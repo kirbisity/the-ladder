@@ -1,9 +1,9 @@
 <!doctype html><meta charset="utf-8"><body style="margin:0;background:#6f9a5a">
 <script type="module">
 import { drawCar, buildCar, CAR_STYLES } from '../src/ui/props3d.js';
-const styles = Object.keys(CAR_STYLES);
+const styles = ['blocky', 'voxel', 'lowpoly'];
 const kinds = ['hatchback', 'sedan', 'suv', 'sports'];
-const cw = 330, ch = 215;
+const cw = 520, ch = 360;
 const c = document.createElement('canvas'); c.width = cw * kinds.length; c.height = ch * styles.length; document.body.append(c);
 const ctx = c.getContext('2d');
 const counts = {};
@@ -12,7 +12,7 @@ styles.forEach((style, row) => kinds.forEach((kind, col) => {
   ctx.fillStyle = (row + col) % 2 ? '#7aa565' : '#6f9a5a'; ctx.fillRect(col * cw, row * ch, cw, ch);
   ctx.fillStyle = '#6d7178'; ctx.fillRect(col * cw, row * ch + ch * 0.45, cw, ch * 0.4);
   ctx.save(); ctx.beginPath(); ctx.rect(col * cw, row * ch, cw, ch); ctx.clip();
-  const unit = 66;
+  const unit = 110;
   const k = { unit, iso: (x, y, z = 0) => ({ x: col * cw + cw * 0.28 + (x - y) * unit, y: row * ch + ch * 0.28 + (x + y) * unit * 0.5 - z * unit }) };
   drawCar(ctx, k, 0, 0, kind, 0, style);
   ctx.restore();

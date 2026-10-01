@@ -218,6 +218,7 @@ export const CAR_STYLES = {
   wedge: { label: 'Angular wedge', stations: 9, smooth: 0, wedge: true },
   toy: { label: 'Toy', toy: true },
   voxel: { label: 'Voxel', voxel: true },
+  blocky: { label: 'Blocky with sloped glass', blocky: true },
 };
 
 /** A toy car: a rounded blob of body and cabin on big wheels. */
@@ -295,9 +296,91 @@ function buildVoxelCar(kind) {
   return root;
 }
 
+/**
+ * A blocky car: the body is a chain of solid blocks along the profile, flat
+ * where the profile is flat and sloped where it rises or falls, so the
+ * windscreen, rear screen and cabin roof are inclined planes. A lower layer
+ * runs the full width; the cabin above it is narrower. Wheels are plain
+ * cylinders. No smoothing: the corners stay hard.
+ */
+function buildBlockyCar(kind) {
+  const spec = CARS[kind] ?? CARS.sedan;
+  const root = new Node();
+  const { L, W, lift, belt, top, tumble, glass } = spec;
+  const body = hexToRgb(spec.body);
+  const glassColor = hexToRgb('#7fa3bd');
+  const trim = hexToRgb(shadeHex(spec.body, -0.5));
+  const margin = (W - W * tumble) / 2;
+  const P = (x, y, z) => [x, z * V, y];
+  /** A solid with a flat floor and a top that runs from height h0 at x0 to h1 at x1, between widths y0 and y1. */
+  const ramp = (x0, x1, y0, y1, zFloor, h0, h1, colors) => {
+    const c = [P(x0, y0, zFloor), P(x1, y0, zFloor), P(x1, y1, zFloor), P(x0, y1, zFloor), P(x0, y0, h0), P(x1, y0, h1), P(x1, y1, h1), P(x0, y1, h0)];
+    const centre = [(x0 + x1) / 2, ((zFloor + (h0 + h1) / 2) / 2) * V, (y0 + y1) / 2];
+    const face = (idx, color, bias = 0) => pushFace(root, idx.map((i) => c[i]), centre, color, bias);
+    face([4, 5, 6, 7], colors.top ?? body, colors.top === glassColor ? 0.2 : 0);
+    face([0, 1, 5, 4], colors.side0 ?? body, colors.side0 === glassColor ? 0.2 : 0);
+    face([3, 2, 6, 7], colors.side1 ?? body, colors.side1 === glassColor ? 0.2 : 0);
+    face([1, 2, 6, 5], colors.front ?? body);
+    face([0, 3, 7, 4], colors.back ?? body);
+    face([0, 1, 2, 3], body);
+  };
+  // The base layer, nose to tail, with a dark sill.
+  const baseTop = lift + belt;
+  ramp(0, L, 0, W, lift, baseTop, baseTop, { side0: body, side1: body });
+  ramp(0, L, -0.004, W + 0.004, lift, lift + 0.07, lift + 0.07, { side0: trim, side1: trim, top: trim });
+  // Walk the profile in segments; each one is a block above the base layer.
+  const keys = top;
+  for (let i = 0; i < keys.length - 1; i += 1) {
+    const [t0, v0] = keys[i];
+    const [t1, v1] = keys[i + 1];
+    const h0 = lift + v0;
+    const h1 = lift + v1;
+    const x0 = t0 * L;
+    const x1 = t1 * L;
+    const above = Math.min(h0, h1) > baseTop + 0.06;
+    const rises = Math.abs(h1 - h0) > 0.1;
+    const tm = (t0 + t1) / 2;
+    const screen = tm >= glass.front[0] - 0.02 && tm <= glass.front[1] + 0.02 || tm >= glass.rear[0] - 0.02 && tm <= glass.rear[1] + 0.02;
+    if (Math.max(h0, h1) <= baseTop + 0.02) {
+      // Hood and boot: a low slab on the base.
+      ramp(x0, x1, 0.02, W - 0.02, baseTop, Math.max(h0, baseTop), Math.max(h1, baseTop), {});
+      continue;
+    }
+    const roofSegment = above && !rises;
+    // Cabin block: narrower than the base, with glass sides along the roof run and a sloped glass top on the screens.
+    const lowH0 = Math.max(h0, baseTop);
+    const lowH1 = Math.max(h1, baseTop);
+    ramp(x0, x1, margin, W - margin, baseTop, lowH0, lowH1, {
+      top: screen && rises ? glassColor : body,
+      side0: roofSegment || (above && !screen) ? glassColor : body,
+      side1: roofSegment || (above && !screen) ? glassColor : body,
+      front: body,
+      back: body,
+    });
+  }
+  // Nose and tail details and the cylinder wheels.
+  wbox(root, L - 0.01, W * 0.22, lift + 0.12, 0.03, W * 0.56, 0.1, '#15171a', 0.5);
+  for (const y of [0.08, W - 0.24]) wbox(root, L - 0.015, y, lift + belt * 0.5, 0.035, 0.16, 0.09, '#fff3c4', 0.6);
+  for (const y of [0.08, W - 0.24]) wbox(root, -0.02, y, lift + belt * 0.5, 0.035, 0.16, 0.09, '#d1363c', 0.6);
+  wbox(root, L - 0.04, 0.02, lift - 0.03, 0.08, W - 0.04, 0.07, '#2a2d33', 0.4);
+  wbox(root, -0.04, 0.02, lift - 0.03, 0.08, W - 0.04, 0.07, '#2a2d33', 0.4);
+  // Wheels: a short cylinder at each corner, with a lighter cylinder for the rim.
+  const r = spec.wheel * 0.95;
+  for (const x of [L * 0.2, L * 0.8]) {
+    for (const [y0, y1, rimY] of [[-0.03, 0.13, -0.045], [W - 0.13, W + 0.03, W + 0.03]]) {
+      prism(root, [x, r, y0], [x, r, y1], r, r, '#17181a', { sides: 18, caps: true, bias: 0.3 });
+      prism(root, [x, r, rimY], [x, r, rimY + 0.015], r * 0.58, r * 0.58, '#9aa0a8', { sides: 16, caps: true, bias: 0.5 });
+    }
+  }
+  if (spec.rack) wbox(root, L * 0.4, 0.2, lift + top[3][1] + 0.0, L * 0.4, W - 0.4, 0.04, '#2a2d33', 0.4);
+  if (spec.spoiler) wbox(root, 0.03, 0.15, lift + along(top, 0.05) + 0.1, 0.18, W - 0.3, 0.03, '#15171a', 0.5);
+  return root;
+}
+
 /** A detailed car, nose toward +x, standing on the ground at the origin. */
 export function buildCar(kind, styleName = 'smooth') {
   const style = CAR_STYLES[styleName] ?? CAR_STYLES.smooth;
+  if (style.blocky) return buildBlockyCar(kind);
   if (style.toy) return buildToyCar(kind);
   if (style.voxel) return buildVoxelCar(kind);
   const spec = style.wedge ? { ...(CARS[kind] ?? CARS.sedan), tumble: 0.6, top: wedgeProfile(CARS[kind] ?? CARS.sedan) } : (CARS[kind] ?? CARS.sedan);
@@ -544,7 +627,7 @@ function cached(key, build) {
 }
 
 /** The model used for every car in the game: change it here (or per call) to restyle them all. */
-export const DEFAULT_CAR_STYLE = 'smooth';
+export const DEFAULT_CAR_STYLE = 'blocky';
 export const drawCar = (context, k, x, y, kind, z = 0, style = DEFAULT_CAR_STYLE) => drawProp(context, cached(`car:${kind}:${style}`, () => buildCar(kind, style)), k.iso(x, y, z), k.unit);
 export const drawHouse = (context, k, x, y, kind) => drawProp(context, cached(`house:${kind}`, () => buildHouse(kind)), k.iso(x, y), k.unit);
 export const drawApartment = (context, k, x, y, kind) => drawProp(context, cached(`apt:${kind}`, () => buildApartment(kind)), k.iso(x, y), k.unit);

@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createGame, chooseEventOption, finishQuarterDays, closeQuarter, quitJob, startRunning, runDay, takeFmla, fmlaStatus,
+  takeHoliday, holidayStatus, fireNumber, fireReady,
 } from '../src/sim/game.js';
 import { drawEvent, drawLifeEvent, allEvents } from '../src/sim/events.js';
 import { projectSpec, projectFor, projectsOpenTo } from '../src/sim/agent.js';
@@ -95,7 +96,7 @@ test('a landed project moves its industry meter', () => {
 });
 
 test('big and risky projects open with seniority', () => {
-  const game = createGame({ seed: 42, characterId: 'marcus' });
+  const game = createGame({ seed: 42, characterId: 'simon' });
   const junior = projectsOpenTo(game.player, game.industry).map((project) => project.role);
   assert.ok(!junior.includes('risky'));
   game.player.level = 3;
@@ -127,7 +128,7 @@ test('every career ends with a story, whatever the ending', () => {
   const told = new Map();
   for (let seed = 7000; seed < 7060 && told.size < 4; seed += 1) {
     for (const policyName of ['balanced', 'grinder', 'coaster']) {
-      const game = createGame({ seed, characterId: 'elena', industryId: 'tech' });
+      const game = createGame({ seed, characterId: 'jennifer', industryId: 'tech' });
       while (!game.outcome) playQuarter(game, POLICIES[policyName]);
       if (told.has(game.outcome.kind)) continue;
       const story = careerSummary(game);
@@ -145,13 +146,13 @@ test('every career ends with a story, whatever the ending', () => {
 });
 
 test('the story names the moments the journal recorded', () => {
-  const game = createGame({ seed: 44, characterId: 'maya', industryId: 'consulting' });
+  const game = createGame({ seed: 44, characterId: 'chloe', industryId: 'consulting' });
   playQuarters(game, 40);
   game.outcome = { kind: 'retired', age: game.player.age, netWorth: game.savings, title: 'x' };
   const story = careerSummary(game);
   assert.ok(story.verdict.length > 0);
   assert.ok(story.paragraphs.length >= 4);
-  assert.match(story.paragraphs[0], /Maya Lin/);
+  assert.match(story.paragraphs[0], /Chloe C/);
   assert.match(story.paragraphs[0], /management consulting/);
   const promotions = game.journal.filter((entry) => entry.kind === 'promoted').length;
   const words = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
@@ -168,4 +169,47 @@ test('every card in the deck has a scope, a timing and tagged choices', () => {
     if (Array.isArray(event.choices)) for (const choice of event.choices) assert.ok(choice.tag, `${event.id}: ${choice.label}`);
   }
   assert.ok(TIME.daysPerQuarter > 0);
+});
+
+test('holidays: paid days first, then unpaid; faster recovery; rated on days worked', () => {
+  const game = createGame({ seed: 45 });
+  clearEvents(game);
+  game.player.motivation = 40;
+  game.player.motivationBefore = 40;
+  const before = game.savings;
+  takeHoliday(game, 20);
+  assert.equal(holidayStatus(game).allowed, false, 'one trip at a time');
+  assert.ok(game.savings < before, 'travel costs money');
+  const report = (finishQuarterDays(game), closeQuarter(game));
+  assert.notEqual(report.rating, 'onLeave', 'four weeks away is still a rated quarter');
+  assert.ok(report.income < game.player.salary / 4, 'days past the paid allowance are unpaid');
+  assert.ok(report.income > game.player.salary / 4 * 0.85, 'but most of the pay is still there');
+  const rested = createGame({ seed: 45 });
+  clearEvents(rested);
+  rested.player.motivation = 40;
+  rested.player.motivationBefore = 40;
+  finishQuarterDays(rested);
+  assert.ok(game.player.motivation > rested.player.motivation, 'away recovers faster than at the desk');
+});
+
+test('FIRE: offered once net worth covers 25 years of spending, and ends the career on yes', () => {
+  const game = createGame({ seed: 46 });
+  clearEvents(game);
+  game.player.age = 40;
+  assert.equal(fireReady(game), false);
+  game.savings = fireNumber(game) * 1.1;
+  assert.equal(fireReady(game), true);
+  finishQuarterDays(game);
+  closeQuarter(game);
+  assert.equal(game.currentEvent?.event.id, 'fireOffer');
+  chooseEventOption(game, 1);
+  assert.equal(game.outcome, null, 'declining keeps you working');
+  assert.equal(fireReady(game), false, 'and it will not ask again for a while');
+  game.fireAskedQuarter = -99;
+  finishQuarterDays(game);
+  closeQuarter(game);
+  assert.equal(game.currentEvent?.event.id, 'fireOffer');
+  chooseEventOption(game, 0);
+  assert.equal(game.outcome?.kind, 'fire');
+  assert.ok(careerSummary(game).paragraphs.join(' ').includes('one-way ticket'));
 });

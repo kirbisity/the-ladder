@@ -58,7 +58,7 @@ for (const industryId of industries) {
       console.log([
         policyName.padEnd(11),
         characterId.padEnd(8),
-        percent(count((entry) => entry.outcome === 'retired'), careers),
+        percent(count((entry) => entry.outcome === 'retired' || entry.outcome === 'fire'), careers),
         percent(count((entry) => entry.outcome === 'death'), careers),
         percent(count((entry) => entry.outcome === 'breakdown'), careers),
         percent(count((entry) => entry.outcome === 'homeless'), careers),

@@ -8,8 +8,9 @@ import { reserveAgentIds } from './agent.js';
 import { eventById, offerEvent } from './events.js';
 import { prepareCurrentEvent } from './game.js';
 
-// Version 2 added FMLA, the career journal and mid-quarter events.
-export const SAVE_VERSION = 2;
+// Version 2 added FMLA, the career journal and mid-quarter events; 3 the
+// renamed roster, holidays and FIRE.
+export const SAVE_VERSION = 3;
 
 function eventToData(entry) {
   return entry ? { id: entry.event.id, data: entry.data } : null;

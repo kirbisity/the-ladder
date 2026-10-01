@@ -58,7 +58,7 @@
     click('[data-action="new-career"]');
     await settle(frame);
     check(frame, 'character pick');
-    click('[data-character="elena"]');
+    click('[data-character="jennifer"]');
     await settle(frame);
     check(frame, 'industry pick');
     click('[data-industry="academia"]');
@@ -86,7 +86,7 @@
     game.fmla.daysLeft = 0;
     game.player.burnout.active = false;
     game.player.pip.active = false;
-    for (const [action, label] of [['panel-org', 'org chart'], ['panel-performance', 'performance'], ['panel-career', 'skills'], ['menu', 'menu']]) {
+    for (const [action, label] of [['panel-org', 'org chart'], ['panel-performance', 'performance'], ['panel-career', 'skills'], ['panel-timeoff', 'time off'], ['menu', 'menu']]) {
       click(`[data-action="${action}"]`);
       await settle(frame);
       check(frame, label);
@@ -99,7 +99,20 @@
       click('#modal-card [data-action="close-modal"]');
       await settle(frame);
     }
-    for (let page = 0; page < 4; page += 1) {
+    win.theLadder.app.modal = null;
+    click('[data-action="menu"]');
+    click('#modal-card [data-action="settings"]');
+    doc.querySelector('details.developer').open = true;
+    await settle(frame);
+    check(frame, 'settings with developer menu open');
+    for (const scene of ['death', 'retiredLuxury', 'promoted']) {
+      doc.querySelector(`[data-scene="${scene}"]`).click();
+      win.theLadder.cutscenes.seek(3);
+      check(frame, `cut scene ${scene}`);
+      win.theLadder.cutscenes.skip();
+    }
+    click('#modal-card [data-action="close-modal"]');
+    for (let page = 0; page < 5; page += 1) {
       win.theLadder.app.modal = null;
       click('[data-action="menu"]');
       click('#modal-card [data-action="help"]');

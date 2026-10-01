@@ -361,6 +361,7 @@ h2, h3 { margin: 0; text-wrap: balance; }
   linear-gradient(#5b9bf5, #5b9bf5) 15px 21px / 9px 9px no-repeat,
   linear-gradient(#5b9bf5, #5b9bf5) 29px 21px / 9px 9px no-repeat; }
 .side-icon.star::before { content: ''; position: absolute; inset: 0; background: var(--gold); clip-path: polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 92%, 50% 70%, 21% 92%, 32% 57%, 2% 35%, 39% 35%); }
+.side-icon.sun::before { content: ''; position: absolute; left: 9px; top: 7px; width: 20px; height: 20px; border-radius: 50%; background: #f5c542; box-shadow: 0 0 0 4px rgba(245, 197, 66, 0.3); }
 .side-icon.book { background:
   linear-gradient(90deg, #dfe7f3 0 47%, transparent 47% 53%, #dfe7f3 53%) 0 4px / 38px 26px no-repeat; border-bottom: 3px solid #5b9bf5; }
 .side-row { display: flex; gap: 6px; }
@@ -473,6 +474,32 @@ input[type='range']::-moz-range-thumb { width: 16px; height: 20px; border-radius
 .open-slider { display: grid; gap: 2px; }
 .open-labels { display: flex; justify-content: space-between; font-family: 'Barlow Condensed', sans-serif; font-weight: 700; text-transform: uppercase; font-size: 15px; }
 .open-note { margin: 0; font-size: 13px; color: var(--ink-soft); line-height: 1.3; }
+
+/* ── Cut scenes ────────────────────────────────────────────── */
+.cutscene { position: absolute; inset: 0; z-index: 40; background: #000; }
+.cutscene-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.cutscene-caption {
+  position: absolute;
+  left: 50%;
+  bottom: max(28px, env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  width: min(760px, calc(100% - 32px));
+  margin: 0;
+  padding: 12px 18px;
+  background: rgba(8, 10, 16, 0.72);
+  border-radius: 12px;
+  color: #f4f6fa;
+  font-size: clamp(15px, 2.2vw, 19px);
+  line-height: 1.45;
+  text-align: center;
+}
+.cutscene-skip { position: absolute; top: max(14px, env(safe-area-inset-top, 0px)); right: 14px; }
+.scene-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
+.scene-grid .button { font-size: 14px; min-height: 36px; padding: 4px 8px; }
+.settings-rows { display: grid; gap: 8px; }
+.settings-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+details.developer summary { cursor: pointer; color: var(--ink-faint); font-family: 'Barlow Condensed', sans-serif; text-transform: uppercase; letter-spacing: 0.08em; }
+details.developer[open] summary { margin-bottom: 8px; }
 
 /* ── Modal ─────────────────────────────────────────────────── */
 .modal {
@@ -785,5 +812,9 @@ input[type='range']::-moz-range-thumb { width: 16px; height: 20px; border-radius
   .project-choices { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .project-choices .choice { min-height: 36px; padding: 6px 10px; font-size: 14px; }
   .modal-card .button.small { min-height: 30px; padding: 3px 10px; }
+  .scene-grid { grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 4px; }
+  .scene-grid .button { min-height: 26px; font-size: 12px; padding: 2px 6px; }
+  .settings-row .button.small { min-height: 28px; }
+  .settings-rows { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
   .modal-close { min-height: 36px; padding: 0 8px; }
 }

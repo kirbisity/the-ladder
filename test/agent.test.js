@@ -58,26 +58,29 @@ test('long hours lower the health target, rest raises it, age wears it', () => {
   assert.ok(healthTarget(older, context) < healthTarget(standard, context));
 });
 
-test('the Anchor shrugs off long hours that hurt everyone else', () => {
-  const anchor = worker({ traits: characterTraits('david') });
-  const other = worker({ traits: characterTraits('marcus') });
-  anchor.plan.hours = 13;
-  other.plan.hours = 13;
-  other.plan.shares = anchor.plan.shares.slice();
-  assert.ok(healthTarget(anchor, context) > healthTarget(other, context) + 10);
-  assert.ok(motivationTarget(anchor, context) > motivationTarget(other, context));
+test('Simon and Jennifer take long hours well, Chloe badly, Joseph in between', () => {
+  const at13 = (id) => {
+    const agent = worker({ traits: characterTraits(id) });
+    agent.plan.hours = 13;
+    return { health: healthTarget(agent, context), motivation: motivationTarget(agent, context) };
+  };
+  const [simon, jennifer, chloe, joseph] = ['simon', 'jennifer', 'chloe', 'joseph'].map(at13);
+  assert.ok(simon.health > joseph.health + 10 && jennifer.health > joseph.health + 10);
+  assert.ok(chloe.health < joseph.health - 10);
+  assert.ok(simon.motivation > joseph.motivation && chloe.motivation < joseph.motivation);
+  assert.deepEqual(characterTraits('joseph'), {}, 'an average Joe');
 });
 
-test('Elena tires of desk work and Marcus of networking', () => {
-  const elena = worker({ traits: characterTraits('elena') });
-  const deskBound = worker({ traits: characterTraits('elena') });
+test('Jennifer tires of desk work and Simon of networking', () => {
+  const jennifer = worker({ traits: characterTraits('jennifer') });
+  const deskBound = worker({ traits: characterTraits('jennifer') });
   deskBound.plan.shares = [0.8, 0.05, 0.05, 0.1];
-  assert.ok(motivationTarget(deskBound, context) < motivationTarget(elena, context));
+  assert.ok(motivationTarget(deskBound, context) < motivationTarget(jennifer, context));
 
-  const marcus = worker({ traits: characterTraits('marcus') });
-  const networking = worker({ traits: characterTraits('marcus') });
+  const simon = worker({ traits: characterTraits('simon') });
+  const networking = worker({ traits: characterTraits('simon') });
   networking.plan.shares = [0.3, 0.1, 0.5, 0.1];
-  assert.ok(motivationTarget(networking, context) < motivationTarget(marcus, context) - 10);
+  assert.ok(motivationTarget(networking, context) < motivationTarget(simon, context) - 10);
 });
 
 test('motivation falling through the line starts a burnout', () => {

@@ -115,13 +115,17 @@ export function careerSummary(game) {
   else if (years >= 10) paragraphs.push(`${player.name.split(' ')[0]} stayed at ${joined?.company ?? 'one company'} the whole way: a lifer.`);
 
   // Body and mind.
+  const life = [];
   const burnouts = count(journal, 'burnout');
   const leaves = count(journal, 'fmla');
   const scares = count(journal, 'healthScare');
   const wellbeing = [];
   if (burnouts) wellbeing.push(`burned out ${burnouts === 1 ? 'once' : `${burnouts} times`}`);
   if (leaves) wellbeing.push(`took FMLA leave ${leaves === 1 ? 'once' : `${leaves} times`}`);
+  const holidays = journal.filter((entry) => entry.kind === 'holiday');
+  const longest = holidays.reduce((most, entry) => Math.max(most, entry.days ?? 0), 0);
   if (scares) wellbeing.push(`had ${plural(scares, 'health scare')}`);
+  if (holidays.length >= 3) life.push(`took ${plural(holidays.length, 'real holiday')}${longest >= 20 ? ', once a whole month away' : ''}`);
   if (wellbeing.length) {
     paragraphs.push(`The work took its toll: ${player.name.split(' ')[0]} ${wellbeing.join(', ')}.`);
   } else if (years >= 10) {
@@ -129,7 +133,6 @@ export function careerSummary(game) {
   }
 
   // Life outside.
-  const life = [];
   const married = first(journal, 'married');
   if (married) life.push(`married at ${Math.floor(married.age)}`);
   const children = count(journal, 'child');
@@ -162,6 +165,7 @@ export function careerSummary(game) {
     death: `It ended at ${age}, in a hospital, the job still on the phone. The hours had been too long for too long.`,
     homeless: `It ended at ${age} with the savings gone and the apartment lost, the job search still running.`,
     breakdown: `It ended at ${age}: months of burnout with no rest, until there was nothing left to give, and ${player.name.split(' ')[0]} could not go on.`,
+    fire: `At ${age}, financially independent, ${player.name.split(' ')[0]} walked away from the ladder for good: a backpack, a one-way ticket, and no alarm clock.`,
   }[outcome?.kind] ?? '');
 
   return { verdict: careerVerdict(game, { peak, promotions: promotions.length, losses: losses.length, burnouts, moves }), paragraphs: paragraphs.filter(Boolean) };
@@ -174,6 +178,7 @@ export function careerVerdict(game, { peak, promotions, losses, burnouts, moves 
   if (outcome === 'death') return 'The Hours Won';
   if (outcome === 'homeless') return 'The Fall';
   if (outcome === 'breakdown') return 'Running on Empty';
+  if (outcome === 'fire') return 'Financially Independent';
   if (peak >= top) return 'To the Top';
   if (peak >= 5 && burnouts === 0) return 'The Steady Climber';
   if (peak >= 5) return 'The Hard Climb';

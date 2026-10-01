@@ -8,7 +8,7 @@ import { playCareer } from '../src/sim/bots.js';
 
 const CAREERS = 12;
 
-function sweep(policyName, characterId = 'marcus', industryId = 'tech') {
+function sweep(policyName, characterId = 'simon', industryId = 'tech') {
   const results = [];
   for (let index = 0; index < CAREERS; index += 1) {
     results.push(playCareer({ seed: 5000 + index, characterId, industryId, policyName }));
@@ -28,12 +28,13 @@ test('grinding sixteen-hour-ish weeks ends most careers in death or breakdown', 
 });
 
 test('steady, balanced play survives to retirement in nearly every career', () => {
-  assert.ok(balanced.share((entry) => entry.outcome === 'retired') >= 0.8);
-  assert.ok(adaptive.share((entry) => entry.outcome === 'retired') >= 0.8);
+  const retires = (entry) => entry.outcome === 'retired' || entry.outcome === 'fire';
+  assert.ok(balanced.share(retires) >= 0.8);
+  assert.ok(adaptive.share(retires) >= 0.8);
 });
 
 test('minimal effort survives but stays near the bottom of the ladder', () => {
-  assert.ok(minimal.share((entry) => entry.outcome === 'retired') >= 0.5);
+  assert.ok(minimal.share((entry) => entry.outcome === 'retired' || entry.outcome === 'fire') >= 0.5);
   assert.equal(minimal.share((entry) => entry.peakLevel >= 5), 0);
 });
 
@@ -47,10 +48,10 @@ test('effort pays: balanced play out-climbs minimal play', () => {
   assert.ok(median(balanced) > median(minimal));
 });
 
-test('the Anchor lasts years longer than the Systems Thinker on the same grind', () => {
-  const anchor = sweep('grinder', 'david');
+test('Simon lasts years longer than Chloe on the same grind', () => {
+  const chloe = sweep('grinder', 'chloe');
   const medianEnd = (sample) => sample.results.map((entry) => entry.age).sort((a, b) => a - b)[CAREERS >> 1];
-  assert.ok(medianEnd(anchor) > medianEnd(grinder) + 3, `${medianEnd(anchor)} vs ${medianEnd(grinder)}`);
+  assert.ok(medianEnd(grinder) > medianEnd(chloe) + 3, `${medianEnd(grinder)} vs ${medianEnd(chloe)}`);
 });
 
 test('every defeat state is reachable by some style of play', () => {

@@ -12,7 +12,7 @@ function playQuarters(game, count) {
 }
 
 test('a saved career resumes exactly where it was, luck included', () => {
-  const original = createGame({ seed: 31, characterId: 'maya', industryId: 'consulting' });
+  const original = createGame({ seed: 31, characterId: 'chloe', industryId: 'consulting' });
   playQuarters(original, 6);
   const restored = deserializeGame(serializeGame(original));
   assert.ok(restored);

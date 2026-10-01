@@ -5,7 +5,7 @@
 
 import {
   TIME, MONEY, JOBS, HEALTH, MOTIVATION, READINESS, RELATIONSHIP, EVENTS as EVENT_DIALS,
-  INDUSTRIES, INDUSTRY_STATS, CHARACTERS, ORG, PROJECTS, FMLA,
+  INDUSTRIES, INDUSTRY_STATS, CHARACTERS, ORG, PROJECTS, FMLA, HOLIDAY, FIRE,
 } from '../config.js';
 import { createRandom } from './random.js';
 import {
@@ -17,7 +17,7 @@ import {
   applyReviewRules, applyTenureReviews, rollDepartures, fillVacancies, decayUnusedReadiness,
   updateAlignment, runLayoffs, ageAgents, startQuarterFor, employedAgents, agentsAtLevel,
 } from './org.js';
-import { drawEvent, drawLifeEvent, eventById, offerEvent } from './events.js';
+import { drawEvent, drawLifeEvent, eventById, offerEvent, fireEvent } from './events.js';
 import { record } from './story.js';
 import { COMPANY_NAMES as INDUSTRY_COMPANY_POOL } from './names.js';
 
@@ -37,7 +37,7 @@ const MARKET_TRANSITIONS = {
  * Returns:
  *   the game state, in the plan phase of the first quarter
  */
-export function createGame({ seed = Date.now() % 1e9, characterId = 'marcus', industryId = 'tech', playerName = null } = {}) {
+export function createGame({ seed = Date.now() % 1e9, characterId = 'simon', industryId = 'tech', playerName = null } = {}) {
   const random = createRandom(seed);
   const character = CHARACTERS.find((entry) => entry.id === characterId) ?? CHARACTERS[0];
   const industry = INDUSTRIES[industryId] ?? INDUSTRIES.tech;
@@ -88,6 +88,8 @@ export function createGame({ seed = Date.now() % 1e9, characterId = 'marcus', in
     lastReport: null,
     weekDeltas: { health: 0, motivation: 0 },
     fmla: { daysLeft: 0, lastStartQuarter: null },
+    holiday: { daysLeft: 0, unpaidLeft: 0, usedThisYear: 0, year: 0 },
+    fireAskedQuarter: null,
     lifeEventDays: [],
     journal: [],
   };
@@ -220,6 +222,10 @@ export function beginQuarter(game) {
     game.eventQueue.push({ event: offerEvent(), data: game.pendingOffer });
     game.pendingOffer = null;
   }
+  if (fireReady(game)) {
+    game.fireAskedQuarter = game.quarterIndex;
+    game.eventQueue.unshift({ event: fireEvent(), data: { number: fireNumber(game) } });
+  }
   // The first quarter is quiet: a new hire gets to find their desk first.
   // Out of work, the quarter opens with the job hunt instead of the office.
   const chance = game.employment.employed ? EVENT_DIALS.chancePerQuarter : EVENT_DIALS.joblessChancePerQuarter;
@@ -238,6 +244,69 @@ export function beginQuarter(game) {
   nextEvent(game);
 }
 
+// ── FIRE ───────────────────────────────────────────────────────────────
+
+/** Net worth that covers this many years of today's spending: the 4% rule. */
+export function fireNumber(game) {
+  return quarterlyExpenses(game) * 4 * FIRE.yearsOfSpending;
+}
+
+/** Financially independent, old enough, and not asked recently. */
+export function fireReady(game) {
+  const age = game.player.age;
+  const asked = game.fireAskedQuarter;
+  return age >= FIRE.minimumAge && age < TIME.retirementAge - 1
+    && netWorth(game) >= fireNumber(game)
+    && (asked === null || asked === undefined || game.quarterIndex - asked >= FIRE.askEveryQuarters);
+}
+
+/** Retire early, on your own terms. */
+export function retireEarly(game) {
+  record(game, 'fire');
+  endGame(game, 'fire');
+}
+
+// ── Holidays ───────────────────────────────────────────────────────────
+
+/**
+ * Whether a holiday can start now, and what it would cost.
+ *
+ * Returns:
+ *   { allowed, reason, paidLeft }
+ */
+export function holidayStatus(game) {
+  const year = Math.floor(game.quarterIndex / 4);
+  const used = game.holiday.year === year ? game.holiday.usedThisYear : 0;
+  const paidLeft = Math.max(0, HOLIDAY.ptoDaysPerYear - used);
+  if (game.holiday.daysLeft > 0) return { allowed: false, reason: `On holiday: ${game.holiday.daysLeft} days left.`, paidLeft };
+  if (game.fmla.daysLeft > 0) return { allowed: false, reason: 'You are already on FMLA leave.', paidLeft };
+  if (!game.employment.employed) return { allowed: true, reason: 'Between jobs: a trip costs money and pauses the search a little.', paidLeft: 0 };
+  return { allowed: true, reason: `${paidLeft} paid days left this year; anything past that is unpaid.`, paidLeft };
+}
+
+/** Go away for a while: recovery with a price. Returns the message. */
+export function takeHoliday(game, days) {
+  const status = holidayStatus(game);
+  if (!status.allowed) return status.reason;
+  const year = Math.floor(game.quarterIndex / 4);
+  if (game.holiday.year !== year) {
+    game.holiday.year = year;
+    game.holiday.usedThisYear = 0;
+  }
+  const unpaid = game.employment.employed ? Math.max(0, days - status.paidLeft) : 0;
+  game.holiday.daysLeft = days;
+  game.holiday.unpaidLeft = unpaid;
+  game.holiday.usedThisYear += days;
+  const cost = days * HOLIDAY.costPerDay;
+  game.savings -= cost;
+  const weeksPastTwo = Math.max(0, days - 10) / 5;
+  if (game.employment.employed) game.player.alignment -= HOLIDAY.alignmentCostPerWeekPastTwo * weeksPastTwo;
+  if (!game.employment.employed) game.flags.searchBoost = (game.flags.searchBoost ?? 0) - 0.02 * days / 5;
+  record(game, 'holiday', { days });
+  log(game, `You take ${days} days off.`);
+  return `${days} days away${unpaid ? `, ${unpaid} of them unpaid` : ''}. Travel: ${formatMoney(cost)}. The laptop stays home.`;
+}
+
 // ── FMLA ───────────────────────────────────────────────────────────────
 
 /**
@@ -249,6 +318,7 @@ export function beginQuarter(game) {
 export function fmlaStatus(game) {
   const fmla = game.fmla;
   if (fmla.daysLeft > 0) return { eligible: false, reason: `On leave: ${fmla.daysLeft} days left.`, daysLeft: fmla.daysLeft };
+  if (game.holiday.daysLeft > 0) return { eligible: false, reason: 'You are on holiday.' };
   if (!game.employment.employed) return { eligible: false, reason: 'FMLA protects a job you have. You are between jobs.' };
   if (game.player.quartersEmployed < FMLA.eligibleAfterQuarters) {
     const quarters = FMLA.eligibleAfterQuarters - game.player.quartersEmployed;
@@ -372,7 +442,9 @@ export function runDay(game) {
   const player = game.player;
   const healthBefore = player.health;
   const motivationBefore = player.motivation;
-  const onLeave = employed && game.fmla.daysLeft > 0;
+  const onFmla = employed && game.fmla.daysLeft > 0;
+  const onHoliday = game.holiday.daysLeft > 0;
+  const onLeave = onFmla || onHoliday;
   const context = {
     industry: game.industry,
     random,
@@ -381,10 +453,16 @@ export function runDay(game) {
     outputModifier: game.flags.outputModifier,
     moodModifier: game.flags.moodModifier ?? 0,
   };
+  context.leaveBoost = onFmla ? FMLA.recoveryBoost : HOLIDAY.recoveryBoost;
   const notes = stepDay(player, context);
-  if (onLeave) {
+  if (onFmla) {
+    player.quarter.unpaidDays = (player.quarter.unpaidDays ?? 0) + 1;
     game.fmla.daysLeft -= 1;
     if (game.fmla.daysLeft === 0) notes.push({ kind: 'leaveOver', text: 'Your FMLA leave is over. Back to your desk on Monday.' });
+  } else if (onHoliday) {
+    if (game.holiday.daysLeft <= game.holiday.unpaidLeft) player.quarter.unpaidDays = (player.quarter.unpaidDays ?? 0) + 1;
+    game.holiday.daysLeft -= 1;
+    if (game.holiday.daysLeft === 0) notes.push({ kind: 'leaveOver', text: 'Holiday over. The inbox has 1,400 unread messages.' });
   }
   if (notes.some((note) => note.kind === 'burnout')) record(game, 'burnout');
   if (game.org) {
@@ -509,7 +587,9 @@ function closeEmployedQuarter(game, report) {
       }
     }
   }
-  if ((player.quarter.leaveDays ?? 0) > 0) report.notes.push(`FMLA leave: ${player.quarter.leaveDays} unpaid days. No rating, no PIP, and your job is waiting.`);
+  const leaveDays = player.quarter.leaveDays ?? 0;
+  if (leaveDays >= 30) report.notes.push(`On leave for ${leaveDays} days: no rating, no PIP, and your job is waiting.`);
+  else if (leaveDays > 0) report.notes.push(`${leaveDays} days away. Rated on the days you worked.`);
   report.pipStarted = Boolean(player.quarter.pipStarted);
   if (report.pipStarted) record(game, 'pip');
   if (player.quarter.pipStarted) report.notes.push('You are on a Performance Improvement Plan. One quarter to climb out of the bottom bracket.');
@@ -801,7 +881,7 @@ function payQuarter(game, report) {
   let takeHome = 0;
   if (employment.employed) {
     // FMLA is unpaid: leave days earn nothing.
-    const leaveShare = Math.min(1, (player.quarter.leaveDays ?? 0) / TIME.daysPerQuarter);
+    const leaveShare = Math.min(1, (player.quarter.unpaidDays ?? 0) / TIME.daysPerQuarter);
     income = player.salary / 4 * (1 - leaveShare);
     takeHome = income * (1 - taxRate(player.salary));
     employment.lastTakeHome = player.salary * (1 - taxRate(player.salary));
@@ -898,9 +978,9 @@ export function endGame(game, kind) {
     netWorth: netWorth(game),
     lifetimeEarnings: game.lifetimeEarnings,
     quarters: game.quarterIndex + 1,
-    score: careerScore(game),
   };
   game.phase = 'over';
+  game.outcome.score = careerScore(game);
 }
 
 /**
@@ -911,8 +991,10 @@ export function endGame(game, kind) {
 export function careerScore(game) {
   const peak = Math.max(game.peakLevel, game.player.level);
   const prestige = (peak + 1) * 1000;
+  // Retiring early is its own prize: a year of freedom is worth 150 points.
+  const freedom = game.outcome?.kind === 'fire' ? Math.max(0, TIME.retirementAge - game.player.age) * 150 : 0;
   const wealth = 2000 * Math.log10(Math.max(1, netWorth(game) / 50000));
-  return Math.round(prestige + wealth);
+  return Math.round(prestige + wealth + freedom);
 }
 
 function snapshot(game, report) {

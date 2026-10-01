@@ -48,8 +48,8 @@ test('the first quarter is quiet, and later runs wait for events to be answered'
 });
 
 test('the same seed and choices replay the same career', () => {
-  const first = playCareer({ seed: 77, characterId: 'elena', industryId: 'tech', policyName: 'balanced' });
-  const second = playCareer({ seed: 77, characterId: 'elena', industryId: 'tech', policyName: 'balanced' });
+  const first = playCareer({ seed: 77, characterId: 'jennifer', industryId: 'tech', policyName: 'balanced' });
+  const second = playCareer({ seed: 77, characterId: 'jennifer', industryId: 'tech', policyName: 'balanced' });
   assert.deepEqual(first, second);
 });
 
@@ -70,7 +70,7 @@ test('an event can hold the hours up, and the slider cannot go under it', () => 
 });
 
 test('health at zero ends the career on the day it happens', () => {
-  const game = createGame({ seed: 13 });
+  const game = createGame({ seed: 13, characterId: 'joseph' });
   clearEvents(game);
   game.player.health = 0.01;
   setPlan(game, { hours: 16, shares: [0.9, 0.05, 0.05, 0] });

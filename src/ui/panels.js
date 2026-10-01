@@ -4,9 +4,10 @@
 
 import { RATING_LABELS, RATINGS, dailyCoreOutput, stagnationYears, projectSpec, projectsOpenTo, CORE, POLITICS } from '../sim/agent.js';
 import { employedAgents, agentsAtLevel, TEAM_COUNT } from '../sim/org.js';
-import { titleOf, formatMoney, netWorth, managerOf, teamHappiness, quarterlyExpenses, dryPowder, fmlaStatus } from '../sim/game.js';
+import { titleOf, formatMoney, netWorth, managerOf, teamHappiness, quarterlyExpenses, dryPowder, fmlaStatus, holidayStatus } from '../sim/game.js';
 import { careerSummary } from '../sim/story.js';
-import { PROJECTS, READINESS, INDUSTRY_STATS, ORG, TIME, MOTIVATION, RELATIONSHIP, CHARACTERS, INDUSTRIES } from '../config.js';
+import { drawPerson } from './figures.js';
+import { PROJECTS, READINESS, INDUSTRY_STATS, ORG, TIME, MOTIVATION, RELATIONSHIP, CHARACTERS, INDUSTRIES, HOLIDAY } from '../config.js';
 
 export function escapeHtml(text) {
   return String(text).replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
@@ -16,14 +17,31 @@ const RATING_COLORS = {
   greatlyExceeds: '#46b96b', exceeds: '#8fd36f', meetAll: '#f5c542', meetMost: '#f0a24a', meetSome: '#e5484d', onLeave: '#7d899c',
 };
 
+const portraitCache = new Map();
+
+/** A head-and-shoulders portrait, drawn with the same features as the office and the cut scenes. */
 export function portrait(look, size = 64) {
-  return `<svg class="portrait" viewBox="0 0 64 64" width="${size}" height="${size}" aria-hidden="true">
-    <rect width="64" height="64" rx="14" fill="#223047"/>
-    <path d="M12 64 C 14 46, 22 42, 32 42 C 42 42, 50 46, 52 64 Z" fill="${look.suit}"/>
-    <path d="M28 43 L32 52 L36 43 Z" fill="#ffffff"/>
-    <circle cx="32" cy="28" r="12" fill="${look.skin}"/>
-    <path d="M19 27 C 19 14, 45 12, 45 27 C 41 21, 26 21, 19 27 Z" fill="${look.hair}"/>
-  </svg>`;
+  const key = `${JSON.stringify(look)}|${size}`;
+  if (!portraitCache.has(key) && typeof document !== 'undefined') {
+    const ratio = 2;
+    const canvas = document.createElement('canvas');
+    canvas.width = size * ratio;
+    canvas.height = size * ratio;
+    const context = canvas.getContext('2d');
+    context.scale(ratio, ratio);
+    context.fillStyle = '#223047';
+    context.beginPath();
+    context.roundRect(0, 0, size, size, size * 0.22);
+    context.fill();
+    context.save();
+    context.beginPath();
+    context.roundRect(0, 0, size, size, size * 0.22);
+    context.clip();
+    drawPerson(context, size * 0.5, size * 1.95, size * 0.17, look, { pose: 'standing' });
+    context.restore();
+    portraitCache.set(key, canvas.toDataURL());
+  }
+  return `<img class="portrait" src="${portraitCache.get(key) ?? ''}" width="${size}" height="${size}" alt="">`;
 }
 
 function figure(label, value) {
@@ -303,8 +321,6 @@ export function careerPanel(game) {
     <div class="figures">${figure('IQ', player.iq)}${figure('Political skill', player.pol)}${figure('Skill', Math.round(player.skill))}${figure('Informants', Math.floor(player.informants))}</div>
     <div class="figures">${figure('Salary', formatMoney(player.salary))}${figure('Savings', formatMoney(game.savings))}${figure('Home equity', formatMoney(game.homeEquity))}${figure('Earned so far', formatMoney(game.lifetimeEarnings))}</div>
     <div class="figures">${figure('Allies', allies)}${figure('Enemies', enemies)}${figure('Manager', manager ? escapeHtml(manager.name.split(' ')[0]) : '—')}${team !== null ? figure('Team mood', `${Math.round(team)}%`) : figure('Spending / qtr', formatMoney(quarterlyExpenses(game)))}</div>
-    <div class="leave-row"><p>${escapeHtml(fmlaStatus(game).reason)}</p>
-      ${fmlaStatus(game).eligible ? '<button class="button small" data-action="fmla">Take FMLA leave</button>' : ''}</div>
     <p>${game.married ? 'Married' : 'Single'}${game.dependents ? `, ${game.dependents} child${game.dependents > 1 ? 'ren' : ''}` : ''}${game.homeEquity > 0 ? ', homeowner' : ', renting'}. Market: ${game.market}.</p>
     ${historyChart(game)}`;
 }
@@ -393,13 +409,14 @@ export const HELP_PAGES = [
     'Readiness without a chair fades. Peers want the same chairs; someone junior jumping past you hurts.',
     'The Dedicated–Open slider trades focus and layoff protection for recruiter calls and a faster job search.',
   ] },
-  { title: 'Burnout and leave', items: [
+  { title: 'Burnout and time off', items: [
     'Motivation under 20% is burnout: the screen greys, bandwidth halves, and productivity drains toward nothing as motivation falls.',
     'Put Recovery at 35% or more and it counts as sick leave (no rating, no PIP), and the more you rest the faster you climb back.',
-    'After a year with an employer you can take FMLA: twelve weeks off, unpaid, job-protected, recovering three times as fast. Once a year.',
+    'Time off: holidays of one, two or four weeks (15 paid days a year), or after a year with an employer, FMLA: twelve unpaid, job-protected weeks.',
   ] },
   { title: 'How it ends', items: [
     'Retire at 62 with the highest title and the most wealth you can, and read the story of your career.',
+    'Or retire early: once your net worth covers 25 years of spending (the FIRE number), the game offers you the door.',
     'Health at zero is death. Out of work with no savings left is homelessness.',
     'Motivation at zero is a breakdown, but the last 10% resists: only a long stretch of burnout with no rest gets you there.',
   ] },
@@ -415,11 +432,57 @@ export function helpPanel(page) {
       ${page < HELP_PAGES.length - 1 ? `<button class="button small primary" data-help="${page + 1}">Next</button>` : '<button class="button small primary" data-action="close-modal">Got it</button>'}</div>`;
 }
 
+// ── Time off ───────────────────────────────────────────────────────────
+
+export function timeOffPanel(game) {
+  const holiday = holidayStatus(game);
+  const fmla = fmlaStatus(game);
+  const options = HOLIDAY.options.map((days) => {
+    const paid = game.employment.employed ? Math.min(days, holiday.paidLeft) : 0;
+    const unpaid = game.employment.employed ? days - paid : 0;
+    const label = { 5: 'A week away', 10: 'Two weeks away', 20: 'A month away' }[days];
+    const detail = game.employment.employed
+      ? `${unpaid ? `${unpaid} unpaid days · ` : 'Paid time off · '}travel ${formatMoney(days * HOLIDAY.costPerDay)}${days > 10 ? ' · your manager will notice' : ''}`
+      : `Travel ${formatMoney(days * HOLIDAY.costPerDay)} · the job search slows`;
+    return `<button class="choice" data-action="holiday" data-days="${days}" ${holiday.allowed ? '' : 'disabled'}>
+      <span class="choice-line"><span>${label}</span><span class="tag ${unpaid ? 'warn' : 'good'}">${days} workdays</span></span>
+      <span class="choice-blurb">${escapeHtml(detail)}</span></button>`;
+  }).join('');
+  return `${head('Recovery', 'Time off')}
+    <p class="lead">${escapeHtml(holiday.reason)}</p>
+    <div class="choices">${options}
+      <button class="choice" data-action="fmla" ${fmla.eligible ? '' : 'disabled'}>
+        <span class="choice-line"><span>FMLA leave</span><span class="tag blue">60 workdays</span></span>
+        <span class="choice-blurb">${escapeHtml(fmla.reason)}</span></button>
+    </div>
+    <p class="explain">Days away recover health and motivation faster than resting at your desk. You are rated on the days you work; a month or more away counts as leave.</p>`;
+}
+
+// ── Settings ───────────────────────────────────────────────────────────
+
+export function settingsPanel(settings, soundOn, endScenes, interimScenes) {
+  const sceneButtons = (scenes) => Object.entries(scenes)
+    .map(([id, label]) => `<button class="button small" data-scene="${id}">${escapeHtml(label)}</button>`).join('');
+  return `${head('Menu', 'Settings')}
+    <div class="settings-rows">
+      <div class="settings-row"><span>Sound</span><button class="button small" data-action="sound">${soundOn ? 'On' : 'Off'}</button></div>
+      <div class="settings-row"><span>Cut scenes for big moments</span><button class="button small" data-action="toggle-cutscenes">${settings.cutscenes ? 'On' : 'Off'}</button></div>
+    </div>
+    <details class="developer"><summary>Developer</summary>
+      <p class="explain">Replay any cut scene with the current character. Nothing in the career changes.</p>
+      <div class="modal-kicker">Endings</div>
+      <div class="scene-grid">${sceneButtons(endScenes)}</div>
+      <div class="modal-kicker">Moments</div>
+      <div class="scene-grid">${sceneButtons(interimScenes)}</div>
+    </details>`;
+}
+
 export function menuPanel(hasGame) {
   return `${head('Paused', 'Menu')}
     <div class="choices">
       ${hasGame ? '<button class="choice" data-action="close-modal">Resume</button>' : ''}
       <button class="choice" data-action="help">How to play</button>
+      <button class="choice" data-action="settings">Settings</button>
       ${hasGame ? '<button class="choice" data-action="save-quit">Save and return to title</button>' : ''}
       <button class="choice" data-action="new-career">Start a new career</button>
     </div>`;
@@ -431,6 +494,7 @@ const OUTCOMES = {
   retired: { title: 'Retirement', line: (game, outcome) => `At ${Math.floor(outcome.age)} you hand in your badge. The highest chair you held: ${outcome.title}.` },
   death: { title: 'Death', line: (game, outcome) => `Your heart gave out at ${Math.floor(outcome.age)}. The ${game.industry.name.toLowerCase()} world sent flowers and posted the role the next week.` },
   breakdown: { title: 'Breakdown', line: (game, outcome) => `At ${Math.floor(outcome.age)} you could not go on. Burnout ran on with no rest until nothing was left.` },
+  fire: { title: 'Financial independence', line: (game, outcome) => `At ${Math.floor(outcome.age)} you walk away from the ladder with ${formatMoney(outcome.netWorth)} and a one-way ticket.` },
   homeless: { title: 'Homeless', line: (game, outcome) => `At ${Math.floor(outcome.age)} the savings ran out before the job search did. You lost the apartment.` },
 };
 

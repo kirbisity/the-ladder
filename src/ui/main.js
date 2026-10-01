@@ -4,21 +4,26 @@
 
 import {
   createGame, startRunning, runDay, closeQuarter, chooseEventOption, setPlan, rebalanceShares,
-  titleOf, formatMoney, netWorth, quarterlyExpenses, takeFmla, fmlaStatus,
+  titleOf, formatMoney, netWorth, quarterlyExpenses, takeFmla, fmlaStatus, takeHoliday, holidayStatus,
 } from '../sim/game.js';
 import { serializeGame, deserializeGame } from '../sim/save.js';
 import { RATING_LABELS, totalBandwidth, effectiveHours, projectSpec, dailyCoreOutput, onBurnoutLeave } from '../sim/agent.js';
 import { agentsAtLevel, employedAgents } from '../sim/org.js';
 import { CHARACTERS, INDUSTRIES, TIME, BANDWIDTH, MOTIVATION, ORG } from '../config.js';
 import { createOffice, officeTier } from './office.js';
+import { peerLook } from './figures.js';
 import { createAudio } from './audio.js';
 import {
   eventPanel, reviewPanel, orgPanel, performancePanel, careerPanel, projectPanel, helpPanel, menuPanel,
-  gameOverPanel, storyPanel, characterCards, industryCards, industryMeter, projectedCompletion, escapeHtml,
+  gameOverPanel, storyPanel, timeOffPanel, settingsPanel, characterCards, industryCards, industryMeter, projectedCompletion, escapeHtml,
 } from './panels.js';
 import { createIntro } from './intro.js';
+import { createCutscenePlayer, END_SCENES, INTERIM_SCENES, JOURNAL_SCENES, endingSceneFor, sceneData } from './cutscenes.js';
 
 const SAVE_KEY = 'the-ladder-save';
+const SETTINGS_KEY = 'the-ladder-settings';
+// Which journal moment wins when several land at once.
+const SCENE_PRIORITY = ['lostJob', 'healthScare', 'burnout', 'promoted', 'newJob', 'house', 'married', 'child', 'startupWin', 'fmla', 'holiday'];
 const SPEEDS = [1, 2, 4, 8];
 // At 1× a quarter takes six seconds: ten workdays a second.
 const DAYS_PER_SECOND = 10;
@@ -58,6 +63,39 @@ const app = {
 const audio = createAudio();
 let office = null;
 let intro = null;
+let cutscenes = null;
+const settings = loadSettings();
+
+function loadSettings() {
+  try {
+    return { cutscenes: true, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? '{}') };
+  } catch (error) {
+    return { cutscenes: true };
+  }
+}
+
+function saveSettings() {
+  try {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  } catch (error) {
+    console.warn('The Ladder: could not save settings', error);
+  }
+}
+
+// ── Cut scenes ─────────────────────────────────────────────────────────
+
+/** Play a short scene for the most important journal moment since the last look. */
+function playJournalScenes() {
+  const game = app.game;
+  if (!game) return;
+  const journal = game.journal ?? [];
+  const fresh = journal.slice(app.journalSeen ?? journal.length);
+  app.journalSeen = journal.length;
+  if (!settings.cutscenes || game.outcome || fresh.length === 0) return;
+  const scenes = new Set(fresh.map((entry) => JOURNAL_SCENES[entry.kind]).filter(Boolean));
+  const winner = SCENE_PRIORITY.find((scene) => scenes.has(scene));
+  if (winner) cutscenes.play(winner, sceneData(game), () => updateHud(true));
+}
 
 // ── Screens ────────────────────────────────────────────────────────────
 
@@ -103,12 +141,18 @@ function clearSave() {
   }
 }
 
+function sampleSceneData() {
+  const character = CHARACTERS[0];
+  return { look: character.look, name: character.name, firstName: character.name.split(' ')[0], age: 62, born: 1990, died: 2052, title: 'Director', company: 'Stackwell', seed: 7, netWorth: 1e6 };
+}
+
 function startCareer(characterId, industryId) {
   const seed = Math.floor(Math.random() * 1e9);
   app.game = createGame({ seed, characterId, industryId });
   app.paused = false;
   app.dayAccumulator = 0;
   app.readinessChimed = false;
+  app.journalSeen = app.game.journal.length;
   buildSliders();
   showScreen('intro');
   intro.play(app.game, () => enterGame());
@@ -157,6 +201,8 @@ function showGameOver() {
   clearSave();
   audio.setState({ running: false });
   openModal('over', gameOverPanel(app.game), true);
+  // The ending plays over the summary; skipping or finishing reveals it.
+  if (settings.cutscenes) cutscenes.play(endingSceneFor(app.game.outcome), sceneData(app.game), null);
 }
 
 // ── The clock ──────────────────────────────────────────────────────────
@@ -191,6 +237,7 @@ function stepOneDay() {
 
 function handleNote(note) {
   if (note.kind === 'burnout') {
+    playJournalScenes();
     app.paused = true;
     audio.setState({ burnout: true, running: false });
     toast(fmlaStatus(app.game).eligible
@@ -211,6 +258,7 @@ function handleNote(note) {
 function finishQuarter() {
   const game = app.game;
   const report = closeQuarter(game);
+  playJournalScenes();
   $('#labels').querySelectorAll('.chip.live').forEach((chip) => chip.remove());
   audio.setState({ running: false });
   if (report.stinger === 'layoff') audio.brass();
@@ -240,7 +288,7 @@ function frame(now) {
   if (app.screen === 'game' && app.game) {
     const game = app.game;
     const speed = SPEEDS[app.speedIndex];
-    const running = game.phase === 'running' && !app.paused && !app.modal;
+    const running = game.phase === 'running' && !app.paused && !app.modal && !cutscenes.isPlaying();
     if (running) {
       app.dayAccumulator += seconds * DAYS_PER_SECOND * speed;
       while (app.dayAccumulator >= 1 && game.phase === 'running' && !app.paused && !app.modal) {
@@ -277,7 +325,7 @@ function drawOffice(seconds) {
       .concat(employedAgents(game.org).filter((agent) => agent !== player && agent.level === player.level))
     : [];
   const unique = [...new Set(peers)].slice(0, 3).map((agent, index) => ({
-    look: peerLook(agent, index),
+    look: peerLook(agent.id),
     typingRate: running ? (agent.burnout.active ? 0.4 : 0.9) : 0.05,
     posture: agent.burnout.active ? 'slumped' : 'upright',
   }));
@@ -290,17 +338,6 @@ function drawOffice(seconds) {
     industryId: game.industry.id,
     productivity: Math.min(1, player.plan.shares[0] * 1.6),
   });
-}
-
-const PEER_LOOKS = [
-  { skin: '#d9a77c', hair: '#2a1d14', suit: '#3c4f6e' },
-  { skin: '#f0c9a8', hair: '#c9a15a', suit: '#5a3f2e' },
-  { skin: '#8d5a3b', hair: '#111111', suit: '#2e4a3d' },
-  { skin: '#e6b991', hair: '#6b3b23', suit: '#4b3a63' },
-];
-
-function peerLook(agent, index) {
-  return PEER_LOOKS[(agent.id + index) % PEER_LOOKS.length];
 }
 
 function refreshLiveLabels() {
@@ -393,11 +430,14 @@ function updateHud(full) {
   const burned = player.burnout.active;
   $('#app').classList.toggle('burnout', burned);
   const leave = fmlaStatus(game);
-  const onLeave = game.fmla.daysLeft > 0;
-  $('#burnout-banner').hidden = !burned || onLeave;
+  const onFmla = game.fmla.daysLeft > 0;
+  const onHoliday = game.holiday.daysLeft > 0;
+  $('#burnout-banner').hidden = !burned || onFmla || onHoliday;
   $('#banner-fmla').hidden = !leave.eligible;
-  $('#leave-banner').hidden = !onLeave;
-  if (onLeave) $('#leave-banner').textContent = `On FMLA leave: ${game.fmla.daysLeft} workdays left. Unpaid, job-protected, recovering fast.`;
+  $('#banner-holiday').hidden = !holidayStatus(game).allowed;
+  $('#leave-banner').hidden = !onFmla && !onHoliday;
+  if (onFmla) $('#leave-banner').textContent = `On FMLA leave: ${game.fmla.daysLeft} workdays left. Unpaid, job-protected, recovering fast.`;
+  else if (onHoliday) $('#leave-banner').textContent = `On holiday: ${game.holiday.daysLeft} workdays left. Out of office.`;
   $('#pip-banner').hidden = !player.pip.active;
   audio.setState({ burnout: burned, hours: player.plan.hours });
 
@@ -590,6 +630,7 @@ function handleAction(action, target) {
         break;
       }
       app.game = loaded;
+      app.journalSeen = loaded.journal?.length ?? 0;
       app.paused = true;
       buildSliders();
       enterGame();
@@ -606,10 +647,26 @@ function handleAction(action, target) {
     case 'run': beginRunning(); break;
     case 'fmla': {
       toast(takeFmla(game));
-      if (app.modal === 'career') openModal('career', careerPanel(game), true);
+      if (app.modal === 'timeoff') closeModal();
+      playJournalScenes();
       updateHud(true);
       break;
     }
+    case 'holiday': {
+      toast(takeHoliday(game, Number(target.dataset.days)));
+      if (app.modal === 'timeoff') closeModal();
+      playJournalScenes();
+      updateHud(true);
+      break;
+    }
+    case 'panel-timeoff': openModal('timeoff', timeOffPanel(game)); break;
+    case 'settings': openModal('settings', settingsPanel(settings, audio.isEnabled(), END_SCENES, INTERIM_SCENES)); break;
+    case 'toggle-cutscenes':
+      settings.cutscenes = !settings.cutscenes;
+      saveSettings();
+      openModal('settings', settingsPanel(settings, audio.isEnabled(), END_SCENES, INTERIM_SCENES));
+      break;
+    case 'skip-scene': cutscenes.skip(); break;
     case 'speed':
       app.speedIndex = (app.speedIndex + 1) % SPEEDS.length;
       updateHud(true);
@@ -623,6 +680,7 @@ function handleAction(action, target) {
       if (audio.isEnabled()) audio.disable();
       else audio.enable();
       $('#sound-button').textContent = audio.isEnabled() ? 'Sound on' : 'Sound off';
+      if (app.modal === 'settings') openModal('settings', settingsPanel(settings, audio.isEnabled(), END_SCENES, INTERIM_SCENES));
       if (game) audio.setState({ running: game.phase === 'running' && !app.paused, burnout: game.player.burnout.active, hours: game.player.plan.hours });
       break;
     }
@@ -656,6 +714,7 @@ function bindInput() {
     if (choice && app.modal === 'event') {
       const result = chooseEventOption(app.game, Number(choice.dataset.choice));
       if (result) toast(result);
+      playJournalScenes();
       afterQuarterOpened();
       return;
     }
@@ -676,6 +735,12 @@ function bindInput() {
       setPlan(app.game, { project: project.dataset.project });
       closeModal();
       updateHud(true);
+      return;
+    }
+    const scene = event.target.closest('[data-scene]');
+    if (scene) {
+      const data = app.game ? sceneData(app.game) : sampleSceneData();
+      cutscenes.play(scene.dataset.scene, { ...data, netWorth: data.netWorth || 1e6 }, null);
       return;
     }
     const story = event.target.closest('[data-story]');
@@ -705,10 +770,11 @@ function bindInput() {
     if (tab) selectTab(tab.dataset.tab);
   });
   $('#modal').addEventListener('click', (event) => {
-    if (event.target.id === 'modal' && ['org', 'performance', 'career', 'help', 'project', 'menu'].includes(app.modal)) closeModal();
+    if (event.target.id === 'modal' && ['org', 'performance', 'career', 'help', 'project', 'menu', 'timeoff', 'settings'].includes(app.modal)) closeModal();
   });
   document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' && ['org', 'performance', 'career', 'help', 'project', 'menu'].includes(app.modal)) closeModal();
+    if (event.key === 'Escape' && cutscenes.isPlaying()) cutscenes.skip();
+    else if (event.key === 'Escape' && ['org', 'performance', 'career', 'help', 'project', 'menu', 'timeoff', 'settings'].includes(app.modal)) closeModal();
     if (event.key === ' ' && app.screen === 'game' && !app.modal && event.target === document.body) {
       event.preventDefault();
       beginRunning();
@@ -726,6 +792,7 @@ function bindInput() {
   });
   window.addEventListener('resize', () => {
     if (office) office.resize();
+    if (cutscenes) cutscenes.resize();
     if (intro) intro.resize();
   });
   bindArc();
@@ -741,6 +808,7 @@ function selectTab(name) {
 
 function boot() {
   office = createOffice($('#office'));
+  cutscenes = createCutscenePlayer($('#cutscene'));
   intro = createIntro($('#intro-canvas'), $('#intro-line'));
   $('#character-grid').innerHTML = characterCards();
   $('#industry-grid').innerHTML = industryCards();
@@ -765,7 +833,9 @@ window.theLadder = {
     if (hour !== null) app.visualTime = Math.max(0, (hour - 7.5) / (app.game.player.plan.hours + 1)) * VISUAL_DAY_SECONDS;
     drawOffice(performance.now() / 1000);
   },
-  start(characterId = 'marcus', industryId = 'tech') {
+  get cutscenes() { return cutscenes; },
+  get settings() { return settings; },
+  start(characterId = 'simon', industryId = 'tech') {
     startCareer(characterId, industryId);
     intro.skip();
   },

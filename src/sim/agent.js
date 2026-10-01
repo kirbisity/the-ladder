@@ -326,7 +326,7 @@ function stepLeaveDay(agent, context) {
   const days = TIME.daysPerQuarter;
   const working = agent.plan;
   agent.plan = { ...working, ...LEAVE_PLAN };
-  const boost = FMLA.recoveryBoost;
+  const boost = context.leaveBoost ?? FMLA.recoveryBoost;
   agent.health += boost * HEALTH.driftPerQuarter * (healthTarget(agent, { ...context, employed: false }) - agent.health) / days;
   const target = motivationTarget(agent, { ...context, employed: true }) + 10;
   agent.motivation += boost * motivationDrift(agent) * (target - agent.motivation) / days;

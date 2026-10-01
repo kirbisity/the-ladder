@@ -65,8 +65,9 @@ export function createOrganization(random, industry, ageOffset = 0) {
   return org;
 }
 
+// Everyone in the game goes by first name and last initial.
 export function randomName(random) {
-  return `${random.pick(FIRST_NAMES)} ${random.pick(LAST_NAMES)}`;
+  return `${random.pick(FIRST_NAMES)} ${random.pick(LAST_NAMES).charAt(0)}`;
 }
 
 /** A new simulated worker, sized for the level they are hired into. */

@@ -8,7 +8,7 @@
 
 import { EVENTS as EVENT_DIALS } from '../config.js';
 import { payInBand } from './agent.js';
-import { acceptOffer, titleOf, formatMoney } from './game.js';
+import { acceptOffer, titleOf, formatMoney, retireEarly } from './game.js';
 import { CORE_DECK } from './events/core.js';
 import { LIFE_DECK, LIFE_IDS_FROM_CORE } from './events/life.js';
 import { JOBLESS_DECK } from './events/jobless.js';
@@ -74,6 +74,25 @@ export function drawEvent(game, random) {
 /** Draw a personal event for a random day of the quarter. */
 export function drawLifeEvent(game, random) {
   return random.weighted(eligibleCards(game, 'life'), (entry) => (entry.weight ? entry.weight(game) : 1));
+}
+
+/** Financial independence: the game offers early retirement. */
+export function fireEvent() {
+  return {
+    id: 'fireOffer',
+    category: 'career',
+    scope: 'any',
+    timing: 'start',
+    title: 'Financially independent',
+    text: (game, data) => `Your net worth covers 25 years of what you spend (${formatMoney(data.number)} by the 4% rule). You never have to work again. Retire early?`,
+    choices: [
+      { label: 'Retire early and see the world', tag: 'rest', apply: (game) => {
+        retireEarly(game);
+        return 'You hand in your notice. The out-of-office reply never comes off.';
+      } },
+      { label: 'Keep climbing', tag: 'safe', apply: () => 'One more year. Everyone says that.' },
+    ],
+  };
 }
 
 /** The job offer event, built from the offer in hand. */

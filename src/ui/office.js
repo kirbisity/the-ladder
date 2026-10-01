@@ -1,3 +1,5 @@
+import { drawSeatedWorker } from './figures.js';
+
 // The animated workplace: an isometric office drawn in code. The room
 // upgrades as the player climbs, the light runs from morning to night on
 // each condensed workday (later the longer the hours), peers sit at their
@@ -247,40 +249,7 @@ export function createOffice(canvas) {
   /** A seated worker facing the monitor, arms moving at the typing rate. */
   function drawPerson(x, y, look, time, typingRate, posture) {
     const seat = iso(x, y + 0.3, 21);
-    const unit = scale;
-    const slump = posture === 'slumped' ? 6 : 0;
-    const torsoTop = seat.y - 30 * unit + slump * unit;
-    context.fillStyle = look.suit;
-    context.beginPath();
-    context.moveTo(seat.x - 9 * unit, seat.y);
-    context.lineTo(seat.x + 9 * unit, seat.y);
-    context.lineTo(seat.x + 7 * unit, torsoTop);
-    context.lineTo(seat.x - 7 * unit, torsoTop);
-    context.closePath();
-    context.fill();
-    context.fillStyle = '#ffffff';
-    context.beginPath();
-    context.moveTo(seat.x - 2.5 * unit, torsoTop);
-    context.lineTo(seat.x + 2.5 * unit, torsoTop);
-    context.lineTo(seat.x, torsoTop + 9 * unit);
-    context.closePath();
-    context.fill();
-    const tap = Math.sin(time * typingRate * 18) * 1.8 * unit;
-    const tapOther = Math.sin(time * typingRate * 18 + 2) * 1.8 * unit;
-    context.strokeStyle = look.suit;
-    context.lineWidth = 4 * unit;
-    context.lineCap = 'round';
-    line({ x: seat.x - 6 * unit, y: torsoTop + 5 * unit }, { x: seat.x - 15 * unit, y: seat.y - 8 * unit + tap });
-    line({ x: seat.x + 6 * unit, y: torsoTop + 5 * unit }, { x: seat.x - 9 * unit, y: seat.y - 4 * unit + tapOther });
-    context.fillStyle = look.skin;
-    circle(seat.x - 15 * unit, seat.y - 8 * unit + tap, 2.2 * unit);
-    circle(seat.x - 9 * unit, seat.y - 4 * unit + tapOther, 2.2 * unit);
-    const headY = torsoTop - 8 * unit + (posture === 'slumped' ? 3 * unit : 0);
-    circle(seat.x - 1 * unit, headY, 7 * unit);
-    context.fillStyle = look.hair;
-    context.beginPath();
-    context.arc(seat.x, headY - 1.5 * unit, 7.4 * unit, Math.PI * 0.95, Math.PI * 2.15);
-    context.fill();
+    drawSeatedWorker(context, seat.x, seat.y, 10 * scale, look, { time, typingRate, posture });
   }
 
   function circle(x, y, radius) {

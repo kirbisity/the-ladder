@@ -430,53 +430,88 @@ export const INDUSTRY_STATS = {
   },
 };
 
-// The four templates from the design. Stats as given; traits as described.
+// The four characters. Everyone in the game goes by first name and last
+// initial. Stats as in the design; traits: Simon and Jennifer take long
+// hours well, Chloe badly, Joseph is an average Joe.
+// look: colours plus the features the portrait, office and cut scenes draw
+// (face shape, hair style, eyes, brows, nose, mouth, glasses, cheeks, stubble).
 export const CHARACTERS = [
   {
-    id: 'marcus',
-    name: 'Marcus Vance',
+    id: 'simon',
+    name: 'Simon C',
     mbti: 'INTJ',
     iq: 140,
     pol: 60,
     archetype: 'Systems Thinker',
-    blurb: 'Bonus to solitary architectural and technical work. Unstructured networking drains him badly.',
-    traits: { coreBonus: 1.15, networkingDrain: 45, networkingHealthDrain: 10 },
-    look: { skin: '#e0b48f', hair: '#3a2a20', suit: '#2f3a4a' },
+    blurb: 'Bonus to solitary technical work, and long hours wear him down slowly. Unstructured networking drains him badly.',
+    traits: { coreBonus: 1.15, networkingDrain: 45, networkingHealthDrain: 10, strainResistance: 0.6, exhaustionResistance: 0.65 },
+    look: {
+      skin: '#f1d2b0', hair: '#121212', suit: '#2f3a4a', shirt: '#ffffff',
+      face: 'round', hairStyle: 'sideSwept', brows: 'thickCurved', eyes: 'monolid', nose: 'soft', mouth: 'gentle',
+    },
   },
   {
-    id: 'elena',
-    name: 'Elena Rostova',
+    id: 'jennifer',
+    name: 'Jennifer B',
     mbti: 'ENFP',
     iq: 140,
     pol: 110,
     archetype: 'Charismatic Catalyst',
-    blurb: 'Builds relationships and alliances fast. Long stretches of isolated desk work sap her motivation.',
-    traits: { relationshipBonus: 1.5, politicsBonus: 1.2, deskWorkDrain: 50, deskWorkLimit: 0.45 },
-    look: { skin: '#f1c6a6', hair: '#8a4b2a', suit: '#4a3260' },
+    blurb: 'Builds relationships and alliances fast, and keeps going on long days. Long stretches of isolated desk work sap her motivation.',
+    traits: { relationshipBonus: 1.5, politicsBonus: 1.2, deskWorkDrain: 50, deskWorkLimit: 0.45, strainResistance: 0.6, exhaustionResistance: 0.65 },
+    look: {
+      skin: '#f4d6b8', hair: '#0e0e0e', suit: '#4a3260', shirt: '#f3e8ee',
+      face: 'soft', hairStyle: 'shoulderStraight', brows: 'soft', eyes: 'innerDouble', nose: 'delicate', mouth: 'smileTeeth',
+    },
   },
   {
-    id: 'maya',
-    name: 'Maya Lin',
+    id: 'chloe',
+    name: 'Chloe C',
     mbti: 'ENTP',
     iq: 150,
     pol: 95,
     archetype: 'Disruptive Innovator',
-    blurb: 'Moonshots open from day one and land more often. Clashes with rigid, traditional leadership.',
-    traits: { moonshotUnlocked: true, moonshotLanding: 1.25, rigidManagerClash: 0.25 },
-    look: { skin: '#e9c39c', hair: '#151515', suit: '#25505a' },
+    blurb: 'Moonshots open from day one and land more often. Long hours burn her out fast, and she clashes with rigid leadership.',
+    traits: { moonshotUnlocked: true, moonshotLanding: 1.25, rigidManagerClash: 0.25, strainResistance: 1.35, exhaustionResistance: 1.35 },
+    look: {
+      skin: '#f0cdaa', hair: '#1b1512', suit: '#25505a', shirt: '#fff6e8',
+      face: 'round', hairStyle: 'bob', brows: 'soft', eyes: 'large', nose: 'soft', mouth: 'animated', glasses: 'thickBlack', cheeks: 'flushed',
+    },
   },
   {
-    id: 'david',
-    name: 'David Thorne',
+    id: 'joseph',
+    name: 'Joseph J',
     mbti: 'ISTJ',
     iq: 130,
     pol: 105,
-    archetype: 'The Anchor',
-    blurb: 'Shrugs off long hours: strain and exhaustion hit him far less. Slow to adapt when strategy pivots.',
-    traits: { strainResistance: 0.55, exhaustionResistance: 0.6, pivotPenalty: 1.6 },
-    look: { skin: '#c99a76', hair: '#5a5a5a', suit: '#3b3b3b' },
+    archetype: 'The Average Joe',
+    blurb: 'No special strengths, no special weaknesses. Steady, composed, and exactly as tired after a long day as anyone.',
+    traits: {},
+    look: {
+      skin: '#e2b893', hair: '#3a2a1e', suit: '#3b3b3b', shirt: '#dfe7f0',
+      face: 'structured', hairStyle: 'cleanShort', brows: 'straight', eyes: 'focused', nose: 'bridge', mouth: 'composed', glasses: 'aviator', stubble: true,
+    },
   },
 ];
+
+// Holidays: paid time off covers the first fifteen days a year; anything
+// longer is unpaid. A day away recovers half again as fast as resting at
+// work, and travel costs money. Past two weeks, your manager notices.
+export const HOLIDAY = {
+  ptoDaysPerYear: 15,
+  options: [5, 10, 20],
+  recoveryBoost: 1.5,
+  costPerDay: 220,
+  alignmentCostPerWeekPastTwo: 0.03,
+};
+
+// FIRE: financially independent once net worth covers 25 years of spending
+// (the 4% rule). The game asks, at most once every two years.
+export const FIRE = {
+  yearsOfSpending: 25,
+  askEveryQuarters: 8,
+  minimumAge: 30,
+};
 
 // What a peer's personality looks like, drawn per agent.
 export const PEERS = {

@@ -20,13 +20,15 @@ import {
   eventPanel, reviewPanel, moneyPanel, vitalsPanel, orgPanel, performancePanel, careerPanel, projectPanel, helpPanel, menuPanel,
   gameOverPanel, storyPanel, timeOffPanel, settingsPanel, characterCards, characterProfile, industryCards, employerCards, industryMeter, projectedCompletion, escapeHtml,
 } from './panels.js';
+import { socialPanel, partnerPanel } from './family-panels.js';
+import { socialEquilibrium, familyTarget, dateNight, breakUp, partnerIncome } from '../sim/family.js';
 import { createIntro } from './intro.js';
 import { createCutscenePlayer, END_SCENES, INTERIM_SCENES, JOURNAL_SCENES, endingSceneFor, sceneData } from './cutscenes.js';
 
 const SAVE_KEY = 'the-ladder-save';
 const SETTINGS_KEY = 'the-ladder-settings';
 // Which journal moment wins when several land at once.
-const SCENE_PRIORITY = ['lostJob', 'healthScare', 'burnout', 'promoted', 'newJob', 'house', 'married', 'child', 'startupWin', 'fmla', 'holiday'];
+const SCENE_PRIORITY = ['lostJob', 'healthScare', 'burnout', 'promoted', 'newJob', 'house', 'married', 'divorce', 'breakup', 'newborn', 'child', 'dating', 'startupWin', 'fmla', 'holiday'];
 const SPEEDS = [1, 2, 4, 8];
 // At 1× a quarter takes six seconds: ten workdays a second.
 const DAYS_PER_SECOND = 10;
@@ -485,9 +487,11 @@ function updateHud(full) {
   setBar('#vital-health', player.health, 'Health', game.weekDeltas.health, 'this week');
   setBar('#vital-motivation', player.motivation, 'Motivation', game.weekDeltas.motivation, 'this week');
   $('#vital-motivation .battery-level').style.width = `${Math.max(0, Math.min(100, player.motivation)) * 0.92}%`;
+  updateSocialBar(game);
   $('#age-value').textContent = `Age: ${Math.floor(player.age)}`;
   $('#wealth-value').textContent = formatMoney(netWorth(game));
-  $('#income-value').textContent = game.employment.employed ? `${formatMoney(player.salary)} / yr` : 'No income';
+  const householdIncome = (game.employment.employed ? player.salary : 0) + partnerIncome(game);
+  $('#income-value').textContent = householdIncome > 0 ? `${formatMoney(householdIncome)} / yr${game.married && game.partner ? ' (household)' : ''}` : 'No income';
 
   const quarterOfYear = (game.quarterIndex % 4) + 1;
   const year = Math.floor(game.quarterIndex / 4) + 1;
@@ -509,7 +513,8 @@ function updateHud(full) {
   $('#banner-fmla').hidden = !leave.eligible;
   $('#banner-holiday').hidden = !holidayStatus(game).allowed;
   $('#leave-banner').hidden = !onFmla && !onHoliday;
-  if (onFmla) $('#leave-banner').textContent = `On FMLA leave: ${game.fmla.daysLeft} workdays left. Unpaid, job-protected, recovering fast.`;
+  if (onFmla && game.fmla.kind === 'parental') $('#leave-banner').textContent = `On ${game.character.gender === 'female' ? 'maternity' : 'paternity'} leave: ${game.fmla.daysLeft} workdays left. Unpaid, job-protected, with the baby.`;
+  else if (onFmla) $('#leave-banner').textContent = `On FMLA leave: ${game.fmla.daysLeft} workdays left. Unpaid, job-protected, recovering fast.`;
   else if (onHoliday) $('#leave-banner').textContent = `On holiday: ${game.holiday.daysLeft} workdays left. Out of office.`;
   $('#pip-banner').hidden = !player.pip.active;
   audio.setState({ burnout: burned, hours: player.plan.hours });
@@ -543,6 +548,25 @@ function setBar(selector, value, name, weekDelta, suffix) {
     delta.textContent = `${rounded > 0 ? '▲ +' : '▼ '}${rounded.toFixed(1)}% ${suffix}`;
     delta.className = `vital-delta ${rounded > 0 ? 'up' : 'down'}`;
   }
+}
+
+/** The third bar: the social circle, which becomes the family once married. */
+function updateSocialBar(game) {
+  const married = Boolean(game.married && game.family);
+  const element = $('#vital-social');
+  const value = Math.max(0, Math.min(100, married ? game.family.quality : game.social));
+  const target = married ? familyTarget(game).target : socialEquilibrium(game);
+  element.querySelector('.bar').className = `bar ${married ? 'family-bar' : 'social-bar'}${value < 25 ? ' low' : ''}`;
+  element.querySelector('.vital-icon').classList.toggle('family', married);
+  element.querySelector('.bar-fill').style.width = `${value}%`;
+  element.querySelector('.bar-label').textContent = `${married ? 'Family' : 'Social'}: ${Math.round(value)}%`;
+  const delta = element.querySelector('.vital-delta');
+  const gap = target - value;
+  delta.textContent = Math.abs(gap) < 1.5 ? 'steady' : `${gap > 0 ? '▲' : '▼'} heading to ${Math.round(target)}%`;
+  delta.className = `vital-delta ${Math.abs(gap) < 1.5 ? '' : gap > 0 ? 'up' : 'down'}`;
+  $('#partner-button').hidden = !game.partner;
+  $('.side-buttons').classList.toggle('five', Boolean(game.partner));
+  $('#partner-button').lastChild.textContent = game.partner?.stage === 'married' ? 'Spouse' : 'Partner';
 }
 
 // ── Bandwidth sliders ──────────────────────────────────────────────────
@@ -760,6 +784,19 @@ function handleAction(action, target) {
     case 'panel-org': openModal('org', orgPanel(game, app.orgTab, app.orgNode), true); break;
     case 'panel-performance': openModal('performance', performancePanel(game)); break;
     case 'panel-vitals': openModal('vitals', vitalsPanel(game, app.vitalsTab), true); break;
+    case 'panel-social': openModal('social', socialPanel(game), true); break;
+    case 'panel-partner': openModal('partner', partnerPanel(game), true); break;
+    case 'date-night':
+      toast(dateNight(game));
+      openModal('partner', partnerPanel(game), true);
+      updateHud(true);
+      break;
+    case 'end-relationship':
+      breakUp(game, 'player');
+      playJournalScenes();
+      closeModal();
+      updateHud(true);
+      break;
     case 'panel-money': openModal('money', moneyPanel(game), true); break;
     case 'panel-career': openModal('career', careerPanel(game, app.careerTab), true); break;
     case 'pick-project': openModal('project', projectPanel(game)); break;

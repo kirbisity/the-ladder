@@ -10,16 +10,19 @@ import { escapeHtml, portrait, historyChart, wealthChart, outcomeText } from './
 import { snapshotScene, endingSceneFor, sceneData, JOURNAL_SCENES } from './cutscenes.js';
 
 // Moments worth a picture, in the order they are preferred.
-const MOMENT_ORDER = ['promoted', 'married', 'child', 'house', 'startupWin', 'newJob', 'burnout', 'lostJob'];
+const MOMENT_ORDER = ['promoted', 'married', 'divorce', 'newborn', 'child', 'house', 'startupWin', 'newJob', 'burnout', 'lostJob'];
 
 const MILESTONE_TEXT = {
   joined: (entry) => `Joined ${entry.company} as ${entry.title}`,
   promoted: (entry) => `Promoted${entry.title ? ` to ${entry.title}` : ''}`,
   lostJob: (entry) => `Lost the job at ${entry.company ?? 'work'} (${entry.reason})`,
-  married: () => 'Married',
+  dating: (entry) => `Started seeing ${entry.partner ?? 'someone'}`,
+  married: (entry) => (entry.partner ? `Married ${entry.partner}` : 'Married'),
+  breakup: (entry) => `Broke up with ${entry.partner ?? 'a partner'}`,
   child: () => 'A child was born',
+  parentalLeave: () => 'Took parental leave',
   house: () => 'Bought a house',
-  divorce: () => 'Divorced',
+  divorce: (entry) => (entry.reason === 'strain' ? 'Divorced: too many hours, too little home' : 'Divorced'),
   burnout: () => 'Burned out',
   healthScare: () => 'A health scare',
   fmla: () => 'Took FMLA leave',

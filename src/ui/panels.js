@@ -45,11 +45,11 @@ export function portrait(look, size = 64) {
   return `<img class="portrait" src="${portraitCache.get(key) ?? ''}" width="${size}" height="${size}" alt="">`;
 }
 
-function figure(label, value) {
+export function figure(label, value) {
   return `<div class="figure"><span>${label}</span><strong>${value}</strong></div>`;
 }
 
-function head(kicker, title, closable = true) {
+export function head(kicker, title, closable = true) {
   return `<div class="modal-head"><div><div class="modal-kicker">${kicker}</div><h2>${title}</h2></div>
     ${closable ? '<button class="modal-close" data-action="close-modal" aria-label="Close">×</button>' : ''}</div>`;
 }
@@ -461,6 +461,7 @@ export function moneyPanel(game) {
       figure('Still to save', formatMoney(Math.max(0, progress.number - progress.worth))),
       figure('Saved a year', `${progress.annualGain >= 0 ? '+' : '−'}${formatMoney(Math.abs(progress.annualGain))}`),
     ].join('')}</div>
+    ${game.married && game.partner ? `<p class="explain">You are saving as a household: ${escapeHtml(game.partner.name.split(' ')[0])}'s pay, their share of living costs and the children are all in these numbers, so the FIRE number covers both of you.</p>` : ''}
     <p class="explain">When you reach it you can retire, which ends the career as a win, or keep working. A startup that sells, or a stock that soars, can get you there overnight.</p>`;
 }
 
@@ -652,11 +653,13 @@ export function settingsPanel(settings, soundOn, endScenes, interimScenes) {
       <div class="settings-row"><span>Cut scenes for big moments</span><button class="button small" data-action="toggle-cutscenes">${settings.cutscenes ? 'On' : 'Off'}</button></div>
     </div>
     <details class="developer"><summary>Developer</summary>
-      <p class="explain">Replay any cut scene with the current character. Nothing in the career changes.</p>
-      <div class="modal-kicker">Endings</div>
-      <div class="scene-grid">${sceneButtons(endScenes)}</div>
-      <div class="modal-kicker">Moments</div>
-      <div class="scene-grid">${sceneButtons(interimScenes)}</div>
+      <div class="developer-body">
+        <p class="explain">Replay any cut scene with the current character. Nothing in the career changes.</p>
+        <div class="modal-kicker">Endings</div>
+        <div class="scene-grid">${sceneButtons(endScenes)}</div>
+        <div class="modal-kicker">Moments</div>
+        <div class="scene-grid">${sceneButtons(interimScenes)}</div>
+      </div>
     </details>`;
 }
 

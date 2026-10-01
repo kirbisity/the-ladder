@@ -290,7 +290,13 @@ export function motivationTarget(agent, context, terms = null) {
   addTerm(terms, 'Last review', agent.moodFromRating);
   addTerm(terms, 'Recent events', context.moodModifier ?? 0);
   addTerm(terms, 'Burnout', -burnoutDrag);
-  return MOTIVATION.baseTarget - exhaustion - ageExhaustion - fade + rest - stagnation - jobless - desk - networking
+  const life = context.lifeTerms ?? [];
+  let lifeTotal = 0;
+  for (const term of life) {
+    addTerm(terms, term.label, term.value);
+    lifeTotal += term.value;
+  }
+  return lifeTotal + MOTIVATION.baseTarget - exhaustion - ageExhaustion - fade + rest - stagnation - jobless - desk - networking
     + autonomy + agent.moodFromRating + (context.moodModifier ?? 0) - burnoutDrag;
 }
 

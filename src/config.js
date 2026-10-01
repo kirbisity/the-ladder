@@ -115,6 +115,126 @@ export const MOTIVATION = {
   bufferResistance: 0.25,
 };
 
+// The social network: an abstract stock of friends, contacts and goodwill
+// outside the desk. It builds a little each quarter, from time spent with
+// people, and fades when neglected, so it is accumulated, never set. It
+// feeds motivation against a need that depends on temperament: extroverts
+// need a bigger circle than introverts to feel the same.
+export const SOCIAL = {
+  start: 30,
+  // Quarterly gain, before temperament: a floor, plus time put into people.
+  baseGain: 1,
+  // Per unit of bandwidth share on Politics (networking), of openness (the
+  // Dedicated/Open slider), and of Recovery (free evenings).
+  politicsGain: 12,
+  opennessGain: 3,
+  restGain: 3,
+  // Each level up opens doors: a professional circle.
+  levelGain: 0.4,
+  // Extroverts fill up faster, introverts slower.
+  extrovertGain: 1.25,
+  introvertGain: 0.8,
+  // Long days eat the evenings: gain falls by this much per hour past
+  // nine, to a floor, and out of work the work circle goes quiet.
+  hoursPenaltyPerHour: 0.06,
+  gainFloor: 0.3,
+  joblessGainShare: 0.5,
+  // Neglected friendships fade: this share of the stock each quarter. With
+  // the gains above, a balanced extrovert settles near 65 and an introvert
+  // near 40, which is about what each needs.
+  decayPerQuarter: 0.08,
+  // Motivation per point of circle above or below the temperament's need,
+  // capped either way.
+  extrovertNeed: 62,
+  introvertNeed: 38,
+  motivationWeight: 0.25,
+  motivationCap: 12,
+  // Married, the circle still feeds mood, but family comes first.
+  marriedShare: 0.3,
+  // Chance weight of meeting someone: the circle is where people come from.
+  meetBase: 0.15,
+  meetPerPoint: 0.009,
+  // Asking someone out: odds of a yes by the size of the circle.
+  askBase: 0.3,
+  askPerPoint: 0.005,
+  askExtrovertBonus: 0.1,
+};
+
+// Relationships, marriage, children. A partner is a simulated person: a
+// job, a body, a mood, and a temperament that sets how much work they
+// tolerate and how long a marriage in trouble lasts.
+export const FAMILY = {
+  // Dating: closeness (0-100) drifts toward a target; below the breakup line
+  // it can end, and a good one for long enough leads to a proposal.
+  bondStart: 55,
+  bondTarget: 68,
+  bondDrift: 0.25,
+  bondHoursPenalty: 5,
+  breakupLine: 25,
+  breakupChance: 0.4,
+  proposalAfterQuarters: 4,
+  proposalBond: 55,
+  // Putting off a proposal wears on a partner; after this many it can end it.
+  proposalPatience: 2,
+  datingLift: 0.06,
+  datingLiftCap: 5,
+  // Marriage: quality (0-100) drifts toward a target made of the terms in
+  // the family panel. Hours past what the partner tolerates are the big one.
+  startQuality: 72,
+  baseTarget: 72,
+  driftPerQuarter: 0.25,
+  hoursPenaltyPerHour: 7,
+  hoursPenaltyCap: 45,
+  // Young children stretch the evenings: the hours penalty grows this much
+  // per child under five.
+  youngChildHoursFactor: 0.15,
+  restBonus: 14,
+  warmthWeight: 16,
+  debtStrain: 10,
+  joblessStrain: 6,
+  // Below the partner's own line for this many quarters in a row, the
+  // marriage ends. A warning comes the first quarter it is near the line.
+  divorceQuarters: 2,
+  warnMargin: 10,
+  // Mood against the family: per point of quality above or below this,
+  // capped either way. Married is not automatically happier.
+  moodReference: 60,
+  moodWeight: 0.3,
+  moodFloor: -15,
+  moodCeiling: 8,
+  // Money. A partner has their own income, and costs a household its share
+  // of living; children cost a great deal, most of all before school.
+  partnerLivingCost: 18000,
+  childCostUnderFive: 30000,
+  childCostSchoolAge: 18000,
+  childCostTeen: 24000,
+  childCostCollege: 12000,
+  childLeavesHomeAge: 22,
+  // After a divorce the children stay a cost, at this share.
+  custodyCostShare: 0.65,
+  // Children are a constant lift to mood while they are at home.
+  kidMotivation: 3.5,
+  kidMotivationCap: 10,
+  // Parental leave, in workdays: the carrying parent gets twelve weeks, the
+  // other six.
+  leaveDays: { female: 60, male: 30 },
+  partnerLeaveQuarters: 2,
+  partnerLeaveIncomeShare: 0.5,
+  // Divorce: the mood blow (before age softens it), the shadow it leaves,
+  // fading by this share a quarter, and the friends who take sides.
+  divorceMotivationHit: 22,
+  divorceShadow: 15,
+  divorceShadowFade: 0.8,
+  divorceSocialLoss: 10,
+  dateNightCost: 400,
+  dateNightLift: 6,
+  counsellingCost: 4000,
+  counsellingLift: 20,
+  // Partner career: salary by kind, growing until 55.
+  partnerRaisePerYear: 0.03,
+  partnerRaiseUntil: 55,
+};
+
 export const PERFORMANCE = {
   // Raw daily output is scaled so a typical quarter scores near 100, which
   // makes the noise a share of a score. The design's N(0, 5) is widened a

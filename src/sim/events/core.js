@@ -532,56 +532,6 @@ export const CORE_DECK = [
     ],
   },
   {
-    id: 'partner',
-    category: 'lifestyle',
-    title: 'Someone special',
-    weight: (game) => (!game.married && game.player.age > 24 && game.player.age < 45 ? 0.9 : 0),
-    text: 'Two years in, your partner asks the question over dinner.',
-    choices: [
-      { label: 'Yes, with a big wedding', tag: 'kind', apply: (game) => {
-        game.married = true;
-        record(game, 'married');
-        game.savings -= 35000;
-        game.player.motivation += 12;
-        return `A wonderful day. ${formatMoney(35000)} well spent, mostly.`;
-      } },
-      { label: 'Yes, at the courthouse', tag: 'safe', apply: (game) => {
-        game.married = true;
-        record(game, 'married');
-        game.savings -= 3000;
-        game.player.motivation += 10;
-        return 'Just the two of you, and lunch after.';
-      } },
-      { label: 'Not now: work comes first', tag: 'ambitious', apply: (game) => {
-        game.player.motivation -= 10;
-        return 'They leave in the spring.';
-      } },
-    ],
-  },
-  {
-    id: 'baby',
-    category: 'lifestyle',
-    title: 'A baby on the way',
-    weight: (game) => (game.married && game.dependents < 3 && game.player.age < 44 ? 1 : 0),
-    text: 'Two pink lines.',
-    choices: [
-      { label: 'Take full parental leave', tag: 'rest', apply: (game) => {
-        game.dependents += 1;
-        record(game, 'child');
-        scaleQuarter(game, 0.6);
-        game.player.motivation += 12;
-        return 'Three blurry months you will never forget.';
-      } },
-      { label: 'Back at your desk in two weeks', tag: 'ambitious', apply: (game) => {
-        game.dependents += 1;
-        record(game, 'child');
-        game.player.health -= 6;
-        game.player.motivation += 4;
-        return 'You learn to answer email one-handed at 3 AM.';
-      } },
-    ],
-  },
-  {
     id: 'house',
     category: 'lifestyle',
     title: 'The house',

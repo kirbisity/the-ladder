@@ -246,6 +246,8 @@ h2, h3 { margin: 0; text-wrap: balance; }
 .bar-fill { position: absolute; inset: 0 auto 0 0; width: 50%; transition: width 0.3s ease; }
 .health-bar .bar-fill { background: linear-gradient(180deg, #5fd081, var(--health-deep)); }
 .motivation-bar .bar-fill { background: linear-gradient(180deg, #5c9bff, var(--motivation-deep)); }
+.social-bar .bar-fill { background: linear-gradient(180deg, #f6c25b, #c47f1f); }
+.family-bar .bar-fill { background: linear-gradient(180deg, #f08db0, #c0446f); }
 .bar.low .bar-fill { background: linear-gradient(180deg, #ff6b6f, #b52d32); }
 .bar-label {
   position: relative;
@@ -270,6 +272,12 @@ h2, h3 { margin: 0; text-wrap: balance; }
   background: #e5484d;
   clip-path: path('M15 25 C 3 16, 0 10, 3 5 C 6 0, 12 1, 15 6 C 18 1, 24 0, 27 5 C 30 10, 27 16, 15 25 Z');
 }
+.people { background:
+  radial-gradient(circle at 8px 7px, #f6c25b 0 5px, transparent 5.5px),
+  radial-gradient(circle at 22px 7px, #f6c25b 0 5px, transparent 5.5px),
+  radial-gradient(ellipse at 8px 22px, #c47f1f 0 7px, transparent 7.5px),
+  radial-gradient(ellipse at 22px 22px, #c47f1f 0 7px, transparent 7.5px); }
+.people.family::before { content: ''; position: absolute; inset: 0; background: #f08db0; clip-path: polygon(50% 0, 100% 45%, 86% 45%, 86% 100%, 14% 100%, 14% 45%, 0 45%); }
 .battery { border: 2px solid #e8eef8; border-radius: 4px; width: 30px; height: 18px; }
 .battery::after { content: ''; position: absolute; right: -6px; top: 4px; width: 4px; height: 7px; background: #e8eef8; border-radius: 0 2px 2px 0; }
 .battery-level { position: absolute; left: 2px; top: 2px; bottom: 2px; width: 50%; background: var(--motivation); border-radius: 1px; }
@@ -400,6 +408,7 @@ h2, h3 { margin: 0; text-wrap: balance; }
   linear-gradient(#5b9bf5, #5b9bf5) 15px 21px / 9px 9px no-repeat,
   linear-gradient(#5b9bf5, #5b9bf5) 29px 21px / 9px 9px no-repeat; }
 .side-icon.star::before { content: ''; position: absolute; inset: 0; background: var(--gold); clip-path: polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 92%, 50% 70%, 21% 92%, 32% 57%, 2% 35%, 39% 35%); }
+.side-icon.heart2::before { content: ''; position: absolute; left: 4px; top: 3px; width: 30px; height: 27px; background: #f08db0; clip-path: path('M15 26 C 3 17, 0 10, 3 5 C 6 0, 12 1, 15 6 C 18 1, 24 0, 27 5 C 30 10, 27 17, 15 26 Z'); }
 .side-icon.sun::before { content: ''; position: absolute; left: 9px; top: 7px; width: 20px; height: 20px; border-radius: 50%; background: #f5c542; box-shadow: 0 0 0 4px rgba(245, 197, 66, 0.3); }
 .side-icon.book { background:
   linear-gradient(90deg, #dfe7f3 0 47%, transparent 47% 53%, #dfe7f3 53%) 0 4px / 38px 26px no-repeat; border-bottom: 3px solid #5b9bf5; }
@@ -898,3 +907,19 @@ details.developer[open] summary { margin-bottom: 8px; }
 .vitals-log em { color: var(--ink-faint); font-style: normal; font-size: 13px; text-align: right; }
 .progress.fire div { background: linear-gradient(90deg, #7f5af0, #c78bff); }
 .fire-tracker { display: grid; gap: 8px; }
+
+.progress.social div { background: linear-gradient(90deg, #f6c25b, #c47f1f); }
+.progress.family div { background: linear-gradient(90deg, #f08db0, #c0446f); }
+.progress.health div { background: linear-gradient(90deg, #5fd081, #2f8f4e); }
+.progress.motivation div { background: linear-gradient(90deg, #5c9bff, #3a63c4); }
+.people.family { background: none; }
+.partner-card { display: flex; gap: 14px; align-items: center; margin: 4px 0 10px; }
+.partner-card .portrait { flex: none; }
+.partner-facts p { margin: 2px 0; }
+
+/* The list of replayable scenes keeps growing: it scrolls inside the menu rather than pushing the dialog off a small screen. */
+.developer-body { max-height: 34vh; overflow-y: auto; }
+
+/* A fifth button (the partner) squeezes the column: smaller icons keep them clear of the labels. */
+.side-buttons.five .side-icon { transform: scale(0.62); margin: -7px 0; }
+.side-buttons.five .side-button { gap: 0; font-size: 15px; }

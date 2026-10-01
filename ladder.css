@@ -140,6 +140,8 @@ h2, h3 { margin: 0; text-wrap: balance; }
 .pick-card.character .portrait { grid-row: span 3; width: 56px; height: 56px; }
 .pick-card.character h3 { font-size: 20px; }
 .pick-card.character .archetype { font-size: 13px; }
+.pick-grid.employers { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.pick-card.employer h3 { font-size: 22px; }
 .pick-card.selected { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(244, 197, 66, 0.35); }
 .pick-detail {
   width: min(1100px, 100%);
@@ -647,6 +649,7 @@ details.developer[open] summary { margin-bottom: 8px; }
   .stat { padding: 6px 12px; }
   .stat-value { font-size: 22px; }
   .pick-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pick-grid.employers { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 /* ── Narrow screens: one control panel at a time, chosen by tab ── */
@@ -717,6 +720,10 @@ details.developer[open] summary { margin-bottom: 8px; }
   .pick-card { grid-template-columns: auto minmax(0, 1fr); padding: 10px 12px; gap: 4px 12px; }
   .pick-card .portrait { grid-row: span 3; width: 52px; height: 52px; }
   .pick-card.industry { grid-template-columns: minmax(0, 1fr); }
+  .pick-grid.employers { grid-template-columns: minmax(0, 1fr); }
+  .pick-card.employer { padding: 8px 12px; gap: 4px; }
+  .pick-card.employer h3 { font-size: 18px; }
+  .pick-card.employer p { display: none; }
   .pick-grid.characters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .career-blurb { padding: 8px 10px; gap: 10px; }
   .career-blurb .portrait { width: 44px; height: 44px; }
@@ -826,6 +833,7 @@ details.developer[open] summary { margin-bottom: 8px; }
   .arc { max-height: 70px; }
   .slider-row input { height: 18px; }
   .pick-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .pick-grid.employers { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .pick-card p.blurb { display: none; }
   .modal { padding: 8px; }
   .modal-card { max-height: 100%; padding: 10px 14px; gap: 8px; width: min(760px, 100%); }

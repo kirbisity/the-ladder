@@ -5,7 +5,7 @@
 
 import {
   TIME, MONEY, JOBS, HEALTH, MOTIVATION, READINESS, RELATIONSHIP, EVENTS as EVENT_DIALS,
-  INDUSTRIES, INDUSTRY_STATS, CHARACTERS, ORG, PROJECTS, FMLA, HOLIDAY, FIRE, COMPANY_TIERS, TIER_SHIFT, JOBLESS } from '../config.js';
+  INDUSTRIES, INDUSTRY_STATS, CHARACTERS, ORG, PROJECTS, FMLA, HOLIDAY, FIRE, COMPANY_TIERS, TIER_SHIFT, TIER_MIX, JOBLESS } from '../config.js';
 import { createRandom } from './random.js';
 import {
   createAgent, stepDay, clamp, clampVitals, defaultPlan, payInBand, projectFor, projectSpec, defaultTrack, utilizationOf, RATING_LABELS,
@@ -36,7 +36,7 @@ const MARKET_TRANSITIONS = {
  * Returns:
  *   the game state, in the plan phase of the first quarter
  */
-export function createGame({ seed = Date.now() % 1e9, characterId = 'simon', industryId = 'tech', playerName = null, tierLock = null } = {}) {
+export function createGame({ seed = Date.now() % 1e9, characterId = 'simon', industryId = 'tech', playerName = null, tierLock = null, startTier = null } = {}) {
   const random = createRandom(seed);
   const character = CHARACTERS.find((entry) => entry.id === characterId) ?? CHARACTERS[0];
   const industry = INDUSTRIES[industryId] ?? INDUSTRIES.tech;
@@ -93,10 +93,14 @@ export function createGame({ seed = Date.now() % 1e9, characterId = 'simon', ind
     journal: [],
     // When set, every employer is this tier (for the per-tier report).
     tierLock,
+    // The kind of employer the career opened at, when the player chose one.
+    startTier: startTier && TIER_MIX[industry.id]?.[startTier] ? startTier : null,
     equity: null,
   };
   player.plan.project = projectFor(industry, 'safe').id;
-  joinOrganization(game, createOrganization(random, industry, { tier: tierLock }), 0);
+  joinOrganization(game, createOrganization(random, industry, { tier: tierLock ?? game.startTier }), 0);
+  // A new graduate starts at the bottom of this employer's band.
+  player.salary = game.org.industry.salaries[0];
   beginQuarter(game);
   return game;
 }

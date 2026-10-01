@@ -33,7 +33,8 @@ Play: <https://kirbisity.github.io/the-ladder/>
   growth, best pay), established (twice a year), steady (once a year, more
   politics) and startups (equity; most fold, a few sell). Companies drift
   between tiers. Higher tiers cost more jobs and reach financial
-  independence sooner.
+  independence sooner. You pick the kind of employer for your first job (or
+  take a surprise); later offers come from the market.
 - **Peers** pick their plans by utility (ambition × gain − self-preservation
   × risk) and keep a ledger with you: allies warn and sponsor, enemies
   undercut you in calibration.

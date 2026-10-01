@@ -70,3 +70,18 @@ test('expressions change the face, and a head can be drawn on its own', () => {
   drawHead3D(context, 100, 100, 50, CHARACTERS[0].look, {});
   assert.ok(log.polygons > 100 && log.maxY - log.minY < 50 * 4);
 });
+
+test('every character has a face style from the config, and styles and tweaks change the model', async () => {
+  const { FACE_STYLES } = await import('../src/config.js');
+  for (const character of CHARACTERS) assert.ok(FACE_STYLES[character.look.faceStyle], `${character.id}: ${character.look.faceStyle}`);
+  const base = CHARACTERS.find((character) => character.id === 'simon').look;
+  const heightOf = (look) => {
+    const { context, log } = recorder();
+    drawFigure3D(context, 200, 400, 30, look, { pose: 'standing' });
+    return log.minY;
+  };
+  assert.ok(heightOf({ ...base, faceStyle: 'glossy' }) < heightOf({ ...base, faceStyle: 'small' }), 'a bigger head stands taller');
+  assert.ok(heightOf({ ...base, faceStyle: 'small', faceTweaks: { head: 1.3 } }) < heightOf({ ...base, faceStyle: 'small' }), 'a tweak overrides one field of the style');
+  const eyes = (style) => { const { context, log } = recorder(); drawFigure3D(context, 200, 400, 30, { ...base, faceStyle: style }, {}); return [...log.colours].join(); };
+  assert.notEqual(eyes('glossy'), eyes('dots'), 'different eyes, different shades');
+});

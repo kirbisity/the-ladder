@@ -36,7 +36,7 @@ const MARKET_TRANSITIONS = {
  * Returns:
  *   the game state, in the plan phase of the first quarter
  */
-export function createGame({ seed = Date.now() % 1e9, characterId = 'simon', industryId = 'tech', playerName = null, tierLock = null, startTier = null } = {}) {
+export function createGame({ seed = Date.now() % 1e9, characterId = 'simon', industryId = 'tech', playerName = null, tierLock = null, startTier = null, faceStyle = null } = {}) {
   const random = createRandom(seed);
   const character = CHARACTERS.find((entry) => entry.id === characterId) ?? CHARACTERS[0];
   const industry = INDUSTRIES[industryId] ?? INDUSTRIES.tech;
@@ -47,7 +47,7 @@ export function createGame({ seed = Date.now() % 1e9, characterId = 'simon', ind
     iq: character.iq,
     pol: character.pol,
     traits: { ...character.traits },
-    look: character.look,
+    look: faceStyle ? { ...character.look, faceStyle } : character.look,
     characterId: character.id,
     level: 0,
     salary: industry.salaries[0],

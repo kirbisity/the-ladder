@@ -7,7 +7,8 @@
 //   nose: soft | delicate | bridge
 //   mouth: gentle | smileTeeth | animated | composed
 //   glasses: thickBlack | aviator (optional); cheeks: flushed; stubble: true
-//   build: thin (a slighter body); youthful: true (larger, lower-set eyes)
+//   build: thin (a slighter body)
+//   faceStyle: a key of FACE_STYLES in the config (head size, eyes, mouth, nose); faceTweaks overrides it
 // Expressions override the mouth and eyes: happy, sad, crying, blank, sleep.
 
 import { drawFigure3D, drawHead3D } from './model3d.js';
@@ -50,5 +51,6 @@ export function peerLook(id) {
     mouth: pick(['gentle', 'composed', 'smileTeeth'], 10),
     glasses: pick([null, null, null, 'thickBlack', 'aviator'], 11),
     stubble: pick([false, false, true], 12),
+    faceStyle: pick(['glossy', 'dots', 'beans', 'anime', 'sleepy', 'small'], 13),
   };
 }

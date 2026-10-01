@@ -593,7 +593,23 @@ export const INDUSTRY_STATS = {
 //   difficulty           — 1 to 3: how hard the climb is on average, set from the
 //                           outcome report's Director-or-higher rates across all
 //                           industries (1 above ~55%, 2 around 35-45%, 3 under 10%)
+// faceStyle: which toy face the character has (a key of FACE_STYLES below).
+//   faceTweaks may override any field of the style for this one character.
 // look: colours plus the features the portrait, office and cut scenes draw.
+// The toy faces. Each is a recipe the 3D model reads: how big the head is
+// (1 is a realistic head), the eyes (glossy | dot | bean | oval | sleepy),
+// the mouth (smile | line | cat | dot), the nose (small | dot | none) and
+// whether the eyes sit low on the face. Add one here and name it in a
+// character's `faceStyle`; override single fields with `faceTweaks`.
+export const FACE_STYLES = {
+  glossy: { label: 'Big glossy', head: 1.22, eyes: 'glossy', mouth: 'smile', nose: 'small', lowEyes: true },
+  dots: { label: 'Dots and a line', head: 1.18, eyes: 'dot', mouth: 'line', nose: 'none', lowEyes: false },
+  beans: { label: 'Beans and a cat mouth', head: 1.2, eyes: 'bean', mouth: 'cat', nose: 'dot', lowEyes: true },
+  anime: { label: 'Anime ovals', head: 1.05, eyes: 'oval', mouth: 'smile', nose: 'small', lowEyes: true },
+  sleepy: { label: 'Sleepy lids', head: 1.1, eyes: 'sleepy', mouth: 'line', nose: 'small', lowEyes: false },
+  small: { label: 'Small head', head: 0.95, eyes: 'dot', mouth: 'dot', nose: 'dot', lowEyes: false },
+};
+
 export const CHARACTERS = [
   {
     id: 'simon',
@@ -606,6 +622,7 @@ export const CHARACTERS = [
     blurb: 'Brilliant at solitary technical work and takes long hours well, but every hour of networking costs him health and mood. Climbs on output, if he can stand the politics up top.',
     traits: { coreBonus: 1.15, networkingDrain: 45, networkingHealthDrain: 10, strainResistance: 0.6, exhaustionResistance: 0.65 },
     look: {
+      faceStyle: 'dots',
       skin: '#f1d2b0', hair: '#121212', suit: '#2f3a4a', shirt: '#ffffff',
       face: 'narrow', hairStyle: 'sideSwept', brows: 'thickCurved', eyes: 'monolid', nose: 'soft', mouth: 'gentle',
     },
@@ -621,6 +638,7 @@ export const CHARACTERS = [
     blurb: 'Builds alliances fast and keeps going on long days, but long stretches of solo desk work sap her motivation. Climbs through people, if she keeps her spark.',
     traits: { relationshipBonus: 1.5, politicsBonus: 1.2, deskWorkDrain: 50, deskWorkLimit: 0.45, strainResistance: 0.6, exhaustionResistance: 0.65 },
     look: {
+      faceStyle: 'glossy',
       skin: '#f4d6b8', hair: '#0e0e0e', suit: '#4a3260', shirt: '#f3e8ee',
       face: 'soft', hairStyle: 'shoulderStraight', brows: 'soft', eyes: 'innerDouble', nose: 'delicate', mouth: 'smileTeeth',
     },
@@ -639,8 +657,9 @@ export const CHARACTERS = [
       autonomyNeed: 1, noveltyLift: 1.6,
     },
     look: {
+      faceStyle: 'glossy',
       skin: '#f0cdaa', hair: '#1b1512', suit: '#25505a', shirt: '#fff6e8',
-      face: 'round', youthful: true, hairStyle: 'ponytail', brows: 'soft', eyes: 'large', nose: 'soft', mouth: 'animated', glasses: 'thickBlack', cheeks: 'flushed',
+      face: 'round', hairStyle: 'ponytail', brows: 'soft', eyes: 'large', nose: 'soft', mouth: 'animated', glasses: 'thickBlack', cheeks: 'flushed',
     },
   },
   {
@@ -654,6 +673,7 @@ export const CHARACTERS = [
     blurb: 'No special talents and no special weaknesses, but an even temper: setbacks sting him less than most. A steady, drama-free career is his to lose.',
     traits: { steadiness: 0.35 },
     look: {
+      faceStyle: 'dots',
       skin: '#e2b893', hair: '#3a2a1e', suit: '#3b3b3b', shirt: '#dfe7f0',
       face: 'square', hairStyle: 'cleanShort', brows: 'straight', eyes: 'focused', nose: 'bridge', mouth: 'composed', glasses: 'aviator', stubble: true,
     },
@@ -669,6 +689,7 @@ export const CHARACTERS = [
     blurb: 'Not the sharpest in the room, but he works the room: networking pays him back more than anyone, he plays office politics well, takes bad news in his stride, and works long hours like Simon.',
     traits: { strainResistance: 0.6, exhaustionResistance: 0.65, politicsBonus: 1.15, eventSavvy: 1.35, steadiness: 0.25 },
     look: {
+      faceStyle: 'anime',
       skin: '#e8c4a0', hair: '#6b4a2e', suit: '#1f3550', shirt: '#ffffff',
       face: 'square', hairStyle: 'sideSwept', brows: 'straight', eyes: 'focused', nose: 'bridge', mouth: 'smileTeeth',
     },
@@ -684,6 +705,7 @@ export const CHARACTERS = [
     blurb: 'Can work brutal hours for years without burning out, and out-produces everyone. But output is not leadership: management doors open for him no faster than for anyone.',
     traits: { strainResistance: 0.3, exhaustionResistance: 0.3, coreBonus: 1.1, leadership: 0.6 },
     look: {
+      faceStyle: 'anime',
       skin: '#d9a77c', hair: '#2a1d14', suit: '#2e3a2e', shirt: '#e6eef8',
       face: 'narrow', build: 'thin', hairStyle: 'long', brows: 'thickCurved', eyes: 'focused', nose: 'soft', mouth: 'composed',
     },
@@ -699,6 +721,7 @@ export const CHARACTERS = [
     blurb: 'Sharp, political, and made for leadership: people follow him and promotion committees like him. The best shot at the top chair, if he keeps his health.',
     traits: { leadership: 1.3, politicsBonus: 1.15, relationshipBonus: 1.25, eventSavvy: 1.2 },
     look: {
+      faceStyle: 'sleepy',
       skin: '#c99a76', hair: '#151515', suit: '#202a44', shirt: '#ffffff',
       face: 'structured', hairStyle: 'cleanShort', brows: 'thickCurved', eyes: 'large', nose: 'bridge', mouth: 'gentle',
     },
@@ -714,6 +737,7 @@ export const CHARACTERS = [
     blurb: 'Much like an average Joe, calm when things go wrong, but long hours wear her down quickly. A good career at a sane pace.',
     traits: { steadiness: 0.3, strainResistance: 1.35, exhaustionResistance: 1.35 },
     look: {
+      faceStyle: 'beans',
       skin: '#f2d1b3', hair: '#7a4a2a', suit: '#5a3f4e', shirt: '#fbf3f6',
       face: 'soft', hairStyle: 'long', brows: 'soft', eyes: 'innerDouble', nose: 'delicate', mouth: 'gentle',
     },

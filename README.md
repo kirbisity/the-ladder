@@ -47,6 +47,9 @@ Play: <https://kirbisity.github.io/the-ladder/>
   initial, and they differ only in numbers on the character card. Each is a
   3D model (a small software renderer, like Slope Lab's skier) built from their
   look card, so portraits, the office and every cut scene show the same face.
+  Faces are toys, in six styles (`FACE_STYLES` in the config: head size, eyes,
+  mouth, nose); each character has a `faceStyle`, `faceTweaks` override single
+  fields, and the character page lets you swap the style for a run.
 - **Industries** are patches over one default, each with its own seven
   projects and its own event deck: tech (on-call, migrations, RTO mandates,
   CVEs), consulting (up or out, utilization, death-march cases, sales

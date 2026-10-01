@@ -154,9 +154,9 @@ function sampleSceneData() {
   return { look: character.look, name: character.name, firstName: character.name.split(' ')[0], age: 62, born: 1990, died: 2052, title: 'Director', company: 'Stackwell', seed: 7, netWorth: 1e6 };
 }
 
-function startCareer(characterId, industryId, startTier = null) {
+function startCareer(characterId, industryId, startTier = null, faceStyle = null) {
   const seed = Math.floor(Math.random() * 1e9);
-  app.game = createGame({ seed, characterId, industryId, startTier });
+  app.game = createGame({ seed, characterId, industryId, startTier, faceStyle });
   app.paused = false;
   app.dayAccumulator = 0;
   app.readinessChimed = false;
@@ -779,7 +779,7 @@ function handleAction(action, target) {
     case 'same-again': {
       const { character, industry } = game;
       closeModal();
-      startCareer(character.id, industry.id, game.startTier);
+      startCareer(character.id, industry.id, game.startTier, game.player.look.faceStyle);
       break;
     }
     case 'intro-next': intro.next(); break;
@@ -810,8 +810,15 @@ function bindInput() {
     const character = event.target.closest('[data-character]');
     if (character) {
       app.pick.characterId = character.dataset.character;
+      app.pick.faceStyle = null;
       $('#profile-body').innerHTML = characterProfile(app.pick.characterId);
       showScreen('profile');
+      return;
+    }
+    const faceStyle = event.target.closest('[data-face-style]');
+    if (faceStyle) {
+      app.pick.faceStyle = faceStyle.dataset.faceStyle;
+      $('#profile-body').innerHTML = characterProfile(app.pick.characterId, app.pick.faceStyle);
       return;
     }
     const industry = event.target.closest('[data-industry]');
@@ -824,7 +831,7 @@ function bindInput() {
     const employer = event.target.closest('[data-employer]');
     if (employer) {
       const tier = employer.dataset.employer === 'random' ? null : employer.dataset.employer;
-      startCareer(app.pick.characterId, app.pick.industryId, tier);
+      startCareer(app.pick.characterId, app.pick.industryId, tier, app.pick.faceStyle);
       return;
     }
     const project = event.target.closest('[data-project]');

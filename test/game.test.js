@@ -315,3 +315,11 @@ test('autopilot repeats the last answer for a kind of event, and asks about anyt
   assert.equal(pickRemembered(memory, 'fireOffer', choices), null, 'retiring is never decided for you');
   assert.equal(pickRemembered(memory, 'layoffRumor', [{ label: 'Other', tag: 'rest' }]), null, 'an old answer that is gone is a new question');
 });
+
+test('a face style chosen at the start becomes the player\'s face, and the character card is untouched', () => {
+  const game = createGame({ seed: 97, characterId: 'simon', faceStyle: 'beans' });
+  assert.equal(game.player.look.faceStyle, 'beans');
+  const card = CHARACTERS.find((character) => character.id === 'simon');
+  assert.notEqual(card.look.faceStyle, 'beans', 'the roster entry keeps its own style');
+  assert.equal(createGame({ seed: 97, characterId: 'simon' }).player.look.faceStyle, card.look.faceStyle);
+});

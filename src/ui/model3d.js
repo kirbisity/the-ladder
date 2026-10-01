@@ -11,6 +11,8 @@
 // Units: one head radius is 1. Feet at y = 0, hips at 3.6, shoulders at
 // 6.9, head centre at 8.15. y is up, the model faces +z (toward the viewer).
 
+import { FACE_STYLES } from '../config.js';
+
 const TWO_PI = Math.PI * 2;
 const LIGHT = norm([-0.4, 0.7, 0.75]);
 const AMBIENT = 0.68;
@@ -223,130 +225,129 @@ function surfaceZ(shape, x, y) {
 
 // ── Building a figure ──────────────────────────────────────────────────
 
-function buildEyes(head, look, shape, skin, detail) {
-  const type = look.eyes ?? 'innerDouble';
-  const width = { large: 0.25, focused: 0.21, monolid: 0.22, innerDouble: 0.22 }[type] ?? 0.22;
-  const height = { large: 0.2, focused: 0.1, monolid: 0.085, innerDouble: 0.12 }[type] ?? 0.12;
-  const scale = look.youthful ? 1.14 : 1;
-  const eyeY = look.youthful ? -0.04 : 0.05;
-  const eyes = [];
+/** The face style a look asks for: a named preset from the config, with any per-character tweaks on top. */
+function styleOf(look) {
+  return { ...(FACE_STYLES[look.faceStyle] ?? FACE_STYLES.glossy), ...(look.faceTweaks ?? {}) };
+}
+
+/** What each expression asks of the face: blink, smile (negative is a frown), brows. */
+function lifeFor(expression, blinking, gaze) {
+  const base = { blink: blinking ? 1 : 0, talk: 0, lookX: gaze, brow: 0, smile: 0.35 };
+  if (expression === 'happy') return { ...base, smile: 1, brow: 0.4 };
+  if (expression === 'sad' || expression === 'crying') return { ...base, smile: -0.3, brow: -0.8 };
+  if (expression === 'sleep' || expression === 'blank-closed') return { ...base, blink: 1, smile: 0.2 };
+  if (expression === 'blank') return { ...base, smile: 0.15 };
+  return base;
+}
+
+/**
+ * The face features for a style, built fresh into `face` whenever the
+ * expression, blink or gaze changes. `big` is the head's own proportions.
+ */
+function buildFace(face, look, big, style, life, detail, tearDrop) {
+  const z = (x, y) => surfaceZ(big, x, y) + 0.01;
+  const eyes = style.eyes;
+  const open = 1 - life.blink;
+  const eyeY = style.lowEyes ? -0.08 : 0.06;
+  const spread = 0.4 + style.head * 0.08;
+  const iris = hexToRgb(look.eyes === 'monolid' ? '#2a1d14' : '#3a2418');
+  const gx = life.lookX;
+  if (!detail) {
+    for (const side of [-1, 1]) ellipsoid(face, [side * spread, eyeY, z(side * spread, eyeY)], [0.1, 0.1, 0.03], '#141010', { lat: 3, lon: 6, bias: FEATURE_BIAS });
+    return;
+  }
   for (const side of [-1, 1]) {
-    const x = side * 0.38;
-    const z = surfaceZ(shape, x, eyeY) + 0.01;
-    const holder = head.add(new Node(x, eyeY, z));
-    const w = width * scale;
-    const h = height * scale;
-    if (detail === 0) {
-      ellipsoid(holder, [0, 0, 0], [w * 0.8, h * 1.1, 0.03], '#2b1c14', { lat: 3, lon: 6, bias: FEATURE_BIAS });
-      eyes.push({ holder, side, h, closedLine: null, open: [] });
-      continue;
+    const x = side * spread;
+    const holder = face.add(new Node(x, eyeY, z(x, eyeY)));
+    const closedLine = (w) => tube(holder, [[-w, 0, 0.07], [0, -0.09, 0.08], [w, 0, 0.07]], 0.04, '#1d1a1a', { sides: 3, bias: FEATURE_BIAS + 0.2 });
+    if (eyes === 'dot') {
+      if (open > 0.2) ellipsoid(holder, [gx * 0.08, 0, 0.04], [0.085, 0.085 * open, 0.05], '#141010', { lat: 5, lon: 8, bias: FEATURE_BIAS + 0.1 });
+      else closedLine(0.1);
+    } else if (eyes === 'bean') {
+      if (open > 0.2) {
+        ellipsoid(holder, [gx * 0.06, 0, 0.04], [0.1, 0.2 * open, 0.05], '#141010', { lat: 6, lon: 10, bias: FEATURE_BIAS + 0.1 });
+        ellipsoid(holder, [gx * 0.06 - 0.03, 0.07 * open, 0.09], [0.035, 0.05, 0.02], '#ffffff', { lat: 3, lon: 6, bias: FEATURE_BIAS + 0.15 });
+      } else closedLine(0.1);
+    } else if (eyes === 'oval') {
+      if (open > 0.2) {
+        ellipsoid(holder, [0, 0, 0], [0.26, 0.22 * open, 0.05], '#ffffff', { lat: 5, lon: 12, bias: FEATURE_BIAS });
+        ellipsoid(holder, [gx * 0.1, 0, 0.05], [0.17, 0.2 * Math.min(1, open * 1.1), 0.04], iris, { lat: 5, lon: 10, bias: FEATURE_BIAS + 0.05 });
+        ellipsoid(holder, [gx * 0.1, 0, 0.08], [0.08, 0.1, 0.03], '#0a0807', { lat: 3, lon: 8, bias: FEATURE_BIAS + 0.1 });
+        ellipsoid(holder, [gx * 0.1 - 0.06, 0.08, 0.11], [0.05, 0.05, 0.02], '#ffffff', { lat: 3, lon: 6, bias: FEATURE_BIAS + 0.15 });
+      } else closedLine(0.24);
+      tube(holder, [[-0.28, 0.18 * open, 0.07], [0, 0.26 * open, 0.08], [0.28, 0.18 * open, 0.07]], 0.03, '#1d1a1a', { sides: 3, bias: FEATURE_BIAS + 0.2 });
+    } else if (eyes === 'sleepy') {
+      const lid = 0.5 + life.blink * 0.5;
+      ellipsoid(holder, [0, 0, 0], [0.24, 0.18, 0.05], '#fbfaf7', { lat: 5, lon: 12, bias: FEATURE_BIAS });
+      ellipsoid(holder, [gx * 0.08, -0.02, 0.05], [0.13, 0.13, 0.04], iris, { lat: 5, lon: 10, bias: FEATURE_BIAS + 0.05 });
+      ellipsoid(holder, [gx * 0.08, -0.02, 0.08], [0.06, 0.06, 0.03], '#0a0807', { lat: 3, lon: 6, bias: FEATURE_BIAS + 0.1 });
+      // The heavy lid: skin-coloured, pulled down over the top of the eye.
+      ellipsoid(holder, [0, 0.18 - lid * 0.2, 0.09], [0.27, 0.19 * lid + 0.02, 0.05], hexToRgb(look.skin), { lat: 4, lon: 12, bias: FEATURE_BIAS + 0.2 });
+      tube(holder, [[-0.27, (0.18 - lid * 0.2) * 0.1, 0.12], [0, -0.04 - lid * 0.02, 0.13], [0.27, 0, 0.12]], 0.035, '#1d1a1a', { sides: 3, bias: FEATURE_BIAS + 0.25 });
+    } else if (open > 0.15) {
+      ellipsoid(holder, [0, 0, 0], [0.3, 0.34 * open, 0.06], '#ffffff', { lat: 6, lon: 12, bias: FEATURE_BIAS });
+      ellipsoid(holder, [gx * 0.1, 0, 0.05], [0.22, 0.25 * Math.min(1, open * 1.2), 0.05], iris, { lat: 6, lon: 10, bias: FEATURE_BIAS + 0.05 });
+      ellipsoid(holder, [gx * 0.1, 0, 0.09], [0.11, 0.12, 0.03], '#0a0807', { lat: 4, lon: 8, bias: FEATURE_BIAS + 0.1 });
+      ellipsoid(holder, [gx * 0.1 - 0.08, 0.1, 0.12], [0.07, 0.07, 0.02], '#ffffff', { lat: 3, lon: 6, bias: FEATURE_BIAS + 0.15 });
+    } else closedLine(0.3);
+    // Brows: the face's main way of acting, most of all for dot eyes.
+    const browY = eyeY + (eyes === 'dot' ? 0.2 : eyes === 'sleepy' ? 0.28 : 0.4) + life.brow * 0.12;
+    tube(face, [[side * (spread - 0.2), browY, z(side * (spread - 0.2), browY) + 0.01], [side * spread, browY + 0.05, z(side * spread, browY) + 0.01], [side * (spread + 0.26), browY - 0.03 - life.brow * 0.05, z(side * (spread + 0.26), browY) + 0.01]], eyes === 'dot' ? 0.035 : 0.045, shadeHex(look.hair, 0.05), { sides: 4, bias: FEATURE_BIAS + 0.1 });
+    if (look.cheeks === 'flushed' || eyes === 'glossy' || eyes === 'oval') disc(face, [side * (spread + 0.28), eyeY - 0.4, z(side * (spread + 0.28), eyeY - 0.4) + 0.005], 0.2, 0.12, '#f07882', { segments: 8, alpha: 0.5 });
+    if (tearDrop !== null) {
+      const drop = (tearDrop + (side + 1) * 0.37) % 1;
+      ellipsoid(face, [side * spread * 0.9, eyeY - 0.22 - drop * 0.7, z(side * spread * 0.9, eyeY - 0.3) + 0.04], [0.06, 0.09, 0.04], '#a0d2ff', { lat: 3, lon: 6, bias: FEATURE_BIAS + 0.3 });
     }
-    const open = new Node();
-    holder.add(open);
-    ellipsoid(open, [0, 0, 0], [w, h, 0.05], '#fbfaf7', { lat: 4, lon: 10, bias: FEATURE_BIAS });
-    ellipsoid(open, [0, 0, 0.04], [h * 0.95, h * 0.95, 0.04], '#2b1c14', { lat: 4, lon: 8, bias: FEATURE_BIAS + 0.05 });
-    ellipsoid(open, [0, 0, 0.07], [h * 0.45, h * 0.45, 0.03], '#0c0a0a', { lat: 3, lon: 6, bias: FEATURE_BIAS + 0.1 });
-    if (type === 'large') ellipsoid(open, [-h * 0.35, h * 0.4, 0.1], [h * 0.22, h * 0.22, 0.02], '#ffffff', { lat: 3, lon: 6, bias: FEATURE_BIAS + 0.15 });
-    const lid = (y, tilt) => tube(holder, [[-w * 1.1, y - tilt, 0.06], [0, y + h * 0.35, 0.07], [w * 1.1, y + tilt, 0.06]], 0.022, '#1d1a1a', { sides: 3, bias: FEATURE_BIAS + 0.2 });
-    lid(h * 1.05, type === 'monolid' ? side * 0.03 : 0);
-    if (type === 'monolid') ellipsoid(holder, [0, h * 0.78, 0.04], [w * 1.08, h * 0.5, 0.04], skin, { lat: 3, lon: 8, bias: FEATURE_BIAS + 0.12 });
-    if (type === 'innerDouble' || type === 'large') tube(holder, [[-w * 0.9, h * 1.7, 0.05], [0, h * 2.0, 0.06], [w * 0.9, h * 1.7, 0.05]], 0.014, shadeHex(skin, -0.3), { sides: 3, bias: FEATURE_BIAS + 0.1 });
-    const closedLine = new Node();
-    tube(closedLine, [[-w, 0, 0.06], [0, -0.07, 0.07], [w, 0, 0.06]], 0.03, '#1d1a1a', { sides: 3, bias: FEATURE_BIAS + 0.3 });
-    closedLine.visible = false;
-    holder.add(closedLine);
-    eyes.push({ holder, side, h, open, closedLine });
   }
-  return { eyes, eyeY, scale };
-}
-
-function buildBrows(head, look, shape, eyeY) {
-  const style = look.brows ?? 'soft';
-  const thickness = { thickCurved: 0.07, straight: 0.045, soft: 0.035 }[style] ?? 0.04;
-  const color = shadeHex(look.hair === '#ffffff' ? '#cfcfcf' : look.hair, 0.05);
-  const browY = eyeY + 0.27;
-  const brows = [];
-  for (const side of [-1, 1]) {
-    const holder = head.add(new Node(0, browY, 0));
-    const spots = [[0.18, 0.0], [0.39, style === 'straight' ? 0.01 : 0.05], [0.6, style === 'straight' ? -0.01 : -0.04]];
-    const points = spots.map(([x, y]) => [side * x, y, surfaceZ(shape, side * x, browY + y) + 0.02]);
-    tube(holder, points, thickness, color, { sides: 4, bias: FEATURE_BIAS + 0.05 });
-    brows.push({ holder, side, browY });
-  }
-  return brows;
-}
-
-function buildNose(head, look, shape) {
-  const color = shadeHex(look.skin, -0.1);
-  const z = surfaceZ(shape, 0, -0.12);
-  const at = (y, dz) => [0, y, z + dz];
-  if (look.nose === 'bridge') {
-    ellipsoid(head, at(0.0, -0.01), [0.07, 0.3, 0.1], color, { lat: 4, lon: 6, bias: FEATURE_BIAS });
-    ellipsoid(head, at(-0.2, 0.06), [0.14, 0.1, 0.1], color, { lat: 4, lon: 8, bias: FEATURE_BIAS });
-  } else if (look.nose === 'delicate') {
-    ellipsoid(head, at(-0.1, 0.02), [0.05, 0.2, 0.07], color, { lat: 4, lon: 6, bias: FEATURE_BIAS });
-    ellipsoid(head, at(-0.2, 0.05), [0.09, 0.07, 0.07], color, { lat: 4, lon: 8, bias: FEATURE_BIAS });
+  if (style.nose === 'small') ellipsoid(face, [0, eyeY - 0.3, z(0, eyeY - 0.3) + 0.02], [0.06, 0.05, 0.05], shadeHex(look.skin, -0.12), { lat: 3, lon: 6, bias: FEATURE_BIAS });
+  else if (style.nose === 'dot') ellipsoid(face, [0, eyeY - 0.28, z(0, eyeY - 0.28) + 0.01], [0.035, 0.035, 0.03], '#7a4a3a', { lat: 3, lon: 6, bias: FEATURE_BIAS });
+  // The mouth: a style of its own, bending with the smile.
+  const my = eyeY - 0.58;
+  const mz = (x, y) => z(x, y) + 0.005;
+  const frown = life.smile < 0;
+  if (style.mouth === 'line') {
+    const tilt = (life.smile - 0.3) * 0.12;
+    tube(face, [[-0.16, my + tilt, mz(-0.16, my)], [0, my - Math.abs(tilt) * 0.3, mz(0, my)], [0.16, my + tilt, mz(0.16, my)]], 0.03, '#5a3030', { sides: 3, bias: FEATURE_BIAS + 0.1 });
+  } else if (style.mouth === 'dot') {
+    disc(face, [0, my, mz(0, my)], frown ? 0.05 : 0.045, frown ? 0.035 : 0.045, '#6f2a2e', { segments: 8, bias: FEATURE_BIAS + 0.1 });
+  } else if (style.mouth === 'cat') {
+    for (const side of [-1, 1]) {
+      const points = Array.from({ length: 6 }, (_, index) => {
+        const angle = (index / 5) * Math.PI;
+        const x = side * 0.1 + side * 0.1 * (1 - Math.cos(angle)) * 0.9 - side * 0.09;
+        const y = my + (frown ? -0.1 : 0.1) - (frown ? -1 : 1) * Math.sin(angle) * 0.1 * (0.6 + Math.abs(life.smile) * 0.6);
+        return [x, y, mz(x, y)];
+      });
+      tube(face, points, 0.028, '#7a3a3a', { sides: 3, bias: FEATURE_BIAS + 0.1 });
+    }
   } else {
-    ellipsoid(head, at(-0.14, 0.04), [0.13, 0.12, 0.1], color, { lat: 4, lon: 8, bias: FEATURE_BIAS });
-  }
-}
-
-/** The mouth for an expression, built into a node that is rebuilt when it changes. */
-function buildMouth(node, look, shape, expression) {
-  node.faces = [];
-  const mouthY = -0.5;
-  const z = surfaceZ(shape, 0, mouthY) + 0.015;
-  const lip = '#9c4f4f';
-  const arc = (span, radius, flip) => {
-    const points = Array.from({ length: 9 }, (_, index) => {
-      const angle = -span / 2 + (span * index) / 8;
-      return [Math.sin(angle) * radius, flip ? mouthY + Math.cos(angle) * radius - radius : mouthY - Math.cos(angle) * radius + radius, z];
+    const span = 0.7 + Math.abs(life.smile) * 0.8;
+    const arc = Array.from({ length: 7 }, (_, index) => {
+      const angle = -span / 2 + (span * index) / 6;
+      const x = Math.sin(angle) * 0.26;
+      const y = frown ? my + Math.cos(angle) * 0.26 - 0.26 : my - Math.cos(angle) * 0.26 + 0.26;
+      return [x, y, mz(x, y)];
     });
-    tube(node, points.map((point) => [point[0], point[1], surfaceZ(shape, point[0], point[1]) + 0.015]), 0.035, lip, { sides: 3, bias: FEATURE_BIAS + 0.1 });
-  };
-  const open = (w, h) => {
-    disc(node, [0, mouthY + 0.03, z], w, h, '#6f2a2e', { segments: 10, bias: FEATURE_BIAS + 0.05 });
-  };
-  if (expression === 'happy') {
-    open(0.26, 0.09);
-    disc(node, [0, mouthY + 0.075, z + 0.001], 0.22, 0.035, '#ffffff', { segments: 8, bias: FEATURE_BIAS + 0.08 });
-    arc(1.8, 0.27, false);
-  } else if (expression === 'sad' || expression === 'crying') {
-    arc(1.1, 0.25, true);
-  } else if (expression === 'sleep' || expression === 'blank' || expression === 'blank-closed') {
-    tube(node, [[-0.13, mouthY, z], [0.13, mouthY, z]], 0.03, lip, { sides: 3 });
-  } else if (look.mouth === 'smileTeeth') {
-    open(0.24, 0.085);
-    disc(node, [0, mouthY + 0.07, z + 0.001], 0.2, 0.032, '#ffffff', { segments: 8, bias: FEATURE_BIAS + 0.08 });
-    arc(1.6, 0.26, false);
-  } else if (look.mouth === 'animated') {
-    open(0.12, 0.11);
-    arc(1.3, 0.22, false);
-  } else if (look.mouth === 'composed') {
-    tube(node, [[-0.15, mouthY, z], [0.15, mouthY, z]], 0.032, lip, { sides: 3 });
-  } else {
-    arc(1.0, 0.3, false);
+    if (life.smile > 0.8) disc(face, [0, my + 0.04, mz(0, my)], 0.2, 0.06, '#6f2a2e', { segments: 10, bias: FEATURE_BIAS });
+    tube(face, arc, 0.03, '#9c4f4f', { sides: 3, bias: FEATURE_BIAS + 0.1 });
   }
 }
 
-function buildGlasses(head, look, shape, eyeY) {
+function buildGlasses(head, look, big, style) {
   if (!look.glasses) return;
   const thick = look.glasses === 'thickBlack';
   const color = thick ? '#0d0d0d' : '#b6a27a';
-  const radius = thick ? 0.3 : 0.31;
+  const eyeY = style.lowEyes ? -0.08 : 0.06;
+  const spread = 0.4 + style.head * 0.08;
+  const radius = style.eyes === 'dot' || style.eyes === 'bean' ? 0.3 : 0.4;
   const tubeRadius = thick ? 0.05 : 0.022;
+  const z = surfaceZ(big, spread, eyeY) + 0.12;
   for (const side of [-1, 1]) {
-    const cx = side * 0.38;
-    const z = surfaceZ(shape, cx, eyeY) + 0.11;
-    const ring = Array.from({ length: 14 }, (_, index) => {
-      const angle = (index / 14) * TWO_PI;
-      return [cx + Math.cos(angle) * radius, eyeY + Math.sin(angle) * radius * 0.92, z];
-    });
+    const ring = Array.from({ length: 14 }, (_, index) => [side * spread + Math.cos((index / 14) * TWO_PI) * radius, eyeY + Math.sin((index / 14) * TWO_PI) * radius * 0.95, z]);
     tube(head, ring, tubeRadius, color, { sides: 4, closed: true, bias: FEATURE_BIAS + 0.3 });
-    if (!thick) ellipsoid(head, [cx, eyeY, z - 0.02], [radius, radius * 0.92, 0.01], '#a6c0b0', { lat: 2, lon: 10, alpha: 0.18, bias: FEATURE_BIAS + 0.2 });
-    tube(head, [[cx + side * radius, eyeY, z], [side * (shape.w * 0.92), eyeY, z - 0.5]], tubeRadius * 0.8, color, { sides: 3, bias: FEATURE_BIAS + 0.2 });
+    tube(head, [[side * (spread + radius), eyeY, z], [side * (big.w * 0.92), eyeY, z - 0.5]], tubeRadius * 0.8, color, { sides: 3, bias: FEATURE_BIAS + 0.2 });
   }
-  tube(head, [[-0.1, eyeY + 0.05, surfaceZ(shape, 0, eyeY) + 0.12], [0.1, eyeY + 0.05, surfaceZ(shape, 0, eyeY) + 0.12]], tubeRadius, color, { sides: 3, bias: FEATURE_BIAS + 0.3 });
+  tube(head, [[-0.1, eyeY + 0.05, z], [0.1, eyeY + 0.05, z]], tubeRadius, color, { sides: 3, bias: FEATURE_BIAS + 0.3 });
 }
 
 function buildHair(head, look, shape, detail) {
@@ -421,39 +422,17 @@ function buildModel(look, outfit, detail) {
   torso.faces.push({ points: [[-0.34, 3.26, 0.6], [0.34, 3.26, 0.6], [0, 2.1, 0.6]], color: shirt, bias: 0.3, alpha: 1 });
   prism(torso, [0, 3.2, 0], [0, 3.85, 0], 0.32, 0.3, hexToRgb(shadeHex(skin, -0.08)), { sides: 8, caps: false });
 
-  const head = torso.add(new Node(0, 4.55, 0));
+  // A toy head: its size and features come from the character's face style.
+  const style = styleOf(look);
   const shape = FACES[look.face] ?? FACES.round;
-  ellipsoid(head, [0, 0, 0], [shape.w, shape.h, shape.d], skinRgb, { lat: detail ? 14 : 8, lon: detail ? 20 : 12, deform: faceDeform(shape) });
-  for (const side of [-1, 1]) ellipsoid(head, [side * shape.w * 0.96, 0.05, 0], [0.14, 0.26, 0.14], hexToRgb(shadeHex(skin, -0.05)), { lat: 4, lon: 6 });
-  let eyes = [];
-  let brows = [];
-  const mouthNode = head.add(new Node());
-  const tears = [];
-  let eyeY = 0.05;
-  if (detail) {
-    const built = buildEyes(head, look, shape, skin, detail);
-    eyes = built.eyes;
-    eyeY = built.eyeY;
-    brows = buildBrows(head, look, shape, eyeY);
-    buildNose(head, look, shape);
-    buildGlasses(head, look, shape, eyeY);
-    if (look.cheeks === 'flushed') {
-      for (const side of [-1, 1]) disc(head, [side * 0.55, -0.18, surfaceZ(shape, side * 0.55, -0.18) + 0.015], 0.2, 0.12, hexToRgb('#f07882'), { segments: 8, alpha: 0.45 });
-    }
-    if (look.stubble) {
-      ellipsoid(head, [0, 0, 0], [shape.w * 1.012, shape.h * 1.012, shape.d * 1.012], hexToRgb('#3b2d25'), { lat: 6, lon: 20, deform: faceDeform(shape), alpha: 0.2, bias: 0.05 });
-    }
-    for (const side of [-1, 1]) {
-      const tearNode = head.add(new Node(side * 0.4, -0.2, surfaceZ(shape, side * 0.4, -0.2) + 0.05));
-      ellipsoid(tearNode, [0, 0, 0], [0.06, 0.09, 0.04], hexToRgb('#a0d2ff'), { lat: 3, lon: 6, bias: FEATURE_BIAS + 0.3 });
-      tearNode.visible = false;
-      tears.push({ node: tearNode, side });
-    }
-  } else {
-    buildEyes(head, look, shape, skin, 0);
-    buildGlasses(head, look, shape, eyeY);
-  }
-  buildHair(head, look, shape, detail);
+  const big = { w: shape.w * style.head, h: shape.h * (0.85 + style.head * 0.17), d: shape.d * (0.9 + style.head * 0.17), taper: shape.taper * 0.5 };
+  const head = torso.add(new Node(0, 3.6 + big.h, 0));
+  ellipsoid(head, [0, 0, 0], [big.w, big.h, big.d], skinRgb, { lat: detail ? 20 : 8, lon: detail ? 30 : 12, deform: faceDeform(big) });
+  for (const side of [-1, 1]) ellipsoid(head, [side * big.w * 0.97, -0.1, 0], [0.12, 0.2, 0.12], hexToRgb(shadeHex(skin, -0.05)), { lat: 4, lon: 6 });
+  buildGlasses(head, look, big, style);
+  if (look.stubble && detail) ellipsoid(head, [0, 0, 0], [big.w * 1.012, big.h * 1.012, big.d * 1.012], hexToRgb('#3b2d25'), { lat: 6, lon: 20, deform: faceDeform(big), alpha: 0.2, bias: 0.05 });
+  buildHair(head, look, big, detail);
+  const faceNode = head.add(new Node());
 
   const arms = [-1, 1].map((side) => {
     const shoulder = torso.add(new Node(side * 1.0 * thin, 3.1, 0));
@@ -469,7 +448,7 @@ function buildModel(look, outfit, detail) {
   box(crate, [0, 0.58, 0], [1.2, 0.12, 0.56], hexToRgb('#a8844f'));
   crate.visible = false;
 
-  return { root, body, torso, head, legs, arms, eyes, brows, tears, mouthNode, shape, look, crate, mouthKey: null, detail };
+  return { root, body, torso, head, legs, arms, faceNode, big, style, look, crate, faceKey: null, detail };
 }
 
 // ── Posing ─────────────────────────────────────────────────────────────
@@ -564,30 +543,18 @@ function applyPose(model, pose, phase, posture) {
   }
 }
 
-function applyFace(model, expression, phase) {
-  if (!model.detail) return;
-  const closed = expression === 'sleep' || expression === 'blank-closed';
-  const sad = expression === 'sad' || expression === 'crying';
-  for (const eye of model.eyes) {
-    eye.open.visible = !closed;
-    if (eye.closedLine) eye.closedLine.visible = closed;
-  }
-  for (const brow of model.brows) {
-    brow.holder.angles[2] = sad ? brow.side * -0.3 : 0;
-    brow.holder.position[1] = brow.browY + (sad ? 0.04 : 0);
-  }
-  const key = expression ?? '';
-  if (model.mouthKey !== key) {
-    buildMouth(model.mouthNode, model.look, model.shape, expression);
-    model.mouthKey = key;
-  }
-  for (const tear of model.tears) {
-    tear.node.visible = expression === 'crying';
-    if (expression === 'crying') {
-      const drop = (phase / TWO_PI + (tear.side + 1) * 0.37) % 1;
-      tear.node.position[1] = -0.2 - drop * 0.7;
-    }
-  }
+/** Blink every few seconds and glance about, so a still figure is never frozen. */
+function applyFace(model, expression, phase, time) {
+  const blinking = time % 4.3 > 4.15;
+  const gaze = [0, 0, 1, 0, -1][Math.floor(time / 2.7) % 5];
+  const crying = expression === 'crying';
+  const tearFrame = crying ? Math.floor((phase / TWO_PI) * 8) % 8 : -1;
+  const key = `${expression ?? ''}|${blinking}|${gaze}|${tearFrame}`;
+  if (model.faceKey === key) return;
+  model.faceKey = key;
+  model.faceNode.faces = [];
+  model.faceNode.children = [];
+  buildFace(model.faceNode, model.look, model.big, model.style, lifeFor(expression, blinking, gaze), model.detail, crying ? tearFrame / 8 : null);
 }
 
 // ── Drawing ────────────────────────────────────────────────────────────
@@ -644,7 +611,7 @@ function pose(model, options, yawDefault) {
   const { pose: poseName = 'standing', expression = null, time = 0, posture = 'upright', view = 'front' } = options;
   const phase = time * (OMEGA[poseName] ?? 1.2);
   applyPose(model, poseName, phase, posture);
-  applyFace(model, expression, phase);
+  applyFace(model, expression, phase, time);
   // A three-quarter turn gives depth; from the back, a desk worker.
   const yaw = view === 'back' ? Math.PI - 0.45 : poseName === 'lying' ? 0 : yawDefault;
   model.root.angles[1] = yaw;

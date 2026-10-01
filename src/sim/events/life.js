@@ -324,4 +324,4 @@ export const LIFE_DECK = [
 ];
 
 // The first build's life cards, kept: they are tagged as mid-quarter in events.js.
-export const LIFE_IDS_FROM_CORE = ['healthScare', 'familyIllness', 'partner', 'baby', 'house', 'fitness', 'vacation', 'startupBet', 'insomnia', 'windfall'];
+export const LIFE_IDS_FROM_CORE = ['healthScare', 'familyIllness', 'house', 'fitness', 'vacation', 'startupBet', 'insomnia', 'windfall'];

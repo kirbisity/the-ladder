@@ -6,6 +6,8 @@
 import { drawPerson, drawHead, peerLook } from './figures.js';
 import { drawCar, drawHouse, drawApartment, drawUmbrella } from './props3d.js';
 import { mixColor } from './office.js';
+import { lifeScenes } from './scenes-life.js';
+import { drawWorldTour, worldRoute, WORLD_STOPS, WORLD_STOP_SECONDS, WORLD_INTRO_SECONDS } from './scenes-world.js';
 
 export const END_SCENES = {
   death: 'The funeral',
@@ -22,8 +24,12 @@ export const INTERIM_SCENES = {
   promoted: 'Promotion',
   lostJob: 'Packing the box',
   newJob: 'First day',
+  dating: 'First date',
   married: 'Wedding',
+  newborn: 'Newborn',
   child: 'A new baby',
+  breakup: 'Breakup',
+  divorce: 'Divorce',
   house: 'The keys',
   burnout: 'Burnout',
   healthScare: 'The ambulance',
@@ -34,7 +40,7 @@ export const INTERIM_SCENES = {
 
 // Journal moments that earn a short scene.
 export const JOURNAL_SCENES = {
-  promoted: 'promoted', lostJob: 'lostJob', rehired: 'newJob', joined: 'newJob', married: 'married', child: 'child', house: 'house',
+  promoted: 'promoted', lostJob: 'lostJob', rehired: 'newJob', joined: 'newJob', dating: 'dating', married: 'married', child: 'child', parentalLeave: 'newborn', breakup: 'breakup', divorce: 'divorce', house: 'house',
   burnout: 'burnout', healthScare: 'healthScare', holiday: 'holiday', fmla: 'fmla', startupWin: 'startupWin',
 };
 
@@ -150,9 +156,9 @@ function tree(k, context, x, y, { height = 3, crown = '#3f7a46', trunk = '#5b403
   context.fill();
 }
 
-/** A car, as a 3D model standing at a ground point. */
-function car(k, context, x, y, kind) {
-  drawCar(context, k, x, y, kind);
+/** A car, as a 3D model centred on a ground point, its nose along `heading` (0 faces +x, π/2 faces +y). */
+function car(k, context, x, y, kind, heading = Math.PI / 2) {
+  drawCar(context, k, x, y, kind, 0, undefined, heading);
 }
 
 // ── Scenes ─────────────────────────────────────────────────────────────
@@ -477,125 +483,6 @@ const SCENES = {
   retiredWealthy: retirementScene(2),
   retiredLuxury: retirementScene(3),
 
-  fire: {
-    duration: 14,
-    captions: (data) => [
-      `At ${data.age}, ${data.firstName} decided the money was enough.`,
-      'Paris in the spring. Fuji in cherry blossom. A beach with no Wi-Fi.',
-      'No alarm clock. No calendar invites. The whole world, one place at a time.',
-    ],
-    draw(context, width, height, time, data) {
-      const stage = Math.min(3, Math.floor(time / 3.5));
-      const local = time - stage * 3.5;
-      if (stage === 0) {
-        // A world map with a flight arcing across it.
-        sky(context, width, height, '#0f2a4a', '#1d4f7a');
-        context.fillStyle = '#2f6a4f';
-        for (const [x, y, rx, ry] of [[0.22, 0.4, 0.12, 0.16], [0.28, 0.68, 0.06, 0.14], [0.5, 0.38, 0.09, 0.12], [0.53, 0.62, 0.07, 0.15], [0.72, 0.42, 0.16, 0.14], [0.82, 0.72, 0.06, 0.05]]) {
-          context.beginPath();
-          context.ellipse(width * x, height * y, width * rx, height * ry, 0, 0, Math.PI * 2);
-          context.fill();
-        }
-        const progress = Math.min(1, local / 3.2);
-        context.setLineDash([6, 8]);
-        context.strokeStyle = 'rgba(255, 255, 255, 0.7)';
-        context.lineWidth = 2;
-        context.beginPath();
-        const start = { x: width * 0.22, y: height * 0.42 };
-        const control = { x: width * 0.5, y: height * 0.05 };
-        const end = { x: width * 0.78, y: height * 0.45 };
-        for (let step = 0; step <= 40 * progress; step += 1) {
-          const t = step / 40;
-          const x = (1 - t) ** 2 * start.x + 2 * (1 - t) * t * control.x + t ** 2 * end.x;
-          const y = (1 - t) ** 2 * start.y + 2 * (1 - t) * t * control.y + t ** 2 * end.y;
-          if (step === 0) context.moveTo(x, y);
-          else context.lineTo(x, y);
-        }
-        context.stroke();
-        context.setLineDash([]);
-        const t = progress;
-        const px = (1 - t) ** 2 * start.x + 2 * (1 - t) * t * control.x + t ** 2 * end.x;
-        const py = (1 - t) ** 2 * start.y + 2 * (1 - t) * t * control.y + t ** 2 * end.y;
-        context.fillStyle = '#ffffff';
-        context.save();
-        context.translate(px, py);
-        context.rotate(Math.atan2(height * 0.3 * (1 - 2 * t), width * 0.56) - 0.1);
-        context.fillRect(-14, -3, 28, 6);
-        context.fillRect(-4, -12, 6, 24);
-        context.restore();
-        return;
-      }
-      const traveller = { top: '#d97706', bottom: '#3f5a73', shirt: '#fff4dc' };
-      if (stage === 1) {
-        sky(context, width, height, '#f6a46b', '#fde2b8');
-        const k = kit(context, width, height, Math.min(width, height * 1.6) / 16, width / 2, height * 0.6);
-        context.fillStyle = '#b8a88e';
-        context.fillRect(0, height * 0.7, width, height * 0.3);
-        // An iron lattice tower on the skyline.
-        const base = { x: width * 0.72, y: height * 0.7 };
-        context.strokeStyle = '#4a3a2e';
-        context.lineWidth = 3;
-        context.beginPath();
-        context.moveTo(base.x - width * 0.08, base.y);
-        context.quadraticCurveTo(base.x - width * 0.02, base.y - height * 0.3, base.x, base.y - height * 0.58);
-        context.quadraticCurveTo(base.x + width * 0.02, base.y - height * 0.3, base.x + width * 0.08, base.y);
-        context.moveTo(base.x - width * 0.05, base.y - height * 0.2);
-        context.lineTo(base.x + width * 0.05, base.y - height * 0.2);
-        context.moveTo(base.x - width * 0.025, base.y - height * 0.38);
-        context.lineTo(base.x + width * 0.025, base.y - height * 0.38);
-        context.stroke();
-        k.box(-6, 1, 0, 1.2, 0.8, 0.9, '#d8c6a8');
-        k.person(-1 + local * 0.5, 4, data.look, { pose: 'walking', expression: 'happy', outfit: traveller, time });
-      } else if (stage === 2) {
-        sky(context, width, height, '#9cc8ec', '#e8f3fb');
-        context.fillStyle = '#5a6d86';
-        context.beginPath();
-        context.moveTo(width * 0.25, height * 0.68);
-        context.lineTo(width * 0.55, height * 0.22);
-        context.lineTo(width * 0.85, height * 0.68);
-        context.fill();
-        context.fillStyle = '#ffffff';
-        context.beginPath();
-        context.moveTo(width * 0.47, height * 0.34);
-        context.lineTo(width * 0.55, height * 0.22);
-        context.lineTo(width * 0.63, height * 0.34);
-        context.lineTo(width * 0.58, height * 0.31);
-        context.lineTo(width * 0.55, height * 0.35);
-        context.lineTo(width * 0.51, height * 0.31);
-        context.fill();
-        const k = kit(context, width, height, Math.min(width, height * 1.6) / 16, width / 2, height * 0.6);
-        context.fillStyle = '#7fa36a';
-        context.fillRect(0, height * 0.68, width, height * 0.32);
-        tree(k, context, -3, 3, { crown: '#f3b6c8', height: 2.6 });
-        tree(k, context, 3.5, 1.5, { crown: '#f7c6d4', height: 2.4 });
-        k.person(0.5, 4.2, data.look, { pose: 'waving', expression: 'happy', outfit: traveller, time });
-        falling(context, width, height, time, ['#f7c6d4', '#ffffff', '#f3a5bb'], { count: 50, speed: 50, size: 6 });
-      } else {
-        sky(context, width, height, '#4fb3e8', '#c7ecff');
-        context.fillStyle = '#2a8fc7';
-        context.fillRect(0, height * 0.45, width, height * 0.25);
-        context.fillStyle = '#fff3c4';
-        context.beginPath();
-        context.arc(width * 0.8, height * 0.18, height * 0.08, 0, Math.PI * 2);
-        context.fill();
-        const k = kit(context, width, height, Math.min(width, height * 1.6) / 16, width / 2, height * 0.62);
-        context.fillStyle = '#f0dca4';
-        context.fillRect(0, height * 0.7, width, height * 0.3);
-        for (let wave = 0; wave < 4; wave += 1) {
-          context.strokeStyle = 'rgba(255, 255, 255, 0.6)';
-          context.beginPath();
-          const y = height * 0.66 + wave * 4 + Math.sin(time * 2 + wave) * 2;
-          context.moveTo(0, y);
-          for (let x = 0; x <= width; x += 20) context.lineTo(x, y + Math.sin(x / 30 + time * 3) * 2);
-          context.stroke();
-        }
-        tree(k, context, -3.5, 2, { palm: true, crown: '#2f7d3b', trunk: '#8a6a42', height: 3.5 });
-        k.box(1.5, 3.5, 0, 1.6, 0.7, 0.25, '#ffffff');
-        k.person(2.3, 3.9, data.look, { pose: 'sitting', expression: 'happy', outfit: { top: '#1aa3a3', bottom: '#f4d06f', shirt: '#1aa3a3' }, time, z: 0.25 });
-      }
-    },
-  },
-
   // ── Interim ──
   promoted: interim(3.8, (data) => [`Promoted: ${data.title}.`], (context, width, height, time, data, k) => {
     sky(context, width, height, '#cfe0f2', '#eef4fa');
@@ -632,19 +519,6 @@ const SCENES = {
     context.textAlign = 'center';
     context.fillText(data.company.toUpperCase(), sign.x, sign.y);
     k.person(2.5 - time * 0.7, 1.6, data.look, { pose: 'walking', expression: 'happy', time, facing: -1 });
-  }),
-  married: interim(4, () => ['Just married.'], (context, width, height, time, data, k) => {
-    sky(context, width, height, '#bfe3f7', '#f4fbff');
-    k.ground(-4, -2, 6, 6, '#8fc47a');
-    const arch = k.iso(0.6, 0.6, 0);
-    context.strokeStyle = '#ffffff';
-    context.lineWidth = k.unit * 0.18;
-    context.beginPath();
-    context.arc(arch.x, arch.y - k.unit * 2.2, k.unit * 1.6, Math.PI, 0);
-    context.stroke();
-    k.person(0, 1.5, data.look, { pose: 'standing', expression: 'happy', time, outfit: { top: '#1d2433', bottom: '#1d2433', shirt: '#ffffff' } });
-    k.person(1.3, 1.5, peerLook(data.seed + 5), { pose: 'waving', expression: 'happy', time, outfit: { top: '#f6f2ea', bottom: '#f6f2ea', shirt: '#f6f2ea' } });
-    falling(context, width, height, time, ['#ffffff', '#f7c6d4', '#ffe9a8'], { count: 70, speed: 70, size: 5 });
   }),
   child: interim(4, () => ['A new person in the house. Nobody sleeps.'], (context, width, height, time, data, k) => {
     sky(context, width, height, '#2a3550', '#41507a');
@@ -687,34 +561,6 @@ const SCENES = {
     context.fillRect(0, 0, width, height);
     context.globalCompositeOperation = 'source-over';
   }),
-  healthScare: interim(3.8, () => ['Chest pains. Sirens.'], (context, width, height, time, data, k) => {
-    sky(context, width, height, '#0b1020', '#1a2240');
-    k.ground(-4, -2, 6, 6, '#2a2f3a');
-    k.box(-1.5, 0, 0.2, 3, 1.4, 1.6, '#f2f2f2');
-    k.box(1.5, 0.05, 0.2, 0.9, 1.3, 1.1, '#f2f2f2');
-    k.box(-1.5, -0.01, 0.9, 3, 0.02, 0.3, '#c8102e');
-    const light = k.iso(0, 0.7, 1.9);
-    const on = Math.sin(time * 12) > 0;
-    context.fillStyle = on ? '#ff3b3b' : '#3b7bff';
-    context.beginPath();
-    context.arc(light.x, light.y, k.unit * 0.18, 0, Math.PI * 2);
-    context.fill();
-    context.fillStyle = on ? 'rgba(255, 50, 50, 0.08)' : 'rgba(50, 100, 255, 0.08)';
-    context.fillRect(0, 0, width, height);
-  }),
-  holiday: interim(4, (data) => [`${data.firstName} switches off. Properly.`], (context, width, height, time, data, k) => {
-    sky(context, width, height, '#4fb3e8', '#c7ecff');
-    context.fillStyle = '#2a8fc7';
-    context.fillRect(0, height * 0.42, width, height * 0.2);
-    k.ground(-4, -1, 6, 6, '#f0dca4');
-    k.box(0, 1.5, 0, 1.6, 0.7, 0.25, '#ffffff');
-    const pole = k.iso(-0.3, 1.8, 2.2);
-    context.fillStyle = '#e5484d';
-    context.beginPath();
-    context.arc(pole.x, pole.y, k.unit * 1.1, Math.PI, 0);
-    context.fill();
-    k.person(0.8, 1.9, data.look, { pose: 'sitting', expression: 'happy', outfit: { top: '#1aa3a3', bottom: '#f4d06f', shirt: '#1aa3a3' }, time, z: 0.25 });
-  }),
   fmla: interim(4, () => ['Twelve weeks. The laptop stays closed.'], (context, width, height, time, data, k) => {
     sky(context, width, height, '#7d8fa6', '#b4c2d2');
     k.ground(-3, -2, 5, 5, '#d9c7a8');
@@ -733,12 +579,34 @@ const SCENES = {
   }),
 };
 
-function interim(duration, captions, draw) {
+// The FIRE ending tours a shuffled route of places (see scenes-world.js); the
+// big personal moments are drawn in scenes-life.js.
+Object.assign(SCENES, lifeScenes({ interim, sky, rain, falling, tree, mixColor, peerLook, umbrella: drawUmbrella }), {
+  fire: {
+    duration: WORLD_INTRO_SECONDS + WORLD_STOPS * WORLD_STOP_SECONDS,
+    captions: (data) => [`At ${data.age}, ${data.firstName} decided the money was enough.`, ...worldRoute(data.seed ?? 1).map((place) => place.line)],
+    captionAt: (time, data) => {
+      const route = worldRoute(data.seed ?? 1);
+      if (time < WORLD_INTRO_SECONDS) return `At ${data.age}, ${data.firstName} decided the money was enough.`;
+      return route[Math.min(route.length - 1, Math.floor((time - WORLD_INTRO_SECONDS) / WORLD_STOP_SECONDS))].line;
+    },
+    draw(context, width, height, time, data) {
+      drawWorldTour(context, width, height, time, data, { kit, sky, tree, falling, mixColor, peerLook, umbrella: drawUmbrella });
+    },
+  },
+});
+
+/**
+ * An interim scene. `zoom` shrinks the kit's unit for crowded sets (a wedding
+ * needs more ground than an office doorway), and `originY` slides the ground
+ * point the scene is drawn around.
+ */
+function interim(duration, captions, draw, { zoom = 1, originY = 0.52 } = {}) {
   return {
     duration,
     captions,
     draw(context, width, height, time, data) {
-      const k = kit(context, width, height, Math.min(width, height * 1.6) / 13, width / 2, height * 0.52);
+      const k = kit(context, width, height, Math.min(width, height * 1.6) / 13 * zoom, width / 2, height * originY);
       draw(context, width, height, time, data, k);
     },
   };
@@ -767,12 +635,12 @@ function retirementScene(tier) {
         // A worn apartment block with a balcony.
         drawApartment(context, k, -4, -3, data.home === 'nice' || data.home === 'luxury' ? 'nice' : 'worn');
         k.person(-1.85, 0.3, data.look, { pose: 'sitting', expression: null, outfit: { top: '#7b7568', bottom: '#4b4740', shirt: '#7b7568' }, time, z: 2.1, size: 0.17 });
-        car(k, context, 4.7, 4.5 - (1 - arrive) * 4, data.car ?? 'hatchback');
+        car(k, context, 5.25, 4.5 - (1 - arrive) * 4, data.car ?? 'hatchback');
       } else if (tier === 1) {
         drawHouse(context, k, -3.5, -2.5, 'modest');
         tree(k, context, 2.5, -2, { height: 3 });
         k.person(-0.6, 2.2, data.look, { pose: 'standing', expression: 'happy', outfit: { top: '#5b7f9a', bottom: '#c9b48a', shirt: '#ffffff' }, time });
-        car(k, context, 4.6, 4 - (1 - arrive) * 4, data.car ?? 'sedan');
+        car(k, context, 5.25, 4 - (1 - arrive) * 4, data.car ?? 'sedan');
       } else if (tier === 2) {
         drawHouse(context, k, -6.4, -3.5, 'family');
         for (let index = 0; index < 4; index += 1) tree(k, context, -5 + index * 3.3, 5.5, { height: 3.2, crown: '#3f8f4f' });
@@ -787,7 +655,7 @@ function retirementScene(tier) {
         context.beginPath();
         context.arc(dog.x + k.unit * 0.35, dog.y - k.unit * 0.42 + Math.sin(time * 8) * 2, k.unit * 0.14, 0, Math.PI * 2);
         context.fill();
-        car(k, context, 4.6, 3.8 - (1 - arrive) * 4, data.car ?? 'suv');
+        car(k, context, 5.25, 3.8 - (1 - arrive) * 4, data.car ?? 'suv');
       } else {
         // A villa: white cubes, a pool, palms, the sea and a boat.
         k.ground(-40, -40, 40, -5, '#2a8fc7');
@@ -806,7 +674,7 @@ function retirementScene(tier) {
         for (const [x, y] of [[2.5, -3], [3, 3.5], [-5.5, 2.5]]) tree(k, context, x, y, { palm: true, crown: '#2f7d3b', trunk: '#8a6a42', height: 4 });
         k.box(-0.4, 3.7, 0, 1.6, 0.6, 0.25, '#ffffff');
         k.person(0.3, 4.0, data.look, { pose: 'sitting', expression: 'happy', outfit: { top: '#ffffff', bottom: '#d9c7a8', shirt: '#ffffff' }, time, z: 0.25 });
-        car(k, context, 4.6, 3.6 - (1 - arrive) * 4, data.car ?? 'sports');
+        car(k, context, 5.25, 3.6 - (1 - arrive) * 4, data.car ?? 'sports');
       }
       // Birds in the evening sky.
       context.strokeStyle = 'rgba(40, 40, 50, 0.6)';
@@ -833,6 +701,13 @@ function retirementScene(tier) {
  * Args:
  *   overlay: element holding a canvas, a caption and a skip button
  */
+/** The caption for a moment: scenes with their own timing say so, the rest split evenly. */
+function captionFor(current, time) {
+  if (current.scene.captionAt) return current.scene.captionAt(time, current.data);
+  const line = Math.min(current.lines.length - 1, Math.floor(time / current.scene.duration * current.lines.length));
+  return current.lines[line];
+}
+
 export function createCutscenePlayer(overlay) {
   const canvas = overlay.querySelector('canvas');
   const caption = overlay.querySelector('.cutscene-caption');
@@ -868,8 +743,8 @@ export function createCutscenePlayer(overlay) {
     current.elapsed = time;
     context.clearRect(0, 0, rect.width, rect.height);
     current.scene.draw(context, rect.width, rect.height, time, current.data);
-    const line = Math.min(current.lines.length - 1, Math.floor(time / current.scene.duration * current.lines.length));
-    if (caption.textContent !== current.lines[line]) caption.textContent = current.lines[line];
+    const text = captionFor(current, time);
+    if (caption.textContent !== text) caption.textContent = text;
     if (time >= current.scene.duration) {
       finish();
       return;
@@ -884,8 +759,7 @@ export function createCutscenePlayer(overlay) {
     const rect = canvas.getBoundingClientRect();
     context.clearRect(0, 0, rect.width, rect.height);
     current.scene.draw(context, rect.width, rect.height, seconds, current.data);
-    const line = Math.min(current.lines.length - 1, Math.floor(seconds / current.scene.duration * current.lines.length));
-    caption.textContent = current.lines[line];
+    caption.textContent = captionFor(current, seconds);
   }
 
   function stop() {
@@ -922,6 +796,9 @@ export function sceneData(game) {
     company: game.org?.companyName ?? game.lastOrg?.companyName ?? 'the company',
     seed: game.seed ?? 1,
     netWorth: game.outcome?.netWorth ?? 0,
+    gender: game.character?.gender ?? 'male',
+    partnerLook: (game.partner ?? game.exPartner)?.look ?? null,
+    partnerFirstName: (game.partner ?? game.exPartner)?.name.split(' ')[0] ?? null,
     car: CAR_KINDS[game.flags.car] ?? null,
     home: game.flags.apartment ?? null,
   };

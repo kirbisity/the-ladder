@@ -3,7 +3,7 @@
 // player's to answer. The simulation itself is untouched: only who answers.
 
 // Decisions too big to repeat blindly: an ending is always the player's.
-const ALWAYS_ASK = new Set(['fireOffer']);
+const ALWAYS_ASK = new Set(['fireOffer', 'meetSomeone', 'proposal', 'considerKids', 'baby', 'coupleTalk']);
 
 /** Remember how this kind of event was just answered. */
 export function rememberAnswer(memory, eventId, choice, index) {

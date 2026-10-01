@@ -2,7 +2,7 @@
 // random source, the industry and character (kept by id) and queued events
 // (kept by id and rebuilt from the deck).
 
-import { INDUSTRIES, CHARACTERS } from '../config.js';
+import { INDUSTRIES, CHARACTERS, SOCIAL } from '../config.js';
 import { createRandom } from './random.js';
 import { reserveAgentIds } from './agent.js';
 import { eventById, offerEvent } from './events.js';
@@ -68,6 +68,12 @@ export function deserializeGame(text) {
     eventQueue: plain.eventQueue.map(eventFromData).filter(Boolean),
     currentEvent: eventFromData(plain.currentEvent),
   };
+  // Careers saved before the social circle, partners and children existed.
+  game.social ??= SOCIAL.start;
+  game.partner ??= null;
+  game.family ??= null;
+  game.children ??= [];
+  game.exPartner ??= null;
   delete game.randomState;
   delete game.industryId;
   delete game.characterId;

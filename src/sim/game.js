@@ -5,7 +5,7 @@
 
 import {
   TIME, MONEY, JOBS, HEALTH, MOTIVATION, READINESS, RELATIONSHIP, EVENTS as EVENT_DIALS,
-  INDUSTRIES, INDUSTRY_STATS, CHARACTERS, ORG, PROJECTS, FMLA, HOLIDAY, FIRE, COMPANY_TIERS, TIER_SHIFT, TIER_MIX, JOBLESS, AGING, BANDWIDTH } from '../config.js';
+  INDUSTRIES, INDUSTRY_STATS, CHARACTERS, ORG, PROJECTS, FMLA, HOLIDAY, FIRE, COMPANY_TIERS, TIER_SHIFT, TIER_MIX, JOBLESS, AGING, BANDWIDTH, SOCIAL, FAMILY } from '../config.js';
 import { createRandom } from './random.js';
 import {
   createAgent, stepDay, clamp, clampVitals, healthTarget, motivationTarget, blowResilience, strainAgeFactor, defaultPlan, payInBand, projectFor, projectSpec, defaultTrack, utilizationOf, RATING_LABELS,
@@ -19,6 +19,9 @@ import {
 } from './org.js';
 import { drawEvent, drawLifeEvent, eventById, offerEvent, fireEvent, trackEvent } from './events.js';
 import { record } from './story.js';
+import {
+  closeLifeQuarter, lifeMoodTerms, childCostPerYear, partnerTakeHome, partnerCostPerYear, afterDivorce,
+} from './family.js';
 
 export const MARKET_STATES = ['boom', 'normal', 'recession'];
 const MARKET_TRANSITIONS = {
@@ -72,6 +75,13 @@ export function createGame({ seed = Date.now() % 1e9, characterId = 'simon', ind
     homeEquity: 0,
     dependents: 0,
     married: false,
+    // The life outside the office (see family.js): the circle of friends, a
+    // partner and the marriage with them, the children, a past partner.
+    social: SOCIAL.start,
+    partner: null,
+    family: null,
+    children: [],
+    exPartner: null,
     lifetimeEarnings: 0,
     yearIncome: 0,
     lastYearIncome: 0,
@@ -191,6 +201,7 @@ function dayContext(game, employed) {
     outputModifier: game.flags.outputModifier,
     moodModifier: game.flags.moodModifier ?? 0,
     ageSensitivity: ageSensitivityOf(game),
+    lifeTerms: lifeMoodTerms(game),
   };
   if (!employed) {
     const quartersOut = game.employment.unemployedQuarters;
@@ -457,6 +468,29 @@ export function fmlaStatus(game) {
   return { eligible: true, reason: 'Twelve weeks off, unpaid, with your job protected: no rating, no PIP, no layoff.' };
 }
 
+/** Whether the player can step away for a new baby now. */
+export function parentalLeaveStatus(game) {
+  if (!game.employment.employed) return { eligible: false, reason: 'No job to take leave from.' };
+  if (game.fmla.daysLeft > 0 || game.holiday.daysLeft > 0) return { eligible: false, reason: 'Already on leave.' };
+  return { eligible: true, reason: 'Unpaid and job-protected.' };
+}
+
+/**
+ * Maternity or paternity leave: the same job-protected, unpaid leave as FMLA
+ * (no rating, no PIP), twelve weeks for the carrying parent and six for the
+ * other (see FAMILY.leaveDays).
+ */
+export function startParentalLeave(game) {
+  const days = FAMILY.leaveDays[game.character?.gender] ?? FAMILY.leaveDays.male;
+  game.fmla.daysLeft = days;
+  game.fmla.kind = 'parental';
+  game.fmla.lastStartQuarter = game.quarterIndex;
+  game.player.pip.active = false;
+  record(game, 'parentalLeave', { days });
+  log(game, `You start ${Math.round(days / 5)} weeks of ${game.character?.gender === 'female' ? 'maternity' : 'paternity'} leave.`);
+  return days;
+}
+
 /** Start twelve weeks of FMLA leave. Returns the status message. */
 export function takeFmla(game) {
   const status = fmlaStatus(game);
@@ -586,7 +620,10 @@ export function runDay(game) {
   if (onFmla) {
     player.quarter.unpaidDays = (player.quarter.unpaidDays ?? 0) + 1;
     game.fmla.daysLeft -= 1;
-    if (game.fmla.daysLeft === 0) notes.push({ kind: 'leaveOver', text: 'Your FMLA leave is over. Back to your desk on Monday.' });
+    if (game.fmla.daysLeft === 0) {
+      notes.push({ kind: 'leaveOver', text: game.fmla.kind === 'parental' ? 'Parental leave is over. The baby has a routine; you do not, yet.' : 'Your FMLA leave is over. Back to your desk on Monday.' });
+      game.fmla.kind = null;
+    }
   } else if (onHoliday) {
     if (game.holiday.daysLeft <= game.holiday.unpaidLeft) player.quarter.unpaidDays = (player.quarter.unpaidDays ?? 0) + 1;
     game.holiday.daysLeft -= 1;
@@ -657,6 +694,7 @@ export function closeQuarter(game) {
   else closeUnemployedQuarter(game, report);
 
   payQuarter(game, report);
+  if (closeLifeQuarter(game, report) === 'divorce') divorce(game, report, 'strain');
   if (!game.employment.employed) ageOutsideOrganization(player);
   rollHealthScare(game, report);
   advanceMarket(game, report);
@@ -930,20 +968,28 @@ function rollDivorce(game, report) {
 /**
  * The marriage ends: savings and home equity are split down the middle,
  * the lawyers take their fees, and the mood takes a long time to recover.
- * Children stay a cost: support replaces the household budget.
+ * Children stay a cost, at a share (see FAMILY.custodyCostShare).
+ * `reason` is 'unemployment' (a long search broke it) or 'strain' (the
+ * family bar sat under the partner's line: too many hours, too little home).
  */
-export function divorce(game, report = null) {
+export function divorce(game, report = null, reason = 'unemployment') {
   const halfSavings = Math.max(0, game.savings) / 2;
   const halfHome = game.homeEquity / 2;
+  const partnerName = game.partner?.name.split(' ')[0] ?? null;
   game.savings -= halfSavings + JOBLESS.divorceLegalFees;
   game.homeEquity -= halfHome;
   game.married = false;
-  game.player.motivation -= 20;
+  const hit = FAMILY.divorceMotivationHit * blowResilience(game.player.age);
+  game.player.motivation -= hit;
   game.player.health -= 4;
-  record(game, 'divorce', { lost: halfSavings + halfHome });
+  noteVitals(game, 'Divorce', -4, -hit);
+  afterDivorce(game, reason);
   if (report) {
     report.divorced = true;
-    report.notes.push(`Divorce. Half of everything, ${formatMoney(halfSavings + halfHome)}, and ${formatMoney(JOBLESS.divorceLegalFees)} to the lawyers.`);
+    const why = reason === 'strain'
+      ? `${partnerName ?? 'Your partner'} has been unhappy for a long time: the hours left no home to come back to.`
+      : 'The long search broke it.';
+    report.notes.push(`Divorce. ${why} Half of everything, ${formatMoney(halfSavings + halfHome)}, and ${formatMoney(JOBLESS.divorceLegalFees)} to the lawyers.`);
   }
 }
 
@@ -1137,13 +1183,14 @@ export function quarterlyExpenses(game) {
   // Committed costs come first: the floor, family, housing, bills, cover.
   // Lifestyle is a share of whatever is left, so a family on a modest salary
   // squeezes its spending rather than borrowing for it.
-  const family = game.dependents * 14000 + (game.married ? 6000 : 0);
+  const family = childCostPerYear(game) + partnerCostPerYear(game);
   const mortgage = game.homeEquity > 0 ? 9000 : 0;
   const rent = game.homeEquity > 0 ? 0 : game.rentPremium ?? 0;
   const plans = (game.paymentPlans ?? []).reduce((sum, plan) => sum + plan.perQuarter * 4, 0);
   const cobra = !employment.employed && game.flags.cobra ? MONEY.cobraPerQuarter * 4 : 0;
   const committed = MONEY.livingFloor + family + mortgage + rent + plans + cobra;
-  const spare = Math.max(0, takeHome - committed);
+  // A working partner's pay is the household's: it lifts what can be spent.
+  const spare = Math.max(0, takeHome + partnerTakeHome(game) - committed);
   const lifestyle = share * Math.min(spare, MONEY.lifestyleCap) + share * (MONEY.lifestyleShareAbove / MONEY.lifestyleShare) * Math.max(0, spare - MONEY.lifestyleCap);
   return (committed + lifestyle) / 4;
 }
@@ -1179,8 +1226,9 @@ function payQuarter(game, report) {
   const rate = MONEY.returns[game.market] / 4;
   const returns = game.savings > 0 ? game.savings * rate : game.savings * MONEY.debtInterestPerQuarter;
   game.homeEquity *= 1.0075;
-  game.savings += takeHome - expenses + returns;
+  game.savings += takeHome + partnerTakeHome(game) / 4 - expenses + returns;
   game.lifetimeEarnings += income;
+  report.partnerIncome = partnerTakeHome(game) / 4;
   game.yearIncome += income;
   if (game.quarterIndex % 4 === 3) {
     game.lastYearIncome = game.yearIncome;

@@ -628,7 +628,31 @@ function cached(key, build) {
 
 /** The model used for every car in the game: change it here (or per call) to restyle them all. */
 export const DEFAULT_CAR_STYLE = 'smooth';
-export const drawCar = (context, k, x, y, kind, z = 0, style = DEFAULT_CAR_STYLE) => drawProp(context, cached(`car:${kind}:${style}`, () => buildCar(kind, style)), k.iso(x, y, z), k.unit);
+
+/**
+ * A car turned to face a direction. `heading` is the angle of the nose on the
+ * ground plane in scene units: 0 faces +x, Math.PI / 2 faces +y. The turned
+ * car is centred on its point (an unturned one hangs from its rear corner).
+ */
+export function buildHeadedCar(kind, style, heading) {
+  const spec = CARS[kind] ?? CARS.sedan;
+  const pivot = new Node();
+  const body = buildCar(kind, style);
+  body.position = [-spec.L / 2, 0, -spec.W / 2];
+  pivot.add(body);
+  body.angles = [0, -heading, 0];
+  // Turning about the corner would swing the car off its point: counter it.
+  const cosine = Math.cos(heading);
+  const sine = Math.sin(heading);
+  const half = [spec.L / 2, spec.W / 2];
+  body.position = [-(half[0] * cosine - half[1] * sine), 0, -(half[0] * sine + half[1] * cosine)];
+  return pivot;
+}
+
+export const drawCar = (context, k, x, y, kind, z = 0, style = DEFAULT_CAR_STYLE, heading = null) => {
+  if (heading === null) return drawProp(context, cached(`car:${kind}:${style}`, () => buildCar(kind, style)), k.iso(x, y, z), k.unit);
+  return drawProp(context, cached(`car:${kind}:${style}:${heading.toFixed(3)}`, () => buildHeadedCar(kind, style, heading)), k.iso(x, y, z), k.unit);
+};
 export const drawHouse = (context, k, x, y, kind) => drawProp(context, cached(`house:${kind}`, () => buildHouse(kind)), k.iso(x, y), k.unit);
 export const drawApartment = (context, k, x, y, kind) => drawProp(context, cached(`apt:${kind}`, () => buildApartment(kind)), k.iso(x, y), k.unit);
 export const drawUmbrella = (context, k, x, y, z, color, accent) => drawProp(context, cached(`umb:${color}:${accent}`, () => buildUmbrella(color, accent)), k.iso(x, y, z), k.unit);

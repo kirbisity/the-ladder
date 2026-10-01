@@ -134,16 +134,25 @@ export function careerSummary(game) {
 
   // Life outside.
   const married = first(journal, 'married');
-  if (married) life.push(`married at ${Math.floor(married.age)}`);
+  const divorce = first(journal, 'divorce');
+  const spouse = married?.partner ?? null;
+  if (married) life.push(`married${spouse ? ` ${spouse}` : ''} at ${Math.floor(married.age)}`);
+  else if (first(journal, 'dating')) life.push(`found love with ${first(journal, 'dating').partner ?? 'someone'}, though it never reached a wedding`);
+  const breakups = count(journal, 'breakup');
+  if (breakups) life.push(`${breakups === 1 ? 'went through a breakup' : `went through ${plural(breakups, 'breakup')}`}`);
   const children = count(journal, 'child');
   if (children) life.push(`raised ${plural(children, 'child', 'children')}`);
+  if (first(journal, 'parentalLeave')) life.push('stepped away from work for a new baby');
   const house = first(journal, 'house');
   if (house) life.push(`bought a house at ${Math.floor(house.age)}`);
   if (first(journal, 'startupWin')) life.push('got rich on a friend\'s startup');
   if (first(journal, 'bereaved')) life.push('lost a parent');
   if (first(journal, 'ipo')) life.push('rode a company to its IPO');
-  const divorce = first(journal, 'divorce');
-  if (divorce) life.push(`divorced at ${Math.floor(divorce.age)}, when a long search out of work broke the marriage and took half of everything`);
+  if (divorce) {
+    life.push(divorce.reason === 'strain'
+      ? `divorced at ${Math.floor(divorce.age)}: the hours had left no home to come back to${divorce.kids ? `, with ${plural(divorce.kids, 'child', 'children')} to raise between two houses` : ''}`
+      : `divorced at ${Math.floor(divorce.age)}, when a long search out of work broke the marriage and took half of everything`);
+  }
   if (life.length) paragraphs.push(`Outside the office, ${player.name.split(' ')[0]} ${life.join(', ')}.`);
 
   // Industry colour.

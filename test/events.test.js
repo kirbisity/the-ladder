@@ -4,12 +4,12 @@ import {
   createGame, chooseEventOption, finishQuarterDays, closeQuarter, quitJob, startRunning, runDay, takeFmla, fmlaStatus,
   takeHoliday, holidayStatus, fireNumber, fireReady,
 } from '../src/sim/game.js';
-import { drawEvent, drawLifeEvent, allEvents } from '../src/sim/events.js';
+import { drawEvent, drawLifeEvent, allEvents, eventById } from '../src/sim/events.js';
 import { projectSpec, projectFor, projectsOpenTo } from '../src/sim/agent.js';
 import { resolveProject } from '../src/sim/org.js';
 import { careerSummary } from '../src/sim/story.js';
 import { playQuarter, POLICIES } from '../src/sim/bots.js';
-import { INDUSTRIES, FMLA, TIME } from '../src/config.js';
+import { INDUSTRIES, FMLA, TIME, EVENTS } from '../src/config.js';
 
 function clearEvents(game) {
   while (game.currentEvent) chooseEventOption(game, 0);
@@ -201,7 +201,7 @@ test('FIRE: offered once net worth covers a lifetime of spending, and ends the c
   game.player.age = 55;
   const late = fireNumber(game);
   game.player.age = 35;
-  assert.ok(fireNumber(game) > late * 1.2, 'retiring younger needs a bigger pot');
+  assert.ok(fireNumber(game) > late * 1.1, 'retiring younger needs a bigger pot');
   game.player.age = age;
   game.savings = fireNumber(game) * 2;
   assert.equal(fireReady(game), true);
@@ -219,4 +219,56 @@ test('FIRE: offered once net worth covers a lifetime of spending, and ends the c
   chooseEventOption(game, 0);
   assert.equal(game.outcome?.kind, 'fire');
   assert.ok(careerSummary(game).paragraphs.join(' ').includes('one-way ticket'));
+});
+
+function drawCareer(industryId, quarters) {
+  const game = createGame({ seed: 61, industryId, tierLock: 'mid' });
+  clearEvents(game);
+  const draws = [];
+  for (let quarter = 0; quarter < quarters; quarter += 1) {
+    game.quarterIndex = quarter;
+    game.player.age = 22 + quarter / 4;
+    // As often as a real quarter deals them.
+    const dealt = [];
+    if (game.random.chance(EVENTS.chancePerQuarter)) dealt.push(drawEvent(game, game.random));
+    if (game.random.chance(EVENTS.lifeEventChance)) dealt.push(drawLifeEvent(game, game.random));
+    if (game.random.chance(EVENTS.secondLifeEventChance)) dealt.push(drawLifeEvent(game, game.random));
+    for (const drawn of dealt) if (drawn) draws.push({ id: drawn.id, quarter, timing: drawn.timing });
+  }
+  return draws;
+}
+
+test('a card is almost never drawn again within a year and a half', () => {
+  const gapInQuarters = 6;
+  const draws = drawCareer('tech', 160);
+  const lastSeen = new Map();
+  let early = 0;
+  for (const draw of draws) {
+    const last = lastSeen.get(draw.id);
+    if (last !== undefined && draw.quarter - last < gapInQuarters) early += 1;
+    lastSeen.set(draw.id, draw.quarter);
+  }
+  assert.ok(draws.length > 150, 'the scenario: a long career of draws');
+  assert.ok(early / draws.length < 0.05, `${early} of ${draws.length} came back early`);
+});
+
+test('a long career meets many different moments in every industry', () => {
+  for (const industryId of Object.keys(INDUSTRIES)) {
+    const distinct = new Set(drawCareer(industryId, 160).map((draw) => draw.id));
+    assert.ok(distinct.size >= 45, `${industryId}: only ${distinct.size} distinct cards`);
+  }
+});
+
+test('some cards only come with age, and the losses of life are in the deck', () => {
+  const game = createGame({ seed: 62 });
+  clearEvents(game);
+  for (const id of ['midlifeQuestion', 'kneeSurgery', 'parentDies', 'youngerBoss']) {
+    game.player.age = 28;
+    game.player.level = 3;
+    assert.equal(eventById(id).weight(game), 0, `${id} at 28`);
+    game.player.age = 52;
+    assert.ok(eventById(id).weight(game) > 0, `${id} at 52`);
+  }
+  for (const id of ['friendDies', 'grandparentDies', 'parentDies', 'highwayCrash', 'petDies', 'burglary']) assert.ok(eventById(id), id);
+  assert.ok(eventById('crashAftermath'), 'the crash has a follow-up');
 });

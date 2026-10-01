@@ -47,6 +47,23 @@ export const HEALTH = {
   scareDamage: 15,
 };
 
+// How age changes the body and the mind. Everything here scales with the
+// employer's ageSensitivity (an industry's own, times its tier's): tech and
+// finance grind people down, a university does not.
+export const AGING = {
+  from: 35,
+  // Past `from`, each year makes the same hours cost more health and more
+  // mood: at 50 a twelve-hour day costs 45% more than it did at 35.
+  strainPerYear: 0.03,
+  // Past `from`, the mood a person settles at falls this much a year: 15
+  // points by 60. Enthusiasm for the job mellows.
+  motivationFadePerYear: 0.5,
+  // Past 30, bad news bounces off a little more each year: a blow to mood
+  // lands at (1 − this × years past 30) of its size, down to the floor.
+  resiliencePerYear: 0.012,
+  resilienceFloor: 0.5,
+};
+
 export const MOTIVATION = {
   // A quarter of the gap each quarter: mood moves within a year.
   driftPerQuarter: 0.25,
@@ -205,9 +222,9 @@ export const ORG = {
   // at the top of the level) at or above this, and a top-half latest rating.
   // 0.6 is the top 40% over about a year; an average performer's standing
   // hovers near 0.5 and only now and then clears it.
-  promotionStanding: 0.5,
+  promotionStanding: 0.6,
   // Above the expert fork (principal, distinguished): the top quarter.
-  expertPromotionStanding: 0.7,
+  expertPromotionStanding: 0.78,
   // Promotion-score points per unit of standing: the best record wins.
   standingPromotionWeight: 150,
   // Quarters at a new level or job before a PIP can start.
@@ -225,7 +242,12 @@ export const MONEY = {
   taxRiseSalary: 500000,
   // Living costs: a floor plus lifestyle that grows with take-home pay.
   livingFloor: 32000,
-  lifestyleShare: 0.7,
+  lifestyleShare: 0.8,
+  // Spending does not keep pace with a high income: past this much spare
+  // take-home, only the smaller share is spent, so a high earner saves a
+  // larger share than a modest one (as real high earners do).
+  lifestyleCap: 100000,
+  lifestyleShareAbove: 0.3,
   // Out of work the lifestyle shrinks, but not to nothing.
   unemployedLifestyleShare: 0.2,
   unemploymentBenefitPerQuarter: 7000,
@@ -250,7 +272,7 @@ export const MONEY = {
   // Out of work and out of savings, people borrow before they lose the
   // apartment: credit cards, family, a friend's couch. Debt costs interest
   // each quarter; past the cushion, the lease goes.
-  debtCushion: 25000,
+  debtCushion: 45000,
   debtInterestPerQuarter: 0.05,
 };
 
@@ -308,6 +330,10 @@ export const EVENTS = {
   chancePerQuarter: 0.7,
   categoryWeights: { macro: 15, interpersonal: 40, industry: 25 },
   joblessChancePerQuarter: 0.8,
+  // A card that has just been drawn waits before it can come up again, so a
+  // career does not meet the same moment every few years. A card may set its
+  // own `cooldown`. A deck with nothing else eligible ignores the wait.
+  cooldownQuarters: { start: 14, life: 24 },
   // Life does not wait for quarter boundaries: up to two personal events
   // land on random days, employed or not.
   lifeEventChance: 0.5,
@@ -415,6 +441,13 @@ const DEFAULT_INDUSTRY = {
   // How much say people have over their own work, 0..1. Characters who need
   // autonomy gain or lose motivation by it (see autonomyNeed).
   autonomy: 0.55,
+  // How hard age bites the body and the mood here (see AGING), and when a
+  // workplace starts to push older people out: from ageOutFrom, each year of
+  // age adds ageOutPerYear to a colleague's chance of leaving each quarter,
+  // and to someone's place on a layoff list. Tiers scale both.
+  ageSensitivity: 1,
+  ageOutFrom: 38,
+  ageOutPerYear: 0.002,
   upOrOutQuarters: null,
   upOrOutBelowLevel: null,
   tenureFromLevel: null,
@@ -425,7 +458,8 @@ const DEFAULT_INDUSTRY = {
   // track; levels above it carry the track's titles. Same pay, same seats.
   trackFromLevel: 3,
   expertTitles: ['Senior Staff Engineer', 'Principal Engineer', 'Distinguished Engineer', 'Fellow'],
-  bonusShare: [0, 0, 0.05, 0.1, 0.15, 0.2, 0.3, 0.5],
+  // Bonuses and, in tech, stock grants.
+  bonusShare: [0, 0.05, 0.12, 0.2, 0.25, 0.3, 0.4, 0.6],
 };
 
 export const INDUSTRIES = {
@@ -440,6 +474,9 @@ export const INDUSTRIES = {
     peerHours: 10.5,
     faceTimePerHour: 0.03,
     autonomy: 0.25,
+    ageSensitivity: 1.2,
+    ageOutFrom: 40,
+    ageOutPerYear: 0.003,
     // Up or out: 16 quarters at a level below Principal and you are
     // counselled out.
     upOrOutQuarters: 16,
@@ -459,6 +496,9 @@ export const INDUSTRIES = {
     peerHours: 12,
     faceTimePerHour: 0.045,
     autonomy: 0.15,
+    ageSensitivity: 1.3,
+    ageOutFrom: 42,
+    ageOutPerYear: 0.003,
     upOrOutQuarters: 16,
     upOrOutBelowLevel: 4,
     subStat: 'dealFlow',
@@ -475,7 +515,11 @@ export const INDUSTRIES = {
     seats: [12, 10, 8, 7, 3, 2, 1, 1],
     peerHours: 9.5,
     faceTimePerHour: 0,
+    // A university is full of the old: little age wear, and no age-out.
     autonomy: 0.9,
+    ageSensitivity: 0.5,
+    ageOutFrom: 99,
+    ageOutPerYear: 0,
     upOrOutQuarters: null,
     // The tenure clock: an assistant professor gets 24 quarters, then
     // either tenure (no PIPs, no layoffs) or the door.
@@ -680,33 +724,38 @@ export const CHARACTERS = [
 //   layoffMultiplier — how often layoffs come
 //   peerHoursOffset  — the culture's hours relative to the industry's
 //   seatScale        — the division's size relative to the industry's
+//   ageSensitivity   — multiplier on how hard age bites body and mood
+//   ageOut           — multiplier on how fast older people are pushed out
 //   upOrOut          — multiplier on the industry's up-or-out clock, or 0
 //                      for none: elite firms enforce it, steady ones do not
 export const COMPANY_TIERS = {
   aggressive: {
     name: 'High-growth', reviewEvery: 1, pipBelowMedian: 0.9, growthPerYear: 0.04, quitMultiplier: 1.4,
-    politicsWeight: 0.8, pay: 1.3, bonus: 1.5, payCatchUp: 1.4, layoffMultiplier: 1.3, peerHoursOffset: 0.75, seatScale: 1, upOrOut: 1,
+    politicsWeight: 0.8, pay: 1.35, bonus: 3, payCatchUp: 1.4, layoffMultiplier: 1.3, peerHoursOffset: 0.75, seatScale: 1, upOrOut: 1, ageSensitivity: 1.25, ageOut: 2,
     blurb: 'Quarterly reviews, the most PIPs, fast promotions as it grows, and the best pay.',
   },
   mid: {
     name: 'Established', reviewEvery: 2, pipBelowMedian: 0.85, growthPerYear: 0.015, quitMultiplier: 1,
-    politicsWeight: 1, pay: 1, bonus: 1, payCatchUp: 1, layoffMultiplier: 1, peerHoursOffset: 0, seatScale: 1, upOrOut: 1.5,
+    politicsWeight: 1, pay: 1, bonus: 1, payCatchUp: 1, layoffMultiplier: 1, peerHoursOffset: 0, seatScale: 1, upOrOut: 1.5, ageSensitivity: 1, ageOut: 1,
     blurb: 'Reviews twice a year, some growth, some politics.',
   },
   stable: {
     name: 'Steady', reviewEvery: 4, pipBelowMedian: 0.78, growthPerYear: 0, quitMultiplier: 0.6,
-    politicsWeight: 1.4, pay: 0.88, bonus: 0.6, payCatchUp: 0.7, layoffMultiplier: 0.7, peerHoursOffset: -0.5, seatScale: 1, upOrOut: 0,
+    politicsWeight: 1.4, pay: 0.85, bonus: 0.3, payCatchUp: 0.7, layoffMultiplier: 0.7, peerHoursOffset: -0.5, seatScale: 1, upOrOut: 0, ageSensitivity: 0.75, ageOut: 0.25,
     blurb: 'Annual reviews, few PIPs, slow promotions, and politics that count.',
   },
   startup: {
     name: 'Startup', reviewEvery: 2, pipBelowMedian: 0.85, growthPerYear: 0.1, quitMultiplier: 1.3,
-    politicsWeight: 0.4, pay: 0.8, bonus: 0, payCatchUp: 1, layoffMultiplier: 1.6, peerHoursOffset: 1, seatScale: 0.35, upOrOut: 0,
+    politicsWeight: 0.4, pay: 0.8, bonus: 0, payCatchUp: 1, layoffMultiplier: 1.6, peerHoursOffset: 1, seatScale: 0.35, upOrOut: 0, ageSensitivity: 1.2, ageOut: 1.5,
     blurb: 'Below-market pay plus equity, little politics, and a real chance it folds.',
     // Each quarter: chance the startup folds (about half within five years),
     // or is acquired (the equity pays out salary × equityMultiple).
     failPerQuarter: 0.03,
     exitPerQuarter: 0.012,
     equityMultiple: [1, 10],
+    // One exit in this many is a unicorn: equity worth this many years of salary.
+    unicornChance: 0.12,
+    unicornMultiple: [35, 120],
   },
 };
 
@@ -765,9 +814,13 @@ export const FIRE = {
   // earlier adds to the multiple: about 33 years of spending at 40.
   yearsOfSpending: 25,
   fullRuleAge: 60,
-  extraYearsPerYearEarly: 0.4,
+  extraYearsPerYearEarly: 0.25,
+  // Retired, the commute, the work wardrobe, the childcare of a two-career
+  // household and the lifestyle that went with the job fall away: a FIRE
+  // budget is this share of what the working life spent.
+  retiredSpendingShare: 0.75,
   askEveryQuarters: 8,
-  minimumAge: 30,
+  minimumAge: 24,
 };
 
 // What a peer's personality looks like, drawn per agent.

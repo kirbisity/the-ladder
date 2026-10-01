@@ -2,9 +2,9 @@
 // than guessed. Each policy reads only what the HUD shows a human: health,
 // motivation, readiness, rating, PIP, burnout, the industry meter.
 
-import { createGame, setPlan, chooseEventOption, startRunning, runDay, closeQuarter, netWorth, takeFmla, fmlaStatus } from './game.js';
+import { createGame, setPlan, chooseEventOption, startRunning, runDay, closeQuarter, netWorth, takeFmla, fmlaStatus, fireNumber } from './game.js';
 import { clamp, projectFor, projectsOpenTo, healthTarget, stagnationYears } from './agent.js';
-import { READINESS, INDUSTRY_STATS, BANDWIDTH } from '../config.js';
+import { READINESS, INDUSTRY_STATS, BANDWIDTH, FIRE } from '../config.js';
 
 function preferTags(order) {
   return (game, choices) => {
@@ -218,7 +218,7 @@ export function playCareer({ seed, characterId, industryId, policyName, tierLock
   const stats = {
     ageAtLevel: [], burnoutQuarters: 0, burnouts: 0, pipCount: 0, lostJobs: 0, unemployedQuarters: 0, leapfrogs: 0, promotions: 0, hopUps: 0, hops: 0,
     levelAt40: null, firstPromotionAge: null, hoursSum: 0, workedQuarters: 0, topRatings: 0, ratedQuarters: 0,
-    readinessGained: 0, readinessFromPolitics: 0, lowHealthQuarters: 0, lowMotivationQuarters: 0, divorced: false,
+    readinessGained: 0, readinessFromPolitics: 0, fireReadyAge: null, lowHealthQuarters: 0, lowMotivationQuarters: 0, divorced: false,
   };
   let wasBurnedOut = false;
   let guard = 0;
@@ -241,6 +241,7 @@ export function playCareer({ seed, characterId, industryId, policyName, tierLock
       stats.readinessGained += report.readinessGain ?? 0;
       stats.readinessFromPolitics += report.readinessFromPolitics ?? 0;
     }
+    if (stats.fireReadyAge === null && game.player.age >= FIRE.minimumAge && netWorth(game) >= fireNumber(game)) stats.fireReadyAge = game.player.age;
     if (report.pipStarted) stats.pipCount += 1;
     if (report.lostJob) stats.lostJobs += 1;
     if (report.unemployed) stats.unemployedQuarters += 1;

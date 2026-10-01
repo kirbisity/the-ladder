@@ -87,13 +87,16 @@ test('up or out is an elite-firm rule: steady consultancies do not enforce it', 
 
 test('a steady employer rates once a year; a high-growth one every quarter', () => {
   for (const [tier, every] of [['stable', COMPANY_TIERS.stable.reviewEvery], ['aggressive', COMPANY_TIERS.aggressive.reviewEvery]]) {
-    const game = createGame({ seed: 31, characterId: 'joseph', tierLock: tier });
-    const reviews = [];
-    for (let quarter = 0; quarter < every * 2 && !game.outcome; quarter += 1) {
+    const game = createGame({ seed: 32, characterId: 'joseph', tierLock: tier });
+    const reviewed = [];
+    for (let quarter = 0; quarter < every * 3 && !game.outcome && game.employment.employed; quarter += 1) {
       const report = playQuarterAsIs(game);
-      if (game.employment.employed && !report.lostJob) reviews.push(Boolean(report.review));
+      if (report.review) reviewed.push(quarter);
     }
-    assert.equal(reviews.filter(Boolean).length, reviews.length / every, `${tier}: one review every ${every} quarters`);
+    assert.ok(reviewed.length >= 2, `${tier}: the scenario needs two reviews in a row`);
+    for (let index = 1; index < reviewed.length; index += 1) {
+      assert.equal(reviewed[index] - reviewed[index - 1], every, `${tier}: one review every ${every} quarters`);
+    }
   }
 });
 

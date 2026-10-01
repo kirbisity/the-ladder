@@ -61,6 +61,8 @@ export function tieredIndustry(industry, tierId) {
     payCatchUp: tier.payCatchUp,
     layoffMultiplier: tier.layoffMultiplier,
     growthPerYear: tier.growthPerYear,
+    ageSensitivity: (base.ageSensitivity ?? 1) * tier.ageSensitivity,
+    ageOutPerYear: (base.ageOutPerYear ?? 0) * tier.ageOut,
     upOrOutQuarters: base.upOrOutQuarters && tier.upOrOut ? Math.round(base.upOrOutQuarters * tier.upOrOut) : null,
   };
 }
@@ -358,7 +360,10 @@ export function rollDepartures(org, random, market, playerId) {
       const seniority = Math.max(0.3, 1 - 0.12 * agent.level) * (org.industry?.quitMultiplier ?? 1);
       const quitChance = (ORG.quitBase + unhappy + ORG.quitOpen * agent.plan.openness) * marketPull * seniority
         + (agent.burnout.active ? 0.15 : 0);
-      if (random.chance(quitChance)) reason = 'quit';
+      // Where the culture pushes older people out, more leave each year of
+      // age past its line; the senior are paid to stay and are pushed less.
+      const pushedOut = Math.max(0, agent.age - (org.industry?.ageOutFrom ?? 99)) * (org.industry?.ageOutPerYear ?? 0) * Math.max(0.3, 1 - 0.1 * agent.level);
+      if (random.chance(quitChance + pushedOut)) reason = pushedOut > 0 && random.chance(0.5) ? 'pushed out' : 'quit';
     }
     if (reason) {
       agent.departed = reason;
@@ -600,7 +605,9 @@ export function layoffScore(agent, levelMedianSalary, random, industry) {
   const rapport = (agent.alignment - 1) + agent.informants * 0.05;
   const performance = { greatlyExceeds: 0.6, exceeds: 0.4, meetAll: 0.2, meetMost: 0, meetSome: -0.4 }[agent.lastRating] ?? 0;
   const loyalty = (1 - agent.plan.openness) * 0.3;
-  return 0.5 * cost + 1.5 * overpaid - rapport - performance - loyalty + random.normal(0, 0.15);
+  // Older workers are likelier to be on the list where the culture is young.
+  const ageBias = industry ? Math.max(0, agent.age - (industry.ageOutFrom ?? 99)) * (industry.ageOutPerYear ?? 0) * 5 : 0;
+  return 0.5 * cost + 1.5 * overpaid + ageBias - rapport - performance - loyalty + random.normal(0, 0.15);
 }
 
 export function runLayoffs(org, industry, share, random) {

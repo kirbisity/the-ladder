@@ -13,6 +13,8 @@ import { CORE_DECK } from './events/core.js';
 import { LIFE_DECK, LIFE_IDS_FROM_CORE } from './events/life.js';
 import { JOBLESS_DECK } from './events/jobless.js';
 import { INDUSTRY_DECK } from './events/industry.js';
+import { MORE_LIFE, MORE_WORK } from './events/more.js';
+import { MORE_INDUSTRY_ARCS } from './events/moreIndustry.js';
 
 // Cards that need no job: the market moves for everyone.
 const ANY_SCOPE = new Set(['downturn', 'boom']);
@@ -32,7 +34,7 @@ function normalise(event) {
   return { ...event, category, scope, timing: life ? 'life' : 'start' };
 }
 
-const DECK = [...CORE_DECK, ...LIFE_DECK, ...JOBLESS_DECK, ...INDUSTRY_DECK].map(normalise);
+const DECK = [...CORE_DECK, ...LIFE_DECK, ...MORE_LIFE, ...MORE_WORK, ...JOBLESS_DECK, ...INDUSTRY_DECK, ...MORE_INDUSTRY_ARCS].map(normalise);
 const DECK_BY_ID = new Map(DECK.map((event) => [event.id, event]));
 
 export function eventById(id) {
@@ -49,12 +51,24 @@ function inScope(game, event) {
   return true;
 }
 
+function rested(game, event) {
+  const last = game.eventLast?.[event.id];
+  return last === undefined || game.quarterIndex - last >= (event.cooldown ?? EVENT_DIALS.cooldownQuarters[event.timing]);
+}
+
 function eligibleCards(game, timing) {
   return DECK.filter((event) => event.timing === timing
     && event.category !== 'arc'
     && inScope(game, event)
     && (!event.industry || event.industry === game.industry.id)
     && (event.weight ? event.weight(game) : 1) > 0);
+}
+
+/** Remember when a card was drawn, for its cooldown. */
+function markDrawn(game, event) {
+  if (!game.eventLast) game.eventLast = {};
+  game.eventLast[event.id] = game.quarterIndex;
+  return event;
 }
 
 /**
@@ -68,12 +82,18 @@ export function drawEvent(game, random) {
   const categories = Object.keys(weights).filter((category) => eligible.some((event) => event.category === category));
   const category = random.weighted(categories, (name) => weights[name]);
   if (!category) return null;
-  return random.weighted(eligible.filter((entry) => entry.category === category), (entry) => (entry.weight ? entry.weight(game) : 1));
+  const inCategory = eligible.filter((entry) => entry.category === category);
+  const fresh = inCategory.filter((entry) => rested(game, entry));
+  const pool = fresh.length > 0 ? fresh : inCategory;
+  return markDrawn(game, random.weighted(pool, (entry) => (entry.weight ? entry.weight(game) : 1)));
 }
 
 /** Draw a personal event for a random day of the quarter. */
 export function drawLifeEvent(game, random) {
-  return random.weighted(eligibleCards(game, 'life'), (entry) => lifeWeight(game, entry));
+  const eligible = eligibleCards(game, 'life');
+  const fresh = eligible.filter((entry) => rested(game, entry));
+  const drawn = random.weighted(fresh.length > 0 ? fresh : eligible, (entry) => lifeWeight(game, entry));
+  return drawn ? markDrawn(game, drawn) : drawn;
 }
 
 /** A card's weight today; a long search makes illness and bills likelier. */

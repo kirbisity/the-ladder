@@ -4,17 +4,18 @@ import { VARIANTS, renderBust } from './heads.js';
 import { CHARACTERS } from '../src/config.js';
 const cast = ['simon', 'chloe', 'christian', 'joseph', 'adam'].map((id) => CHARACTERS.find((c) => c.id === id));
 const cell = 190;
+// Row 7: one cast with a different style each, to show how variety could read.
+const mixed = ['t2', 't1', 't5', 't6', 't3'];
 const canvas = document.getElementById('c');
-canvas.width = cell * cast.length; canvas.height = cell * VARIANTS.length;
+canvas.width = cell * cast.length; canvas.height = cell * (VARIANTS.length + 1);
 const ctx = canvas.getContext('2d');
-VARIANTS.forEach((variant, row) => cast.forEach((character, col) => {
+const draw = (variant, character, col, row) => {
   ctx.fillStyle = (row + col) % 2 ? '#2a3654' : '#25304a'; ctx.fillRect(col * cell, row * cell, cell, cell);
-  const toy = variant.id === 'toy';
-  const cubes = variant.id === 'cubes';
   ctx.save(); ctx.beginPath(); ctx.rect(col * cell, row * cell, cell, cell); ctx.clip();
-  renderBust(ctx, variant, character.look, { smile: 0.5 }, col * cell + cell / 2, row * cell + cell * (toy ? 0.52 : cubes ? 0.5 : 0.58), cell * (toy ? 0.2 : cubes ? 0.19 : 0.26));
+  renderBust(ctx, variant, character.look, { smile: 0.5 }, col * cell + cell / 2, row * cell + cell * 0.52, cell * 0.2);
   ctx.restore();
-}));
-window.sheet = canvas.toDataURL('image/png');
-window.done = true;
+};
+VARIANTS.forEach((variant, row) => cast.forEach((character, col) => draw(variant, character, col, row)));
+cast.forEach((character, col) => draw(VARIANTS.find((v) => v.id === mixed[col]), character, col, VARIANTS.length));
+window.sheet = canvas.toDataURL('image/png'); window.done = true;
 </script>

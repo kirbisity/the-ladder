@@ -236,59 +236,105 @@ function variantCubes(look, life) {
   return root;
 }
 
-// ── E. Toy: a big, smooth, glossy-eyed head on a small body ────────────
-function variantToy(look, life) {
-  const root = new Node();
-  shoulders(root, look, 0.7, 0.6);
-  const head = root.add(new Node(0, 0.55, 0));
-  head.position = [0, 0.75, 0];
-  const shape = { ...(engine.FACES[look.face] ?? engine.FACES.round) };
-  const big = { w: shape.w * 1.2, h: shape.h * 1.05, d: shape.d * 1.1, taper: shape.taper * 0.5 };
-  ellipsoid(head, [0, 0, 0], [big.w, big.h, big.d], hexToRgb(look.skin), { lat: 28, lon: 40, deform: engine.faceDeform(big) });
-  for (const side of [-1, 1]) ellipsoid(head, [side * big.w * 0.97, -0.1, 0], [0.12, 0.2, 0.12], hexToRgb(shadeHex(look.skin, -0.05)), { lat: 6, lon: 8 });
-  // Huge, glossy eyes set low, a tiny nose and mouth: the toy proportions.
-  const z = (x, y) => engine.surfaceZ(big, x, y);
-  const open = 1 - life.blink;
-  for (const side of [-1, 1]) {
-    const x = side * 0.5;
-    const holder = head.add(new Node(x, -0.08, z(x, -0.08) + 0.01));
-    if (open > 0.15) {
-      ellipsoid(holder, [0, 0, 0], [0.3, 0.34 * open, 0.06], '#ffffff', { lat: 6, lon: 12, bias: 0.7 });
-      ellipsoid(holder, [life.lookX * 0.1, 0, 0.05], [0.22, 0.25 * Math.min(1, open * 1.2), 0.05], hexToRgb(look.eyes === 'monolid' ? '#2a1d14' : '#3a2418'), { lat: 6, lon: 10, bias: 0.75 });
-      ellipsoid(holder, [life.lookX * 0.1, 0, 0.09], [0.11, 0.12, 0.03], '#0a0807', { lat: 4, lon: 8, bias: 0.8 });
-      ellipsoid(holder, [life.lookX * 0.1 - 0.08, 0.1, 0.12], [0.07, 0.07, 0.02], '#ffffff', { lat: 3, lon: 6, bias: 0.85 });
-      ellipsoid(holder, [life.lookX * 0.1 + 0.07, -0.08, 0.12], [0.035, 0.035, 0.02], '#ffffff', { lat: 3, lon: 6, bias: 0.85 });
-    } else tube(holder, [[-0.3, 0, 0.07], [0, -0.1, 0.08], [0.3, 0, 0.07]], 0.04, '#1d1a1a', { sides: 3, bias: 0.9 });
-    const by = 0.32 + life.brow * 0.12;
-    tube(head, [[side * 0.22, by, z(side * 0.22, by) + 0.02], [side * 0.5, by + 0.06, z(side * 0.5, by) + 0.02], [side * 0.78, by - 0.03 - life.brow * 0.05, z(side * 0.78, by) + 0.02]], 0.045, shadeHex(look.hair, 0.05), { sides: 4, bias: 0.8 });
-    disc(head, [side * 0.78, -0.5, z(side * 0.78, -0.5) + 0.015], 0.2, 0.12, '#f07882', { segments: 8, alpha: 0.5 });
-  }
-  ellipsoid(head, [0, -0.38, z(0, -0.38) + 0.03], [0.06, 0.05, 0.05], shadeHex(look.skin, -0.12), { lat: 3, lon: 6, bias: 0.7 });
-  const my = -0.66;
-  const span = 0.7 + life.smile * 0.8;
-  const arc = Array.from({ length: 7 }, (_, i) => {
-    const a = -span / 2 + (span * i) / 6;
-    const x = Math.sin(a) * 0.26;
-    const y = my - Math.cos(a) * 0.26 + 0.26 - life.talk * 0.05;
-    return [x, y, z(x, y) + 0.015];
-  });
-  if (life.talk > 0.05) disc(head, [0, my + 0.0 - life.talk * 0.05, z(0, my) + 0.012], 0.12 + life.talk * 0.05, 0.03 + life.talk * 0.09, '#6f2a2e', { segments: 10, bias: 0.72 });
-  tube(head, arc, 0.03, '#9c4f4f', { sides: 3, bias: 0.8 });
-  if (look.glasses) {
-    const thick = look.glasses === 'thickBlack';
-    for (const side of [-1, 1]) tube(head, Array.from({ length: 14 }, (_, i) => [side * 0.5 + Math.cos((i / 14) * Math.PI * 2) * 0.4, -0.08 + Math.sin((i / 14) * Math.PI * 2) * 0.38, z(side * 0.5, -0.08) + 0.12]), thick ? 0.05 : 0.022, thick ? '#0d0d0d' : '#b6a27a', { sides: 4, closed: true, bias: 0.95 });
-  }
-  hairFor(head, look, big, 1.04);
-  head.angles[2] = life.tilt;
-  return root;
+// ── Toy family: one builder, many faces ────────────────────────────────
+// opts: head (size multiplier), eyes (glossy | dot | bean | oval | sleepy),
+//       mouth (smile | line | cat | dot), nose (none | dot | small), body (shoulder width).
+function makeToy(opts) {
+  const { head: headSize = 1.2, eyes = 'glossy', mouth = 'smile', nose = 'small', body = 0.7, lowEyes = true } = opts;
+  return function variantToy(look, life) {
+    const root = new Node();
+    shoulders(root, look, body, 0.6);
+    const head = root.add(new Node(0, 0.55 + headSize * 0.18, 0));
+    const shape = { ...(engine.FACES[look.face] ?? engine.FACES.round) };
+    const big = { w: shape.w * headSize, h: shape.h * (0.85 + headSize * 0.17), d: shape.d * (0.9 + headSize * 0.17), taper: shape.taper * 0.5 };
+    ellipsoid(head, [0, 0, 0], [big.w, big.h, big.d], hexToRgb(look.skin), { lat: 24, lon: 36, deform: engine.faceDeform(big) });
+    for (const side of [-1, 1]) ellipsoid(head, [side * big.w * 0.97, -0.1, 0], [0.12, 0.2, 0.12], hexToRgb(shadeHex(look.skin, -0.05)), { lat: 6, lon: 8 });
+    const z = (x, y) => engine.surfaceZ(big, x, y);
+    const open = 1 - life.blink;
+    const eyeY = lowEyes ? -0.08 : 0.06;
+    const spread = 0.4 + headSize * 0.08;
+    const iris = hexToRgb('#3a2418');
+    for (const side of [-1, 1]) {
+      const x = side * spread;
+      const holder = head.add(new Node(x, eyeY, z(x, eyeY) + 0.01));
+      const gx = life.lookX;
+      const closedLine = (w) => tube(holder, [[-w, 0, 0.07], [0, -0.09, 0.08], [w, 0, 0.07]], 0.04, '#1d1a1a', { sides: 3, bias: 0.9 });
+      if (eyes === 'dot') {
+        if (open > 0.2) ellipsoid(holder, [gx * 0.08, 0, 0.04], [0.085, 0.085 * open, 0.05], '#141010', { lat: 5, lon: 8, bias: 0.8 });
+        else closedLine(0.1);
+      } else if (eyes === 'bean') {
+        if (open > 0.2) {
+          ellipsoid(holder, [gx * 0.06, 0, 0.04], [0.1, 0.2 * open, 0.05], '#141010', { lat: 6, lon: 10, bias: 0.8 });
+          ellipsoid(holder, [gx * 0.06 - 0.03, 0.07 * open, 0.09], [0.035, 0.05, 0.02], '#ffffff', { lat: 3, lon: 6, bias: 0.85 });
+        } else closedLine(0.1);
+      } else if (eyes === 'oval') {
+        if (open > 0.2) {
+          ellipsoid(holder, [0, 0, 0], [0.26, 0.22 * open, 0.05], '#ffffff', { lat: 5, lon: 12, bias: 0.7 });
+          ellipsoid(holder, [gx * 0.1, 0, 0.05], [0.17, 0.2 * Math.min(1, open * 1.1), 0.04], iris, { lat: 5, lon: 10, bias: 0.75 });
+          ellipsoid(holder, [gx * 0.1, 0, 0.08], [0.08, 0.1, 0.03], '#0a0807', { lat: 3, lon: 8, bias: 0.8 });
+          ellipsoid(holder, [gx * 0.1 - 0.06, 0.08, 0.11], [0.05, 0.05, 0.02], '#ffffff', { lat: 3, lon: 6, bias: 0.85 });
+        } else closedLine(0.24);
+        tube(holder, [[-0.28, 0.18 * open, 0.07], [0, 0.26 * open, 0.08], [0.28, 0.18 * open, 0.07]], 0.03, '#1d1a1a', { sides: 3, bias: 0.9 });
+      } else if (eyes === 'sleepy') {
+        const lidDrop = 0.5 + life.blink * 0.5;
+        ellipsoid(holder, [0, 0, 0], [0.24, 0.18, 0.05], '#fbfaf7', { lat: 5, lon: 12, bias: 0.7 });
+        ellipsoid(holder, [gx * 0.08, -0.02, 0.05], [0.13, 0.13, 0.04], iris, { lat: 5, lon: 10, bias: 0.75 });
+        ellipsoid(holder, [gx * 0.08, -0.02, 0.08], [0.06, 0.06, 0.03], '#0a0807', { lat: 3, lon: 6, bias: 0.8 });
+        // The heavy lid: skin-coloured, pulled down over the top of the eye.
+        ellipsoid(holder, [0, 0.18 - lidDrop * 0.2, 0.09], [0.27, 0.19 * lidDrop + 0.02, 0.05], hexToRgb(look.skin), { lat: 4, lon: 12, bias: 0.9 });
+        tube(holder, [[-0.27, 0.0 + (0.18 - lidDrop * 0.2) * 0.1, 0.12], [0, -0.04 - lidDrop * 0.02, 0.13], [0.27, 0.0, 0.12]], 0.035, '#1d1a1a', { sides: 3, bias: 0.95 });
+      } else {
+        if (open > 0.15) {
+          ellipsoid(holder, [0, 0, 0], [0.3, 0.34 * open, 0.06], '#ffffff', { lat: 6, lon: 12, bias: 0.7 });
+          ellipsoid(holder, [gx * 0.1, 0, 0.05], [0.22, 0.25 * Math.min(1, open * 1.2), 0.05], hexToRgb(look.eyes === 'monolid' ? '#2a1d14' : '#3a2418'), { lat: 6, lon: 10, bias: 0.75 });
+          ellipsoid(holder, [gx * 0.1, 0, 0.09], [0.11, 0.12, 0.03], '#0a0807', { lat: 4, lon: 8, bias: 0.8 });
+          ellipsoid(holder, [gx * 0.1 - 0.08, 0.1, 0.12], [0.07, 0.07, 0.02], '#ffffff', { lat: 3, lon: 6, bias: 0.85 });
+        } else closedLine(0.3);
+      }
+      const by = eyeY + (eyes === 'dot' ? 0.2 : eyes === 'sleepy' ? 0.28 : 0.4) + life.brow * 0.12;
+      const browStyle = eyes === 'dot' ? 0.035 : 0.045;
+      tube(head, [[side * (spread - 0.2), by, z(side * (spread - 0.2), by) + 0.02], [side * spread, by + 0.05, z(side * spread, by) + 0.02], [side * (spread + 0.26), by - 0.03 - life.brow * 0.05, z(side * (spread + 0.26), by) + 0.02]], browStyle, shadeHex(look.hair, 0.05), { sides: 4, bias: 0.8 });
+      if (look.cheeks === 'flushed' || eyes === 'glossy' || eyes === 'oval') disc(head, [side * (spread + 0.28), eyeY - 0.4, z(side * (spread + 0.28), eyeY - 0.4) + 0.015], 0.2, 0.12, '#f07882', { segments: 8, alpha: 0.5 });
+    }
+    if (nose === 'small') ellipsoid(head, [0, eyeY - 0.3, z(0, eyeY - 0.3) + 0.03], [0.06, 0.05, 0.05], shadeHex(look.skin, -0.12), { lat: 3, lon: 6, bias: 0.7 });
+    else if (nose === 'dot') ellipsoid(head, [0, eyeY - 0.28, z(0, eyeY - 0.28) + 0.02], [0.035, 0.035, 0.03], '#7a4a3a', { lat: 3, lon: 6, bias: 0.7 });
+    const my = eyeY - 0.58;
+    const mz = (x, y) => z(x, y) + 0.015;
+    if (life.talk > 0.05) {
+      disc(head, [0, my - life.talk * 0.05, mz(0, my)], 0.1 + life.talk * 0.05, 0.03 + life.talk * 0.1, '#6f2a2e', { segments: 10, bias: 0.72 });
+    } else if (mouth === 'line') {
+      const tilt = (life.smile - 0.3) * 0.12;
+      tube(head, [[-0.16, my + tilt, mz(-0.16, my)], [0, my - Math.abs(tilt) * 0.3, mz(0, my)], [0.16, my + tilt, mz(0.16, my)]], 0.03, '#5a3030', { sides: 3, bias: 0.8 });
+    } else if (mouth === 'dot') {
+      disc(head, [0, my, mz(0, my)], 0.045, 0.045, '#6f2a2e', { segments: 8, bias: 0.8 });
+    } else if (mouth === 'cat') {
+      for (const side of [-1, 1]) {
+        const pts = Array.from({ length: 6 }, (_, i) => { const a = (i / 5) * Math.PI; return [side * 0.1 + Math.cos(a + (side < 0 ? Math.PI : 0)) * 0.1 * 0 + (side * 0.1) * (1 - Math.cos(a)) * 0.9 - side * 0.0, my + 0.1 - Math.sin(a) * 0.1 * (0.6 + life.smile * 0.6), mz(0, my)]; });
+        tube(head, pts.map(([x, y, zz]) => [x - side * 0.09, y, z(x - side * 0.09, y) + 0.015]), 0.028, '#7a3a3a', { sides: 3, bias: 0.8 });
+      }
+    } else {
+      const span = 0.7 + life.smile * 0.8;
+      const arc = Array.from({ length: 7 }, (_, i) => { const a = -span / 2 + (span * i) / 6; const x = Math.sin(a) * 0.26; const y = my - Math.cos(a) * 0.26 + 0.26; return [x, y, mz(x, y)]; });
+      tube(head, arc, 0.03, '#9c4f4f', { sides: 3, bias: 0.8 });
+    }
+    if (look.glasses) {
+      const thick = look.glasses === 'thickBlack';
+      const r = eyes === 'dot' || eyes === 'bean' ? 0.3 : 0.4;
+      for (const side of [-1, 1]) tube(head, Array.from({ length: 14 }, (_, i) => [side * spread + Math.cos((i / 14) * Math.PI * 2) * r, eyeY + Math.sin((i / 14) * Math.PI * 2) * r * 0.95, z(side * spread, eyeY) + 0.12]), thick ? 0.05 : 0.022, thick ? '#0d0d0d' : '#b6a27a', { sides: 4, closed: true, bias: 0.95 });
+    }
+    hairFor(head, look, big, 1.04);
+    head.angles[2] = life.tilt;
+    return root;
+  };
 }
 
 export const VARIANTS = [
-  { id: 'faceted', name: 'A · Faceted spheres', build: variantFaceted, note: 'What ships today: low-poly ellipsoid head, flat-shaded.' },
-  { id: 'smooth', name: 'B · Smooth spheres', build: variantSmooth, note: 'Same face, 20x the polygons so the head reads as smooth; glossier eyes.' },
-  { id: 'toy', name: 'C · Big-head toy', build: variantToy, note: 'Chibi proportions: huge glossy eyes set low, blush, tiny mouth. Most expressive at small size.' },
-  { id: 'moai', name: 'D · Moai polygons', build: variantMoai, note: 'Chiselled blocks: brow ridge, deep sockets, wedge nose. Bold silhouette, little detail.' },
-  { id: 'cubes', name: 'E · Cubes (pixel face)', build: variantCubes, note: 'A cube head with an 8x8 pixel face and block hair, Minecraft style.' },
+  { id: 't1', name: 'T1 · Big glossy', build: makeToy({ head: 1.22, eyes: 'glossy', mouth: 'smile', nose: 'small' }), note: 'The pick so far: huge glossy eyes, blush, smile.' },
+  { id: 't2', name: 'T2 · Dots and a line', build: makeToy({ head: 1.18, eyes: 'dot', mouth: 'line', nose: 'none', lowEyes: false }), note: 'Black dot eyes, a straight line mouth. Deadpan; brows do all the acting.' },
+  { id: 't3', name: 'T3 · Beans and a cat mouth', build: makeToy({ head: 1.2, eyes: 'bean', mouth: 'cat', nose: 'dot' }), note: 'Tall bean eyes with a spark, a cat-style "w" mouth. Cute, playful.' },
+  { id: 't4', name: 'T4 · Anime ovals, medium head', build: makeToy({ head: 1.05, eyes: 'oval', mouth: 'smile', nose: 'small', body: 0.85 }), note: 'A smaller head, oval eyes with a lid line. Closest to normal proportions.' },
+  { id: 't5', name: 'T5 · Sleepy lids', build: makeToy({ head: 1.1, eyes: 'sleepy', mouth: 'line', nose: 'small', body: 0.8, lowEyes: false }), note: 'Half-lidded eyes and a flat mouth. Weary, dry; a great look for burnout and calm characters.' },
+  { id: 't6', name: 'T6 · Small head, dot eyes', build: makeToy({ head: 0.95, eyes: 'dot', mouth: 'dot', nose: 'dot', body: 0.95, lowEyes: false }), note: 'A near-realistic head with dot eyes and a dot mouth. The most grown-up.' },
 ];
 
 export function renderBust(context, variant, look, life, x, y, u, yaw = -0.3) {

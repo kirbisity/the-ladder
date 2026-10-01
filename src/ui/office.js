@@ -1,4 +1,5 @@
 import { drawSeatedWorker } from './figures.js';
+import { drawOfficeTheme } from './office-themes.js';
 
 // The animated workplace: an isometric office drawn in code. The room
 // upgrades as the player climbs, the light runs from morning to night on
@@ -291,6 +292,15 @@ export function createOffice(canvas) {
     if (!cssWidth) resize();
     const light = lightAt(scene.hour);
     context.clearRect(0, 0, cssWidth, cssHeight);
+    // At work the room is dressed for the industry and the company's tier.
+    if (scene.themeId && scene.tier !== 'home') {
+      drawOfficeTheme(context, cssWidth, cssHeight, scene.themeId, scene);
+      if (light.fluorescent) {
+        context.fillStyle = `rgba(220, 255, 235, ${0.06 + light.night * 0.08})`;
+        context.fillRect(0, 0, cssWidth, cssHeight);
+      }
+      return;
+    }
     const backdrop = context.createLinearGradient(0, 0, 0, cssHeight);
     backdrop.addColorStop(0, shade(light.sky[0], -0.2));
     backdrop.addColorStop(1, shade(light.sky[1], -0.35));

@@ -32,7 +32,7 @@ export function funeralDetailed(context, width, height, time, data) {
     context.fill();
     context.strokeStyle = 'rgba(255,255,255,0.35)';
     context.beginPath();
-    context.ellipse(p.x, p.y, u * (0.12 + (time * 0.5 + px) % 0.4), u * 0.04, 0, 0, Math.PI * 2);
+    context.ellipse(p.x, p.y, u * (0.12 + (((time * 0.5 + px) % 0.4) + 0.4) % 0.4), u * 0.04, 0, 0, Math.PI * 2);
     context.stroke();
   }
   // The chapel at the back: stone, a slate roof, a door and a stained window.

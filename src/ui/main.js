@@ -13,6 +13,7 @@ import { RATING_LABELS, totalBandwidth, effectiveHours, projectSpec, dailyCoreOu
 import { agentsAtLevel, employedAgents } from '../sim/org.js';
 import { CHARACTERS, INDUSTRIES, TIME, BANDWIDTH, MOTIVATION, ORG } from '../config.js';
 import { createOffice, officeTier } from './office.js';
+import { officeThemeFor } from './office-themes.js';
 import { peerLook } from './figures.js';
 import { createAudio } from './audio.js';
 import {
@@ -407,6 +408,7 @@ function drawOffice(seconds) {
     player: { look: player.look, typingRate, posture: burned ? 'slumped' : 'upright' },
     peers: unique,
     industryId: game.industry.id,
+    themeId: officeThemeFor(game.industry.id, game.org?.tier ?? game.lastOrg?.tier),
     productivity: Math.min(1, player.plan.shares[0] * 1.6),
   });
 }

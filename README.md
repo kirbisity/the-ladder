@@ -59,6 +59,7 @@ Play: <https://kirbisity.github.io/the-ladder/>
   deck: COBRA, contract gigs, final rounds), and life lands on random days
   mid-quarter: medical bills priced by whether you are insured, rent hikes,
   car trouble, family.
+- **The world** is 3D too: the office is dressed for your industry and your company's tier (a brick startup loft, a glass campus, cubicles, a client site, wood-panelled private equity, a book-lined study), and cut scenes use detailed models of cars, houses, apartment blocks and umbrellas. Life asks whether to buy a car or move somewhere nicer, and what you choose is the car in your driveway at the end.
 - **Time off**: holidays of one, two or four weeks (15 paid days a year),
   and FMLA.
 - **Age** fades body and mood past 35 (long days cost more, enthusiasm

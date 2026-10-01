@@ -1,0 +1,22 @@
+<!doctype html><meta charset="utf-8"><body style="margin:0;background:#4a6a4a">
+<script type="module">
+import { drawCar, drawHouse, drawApartment, drawUmbrella } from '../src/ui/props3d.js';
+const c = document.createElement('canvas'); c.width = 1400; c.height = 900; document.body.append(c);
+const ctx = c.getContext('2d');
+ctx.fillStyle = '#6f9a5a'; ctx.fillRect(0, 0, 1400, 900);
+const unit = 36;
+const k = (ox, oy) => ({ unit, iso: (x, y, z = 0) => ({ x: ox + (x - y) * unit, y: oy + (x + y) * unit * 0.5 - z * unit }) });
+let kk = k(240, 120);
+drawHouse(ctx, kk, 0, 0, 'modest');
+kk = k(700, 100); drawHouse(ctx, kk, 0, 0, 'family');
+kk = k(1130, 100); drawHouse(ctx, kk, 0, 0, 'villa');
+kk = k(210, 520); drawApartment(ctx, kk, 0, 0, 'worn');
+kk = k(560, 520); drawApartment(ctx, kk, 0, 0, 'nice');
+kk = k(860, 470); drawApartment(ctx, kk, 0, 0, 'tower');
+kk = k(1150, 600);
+['hatchback', 'sedan', 'suv', 'sports'].forEach((kind, i) => drawCar(ctx, k(1050 + (i % 2) * 150, 560 + Math.floor(i / 2) * 130 + (i % 2) * 40), 0, 0, kind));
+drawUmbrella(ctx, k(900, 800), 0, 0, 0, '#111111');
+drawUmbrella(ctx, k(1000, 800), 0, 0, 0, '#1d2a44', '#2f4268');
+drawUmbrella(ctx, k(1100, 800), 0, 0, 0, '#7a1d1d', '#e9b949');
+window.shot = c.toDataURL('image/png'); window.done = true;
+</script>

@@ -644,4 +644,4 @@ export function drawHead3D(context, x, y, r, look, options = {}) {
 }
 
 /** The renderer's building blocks, for prototypes of other head styles. */
-export const engine = { Node, ellipsoid, prism, box, tube, disc, flatten, paint, rotation, hexToRgb, shadeHex, surfaceZ, FACES, faceDeform };
+export const engine = { pushFace, Node, ellipsoid, prism, box, tube, disc, flatten, paint, rotation, hexToRgb, shadeHex, surfaceZ, FACES, faceDeform };

@@ -613,11 +613,12 @@ export function buildUmbrella(color = '#111111', accent = null) {
  * Draw a prop at a scene point. `origin` is where the prop's (0, 0, 0)
  * lands on screen, and `unit` is the scene kit's unit.
  */
-export function drawProp(context, root, origin, unit) {
-  root.angles = [PITCH, YAW, 0];
+export function drawProp(context, root, origin, unit, view = null) {
+  // A perspective camera sees each prop from its own angle and distance.
+  root.angles = view ? [view.pitch, YAW + view.yaw, 0] : [PITCH, YAW, 0];
   const faces = [];
   flatten(root, rotation(0, 0, 0), [0, 0, 0], faces);
-  paint(context, faces, origin.x, origin.y, unit * TILE_SCALE);
+  paint(context, faces, origin.x, origin.y, unit * TILE_SCALE * (view?.scale ?? 1));
 }
 
 const cache = new Map();
@@ -650,9 +651,9 @@ export function buildHeadedCar(kind, style, heading) {
 }
 
 export const drawCar = (context, k, x, y, kind, z = 0, style = DEFAULT_CAR_STYLE, heading = null) => {
-  if (heading === null) return drawProp(context, cached(`car:${kind}:${style}`, () => buildCar(kind, style)), k.iso(x, y, z), k.unit);
-  return drawProp(context, cached(`car:${kind}:${style}:${heading.toFixed(3)}`, () => buildHeadedCar(kind, style, heading)), k.iso(x, y, z), k.unit);
+  if (heading === null) return drawProp(context, cached(`car:${kind}:${style}`, () => buildCar(kind, style)), k.iso(x, y, z), k.unit, k.view?.(x, y, z));
+  return drawProp(context, cached(`car:${kind}:${style}:${heading.toFixed(3)}`, () => buildHeadedCar(kind, style, heading)), k.iso(x, y, z), k.unit, k.view?.(x, y, z));
 };
-export const drawHouse = (context, k, x, y, kind) => drawProp(context, cached(`house:${kind}`, () => buildHouse(kind)), k.iso(x, y), k.unit);
-export const drawApartment = (context, k, x, y, kind) => drawProp(context, cached(`apt:${kind}`, () => buildApartment(kind)), k.iso(x, y), k.unit);
-export const drawUmbrella = (context, k, x, y, z, color, accent) => drawProp(context, cached(`umb:${color}:${accent}`, () => buildUmbrella(color, accent)), k.iso(x, y, z), k.unit);
+export const drawHouse = (context, k, x, y, kind) => drawProp(context, cached(`house:${kind}`, () => buildHouse(kind)), k.iso(x, y), k.unit, k.view?.(x, y));
+export const drawApartment = (context, k, x, y, kind) => drawProp(context, cached(`apt:${kind}`, () => buildApartment(kind)), k.iso(x, y), k.unit, k.view?.(x, y));
+export const drawUmbrella = (context, k, x, y, z, color, accent) => drawProp(context, cached(`umb:${color}:${accent}`, () => buildUmbrella(color, accent)), k.iso(x, y, z), k.unit, k.view?.(x, y, z));

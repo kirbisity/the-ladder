@@ -6,6 +6,7 @@
 import { drawPerson, drawHead, peerLook } from './figures.js';
 import { drawCar, drawHouse, drawApartment, drawUmbrella } from './props3d.js';
 import { mixColor } from './office.js';
+import { makeKit, SCENE_CAMERA, CAMERAS } from './scene-camera.js';
 import { lifeScenes } from './scenes-life.js';
 import { drawWorldTour, worldRoute, WORLD_STOPS, WORLD_STOP_SECONDS, WORLD_INTRO_SECONDS } from './scenes-world.js';
 
@@ -58,31 +59,7 @@ export function endingSceneFor(outcome) {
 // ── Drawing kit ────────────────────────────────────────────────────────
 
 function kit(context, width, height, unit, originX, originY) {
-  const iso = (x, y, z = 0) => ({ x: originX + (x - y) * unit, y: originY + (x + y) * unit * 0.5 - z * unit });
-  const polygon = (points, fill) => {
-    context.beginPath();
-    points.forEach((point, index) => (index ? context.lineTo(point.x, point.y) : context.moveTo(point.x, point.y)));
-    context.closePath();
-    context.fillStyle = fill;
-    context.fill();
-  };
-  const box = (x, y, z, w, d, h, color) => {
-    polygon([iso(x, y + d, z), iso(x + w, y + d, z), iso(x + w, y + d, z + h), iso(x, y + d, z + h)], mixColor(color, '#000000', 0.12));
-    polygon([iso(x + w, y, z), iso(x + w, y + d, z), iso(x + w, y + d, z + h), iso(x + w, y, z + h)], mixColor(color, '#000000', 0.26));
-    polygon([iso(x, y, z + h), iso(x + w, y, z + h), iso(x + w, y + d, z + h), iso(x, y + d, z + h)], mixColor(color, '#ffffff', 0.08));
-  };
-  // A pitched roof over a box footprint, ridge along x.
-  const roof = (x, y, z, w, d, h, color) => {
-    polygon([iso(x, y, z), iso(x + w, y, z), iso(x + w, y + d / 2, z + h), iso(x, y + d / 2, z + h)], mixColor(color, '#ffffff', 0.05));
-    polygon([iso(x, y + d, z), iso(x + w, y + d, z), iso(x + w, y + d / 2, z + h), iso(x, y + d / 2, z + h)], mixColor(color, '#000000', 0.18));
-    polygon([iso(x + w, y, z), iso(x + w, y + d, z), iso(x + w, y + d / 2, z + h)], mixColor(color, '#000000', 0.3));
-  };
-  const ground = (x0, y0, x1, y1, color) => polygon([iso(x0, y0), iso(x1, y0), iso(x1, y1), iso(x0, y1)], color);
-  const person = (x, y, look, options) => {
-    const point = iso(x, y, options.z ?? 0);
-    drawPerson(context, point.x, point.y, unit * (options.size ?? 0.22), look, options);
-  };
-  return { iso, polygon, box, roof, ground, person, unit };
+  return makeKit(context, unit, originX, originY);
 }
 
 function sky(context, width, height, top, bottom) {
@@ -819,4 +796,4 @@ export function snapshotScene(id, data, width = 640, height = 360, atShare = 0.7
   return canvas.toDataURL('image/png');
 }
 
-export { drawHead, kit, sky, rain, tree, mourners };
+export { drawHead, kit, sky, rain, tree, mourners, SCENE_CAMERA, CAMERAS };

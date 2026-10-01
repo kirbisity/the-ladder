@@ -675,3 +675,6 @@ export function drawHead3D(context, x, y, r, look, options = {}) {
   paint(context, faces, x, y, r);
   return true;
 }
+
+/** The renderer's building blocks, for prototypes of other head styles. */
+export const engine = { Node, ellipsoid, prism, box, tube, disc, flatten, paint, rotation, hexToRgb, shadeHex, surfaceZ, FACES, faceDeform };

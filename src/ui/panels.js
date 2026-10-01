@@ -7,7 +7,7 @@ import { employedAgents, agentsAtLevel, TEAM_COUNT } from '../sim/org.js';
 import { titleOf, formatMoney, netWorth, managerOf, teamHappiness, quarterlyExpenses, dryPowder, fmlaStatus, holidayStatus, employerIndustry, fireNumber, fireProgress, vitalsBreakdown } from '../sim/game.js';
 import { careerSummary } from '../sim/story.js';
 import { drawPerson } from './figures.js';
-import { PROJECTS, READINESS, INDUSTRY_STATS, ORG, TIME, MOTIVATION, RELATIONSHIP, CHARACTERS, INDUSTRIES, HOLIDAY, COMPANY_TIERS, MONEY, TIER_MIX } from '../config.js';
+import { PROJECTS, READINESS, INDUSTRY_STATS, ORG, TIME, MOTIVATION, RELATIONSHIP, CHARACTERS, INDUSTRIES, HOLIDAY, COMPANY_TIERS, MONEY, TIER_MIX, FACE_STYLES } from '../config.js';
 
 export function escapeHtml(text) {
   return String(text).replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
@@ -765,7 +765,7 @@ function statRow(label, ratio, detail = '') {
 }
 
 /** Everything about a character: stats, traits, quirks, difficulty, and the button that begins. */
-export function characterProfile(characterId) {
+export function characterProfile(characterId, faceStyle = null) {
   const character = CHARACTERS.find((entry) => entry.id === characterId);
   if (!character) return '';
   const t = character.traits;
@@ -793,11 +793,12 @@ export function characterProfile(characterId) {
   if (t.rigidManagerClash) quirks.push('Clashes with rigid, demanding managers.');
   if (quirks.length === 0) quirks.push('No quirks: a plain, balanced profile.');
   return `<div class="profile-head">
-      ${portrait(character.look, 96)}
+      ${portrait({ ...character.look, faceStyle: faceStyle ?? character.look.faceStyle }, 96)}
       <div class="profile-title"><div class="modal-kicker">${character.mbti} · ${escapeHtml(character.archetype)}</div>
         <h2>${escapeHtml(character.name)}</h2>${difficultyBadge(character.difficulty)}</div>
     </div>
     <p class="profile-blurb">${escapeHtml(character.blurb)} <span class="muted">${escapeHtml(DIFFICULTY_NOTES[character.difficulty])}</span></p>
+    <div class="face-picker"><span>Face</span>${Object.entries(FACE_STYLES).map(([id, entry]) => `<button class="face-chip ${id === (faceStyle ?? character.look.faceStyle) ? 'on' : ''}" data-face-style="${id}">${escapeHtml(entry.label)}</button>`).join('')}</div>
     <div class="profile-stats">${rows}</div>
     <ul class="quirks">${quirks.map((quirk) => `<li>${escapeHtml(quirk)}</li>`).join('')}</ul>`;
 }

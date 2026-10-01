@@ -150,6 +150,10 @@ h2, h3 { margin: 0; text-wrap: balance; }
 .profile-title h2 { font-size: clamp(26px, 5vw, 38px); text-transform: uppercase; }
 .profile-blurb { margin: 0; color: var(--ink-soft); line-height: 1.45; }
 .profile-blurb .muted { color: var(--ink-faint); }
+.face-picker { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.face-picker span { font-family: 'Barlow Condensed', sans-serif; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-faint); font-size: 13px; margin-right: 4px; }
+.face-chip { border: 1px solid var(--panel-line); background: rgba(255, 255, 255, 0.05); color: var(--ink-soft); border-radius: 999px; padding: 4px 12px; font: inherit; font-size: 13px; cursor: pointer; }
+.face-chip.on { background: #2f6ad8; border-color: #5f9bff; color: #fff; }
 .profile-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 24px; }
 .stat-row { display: grid; gap: 3px; min-width: 0; }
 .stat-top { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; }

@@ -1,0 +1,19 @@
+<!doctype html><meta charset="utf-8"><body style="margin:0;background:#25304a"><canvas id="c"></canvas>
+<script type="module">
+import { VARIANTS, renderBust } from './heads.js';
+import { CHARACTERS } from '../src/config.js';
+const look = CHARACTERS.find((c) => c.id === 'simon').look;
+const frames = [['rest', { smile: 0.3 }, 0], ['blink', { blink: 1 }, 0], ['talk', { talk: 0.8, smile: 0.6, brow: 0.5 }, 0], ['laugh', { smile: 1, brow: 0.7, blink: 0.35 }, 0.12], ['glance', { lookX: 1 }, -0.1], ['sad', { smile: -0.3, brow: -0.8 }, 0.15]];
+const rows = ['t2', 't3', 't5', 't6'].map((id) => VARIANTS.find((v) => v.id === id));
+const cell = 170;
+const canvas = document.getElementById('c');
+canvas.width = cell * frames.length; canvas.height = cell * rows.length;
+const ctx = canvas.getContext('2d');
+rows.forEach((variant, row) => frames.forEach(([name, life, tilt], col) => {
+  ctx.fillStyle = (row + col) % 2 ? '#2a3654' : '#25304a'; ctx.fillRect(col * cell, row * cell, cell, cell);
+  ctx.save(); ctx.beginPath(); ctx.rect(col * cell, row * cell, cell, cell); ctx.clip();
+  renderBust(ctx, variant, look, { ...life, tilt }, col * cell + cell / 2, row * cell + cell * 0.52, cell * 0.2, name === 'glance' ? -0.1 : -0.3);
+  ctx.restore();
+}));
+window.sheet = canvas.toDataURL('image/png'); window.done = true;
+</script>

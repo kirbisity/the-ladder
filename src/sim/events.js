@@ -6,9 +6,9 @@
 // The cards themselves live in src/sim/events/. Choices carry a tag so the
 // balance bots can play them by temperament.
 
-import { EVENTS as EVENT_DIALS } from '../config.js';
+import { EVENTS as EVENT_DIALS, JOBLESS, COMPANY_TIERS } from '../config.js';
 import { payInBand } from './agent.js';
-import { acceptOffer, titleOf, formatMoney, retireEarly } from './game.js';
+import { acceptOffer, titleOf, formatMoney, retireEarly, chooseTrack, employerIndustry } from './game.js';
 import { CORE_DECK } from './events/core.js';
 import { LIFE_DECK, LIFE_IDS_FROM_CORE } from './events/life.js';
 import { JOBLESS_DECK } from './events/jobless.js';
@@ -73,7 +73,40 @@ export function drawEvent(game, random) {
 
 /** Draw a personal event for a random day of the quarter. */
 export function drawLifeEvent(game, random) {
-  return random.weighted(eligibleCards(game, 'life'), (entry) => (entry.weight ? entry.weight(game) : 1));
+  return random.weighted(eligibleCards(game, 'life'), (entry) => lifeWeight(game, entry));
+}
+
+/** A card's weight today; a long search makes illness and bills likelier. */
+export function lifeWeight(game, event) {
+  const base = event.weight ? event.weight(game) : 1;
+  if (!event.medical || game.employment.employed) return base;
+  return base * (1 + Math.min(JOBLESS.illnessWeightCap, JOBLESS.illnessWeightPerQuarter * game.employment.unemployedQuarters));
+}
+
+/** The fork in the ladder: lead people, or be the expert. */
+export function trackEvent() {
+  return {
+    id: 'trackChoice',
+    category: 'career',
+    scope: 'work',
+    timing: 'start',
+    title: 'The fork in the ladder',
+    text: (game) => {
+      const next = game.player.level + 1;
+      return `Your manager asks where you want to go from here. Management: ${titleOf(game, next, 'management')}, judged more and more on influence and people. `
+        + `Or the expert track: ${titleOf(game, next, 'expert')}, judged on your own work. Same pay either way.`;
+    },
+    choices: (game) => [
+      { label: `Management: become ${titleOf(game, game.player.level + 1, 'management')}`, tag: 'ambitious', apply: (innerGame) => {
+        chooseTrack(innerGame, 'management');
+        return 'You start sitting in on hiring loops and budget meetings.';
+      } },
+      { label: `Expert track: become ${titleOf(game, game.player.level + 1, 'expert')}`, tag: 'safe', apply: (innerGame) => {
+        chooseTrack(innerGame, 'expert');
+        return 'You keep your hands on the hardest problems.';
+      } },
+    ],
+  };
 }
 
 /** Financial independence: the game offers early retirement. */
@@ -84,7 +117,7 @@ export function fireEvent() {
     scope: 'any',
     timing: 'start',
     title: 'Financially independent',
-    text: (game, data) => `Your net worth covers 25 years of what you spend (${formatMoney(data.number)} by the 4% rule). You never have to work again. Retire early?`,
+    text: (game, data) => `Your net worth, ${formatMoney(data.number)} or more, covers what you spend for the rest of your life at a safe withdrawal rate. You never have to work again. Retire early?`,
     choices: [
       { label: 'Retire early and see the world', tag: 'rest', apply: (game) => {
         retireEarly(game);
@@ -106,7 +139,12 @@ export function offerEvent() {
     text: (game, offer) => {
       const title = titleOf(game, offer.level);
       const from = offer.source === 'headhunter' ? 'A recruiter calls' : 'After weeks of interviews, a call';
-      return `${from}: ${offer.company} wants you as ${title}, at ${formatMoney(offer.salary)} a year.`;
+      const tier = COMPANY_TIERS[offer.tier];
+      const kind = tier ? ` (${tier.name.toLowerCase()}: ${tier.blurb.charAt(0).toLowerCase()}${tier.blurb.slice(1, -1)})` : '';
+      const current = game.employment.employed ? game.player.level : game.employment.lastLevel ?? game.player.level;
+      const change = offer.level > current ? ' A step up in title.' : offer.level < current ? ' A level down: bigger names often down-level.' : '';
+      const equity = offer.tier === 'startup' ? ' Part of the pay is equity, worth something only if it sells.' : '';
+      return `${from}: ${offer.company}${kind} wants you as ${title}, at ${formatMoney(offer.salary)} a year.${change}${equity}`;
     },
     choices: (game, offer) => [
       { label: 'Accept the offer', tag: !game.employment.employed ? 'safe' : offer.level > game.player.level ? 'ambitious' : 'bold', apply: (innerGame) => {
@@ -115,7 +153,7 @@ export function offerEvent() {
       } },
       { label: 'Use it to negotiate a raise', tag: 'bold', available: (innerGame) => innerGame.employment.employed, apply: (innerGame, data, random) => {
         if (random.chance(0.5)) {
-          innerGame.player.salary = payInBand(innerGame.industry, innerGame.player.level, innerGame.player.salary * 1.06);
+          innerGame.player.salary = payInBand(employerIndustry(innerGame), innerGame.player.level, innerGame.player.salary * 1.06);
           return 'Your manager matches part of it. A 6% raise.';
         }
         innerGame.player.alignment -= 0.06;

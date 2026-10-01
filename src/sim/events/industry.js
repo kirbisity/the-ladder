@@ -3,14 +3,57 @@
 // all need a job: they open a quarter at work.
 
 import { payInBand } from '../agent.js';
-import { makeOffer, acceptOffer, quitJob, formatMoney } from '../game.js';
+import { makeOffer, acceptOffer, quitJob, formatMoney, employerIndustry, titleOf } from '../game.js';
 import {
-  peers, samePeerLevel, bumpRelationship, scaleQuarter, bonusQuarter, forceHours, boostSearch, setPlan, clamp, spend,
+  peers, samePeerLevel, bumpRelationship, scaleQuarter, bonusQuarter, forceHours, boostSearch, setPlan, spend, politicalOdds, paymentPlan,
 } from './helpers.js';
 
-const pol = (game, base = 0.2, span = 140) => clamp(game.player.pol / span, base, 0.85);
+const pol = (game, base = 0.2, span = 140) => politicalOdds(game, base, span);
+
+// Career moves that change the kind of employer are off when a run is
+// pinned to one tier (the outcome report plays each tier on its own).
+const canMove = (game) => !game.tierLock;
+
+/** A named move to another kind of employer, at a stated title and pay. */
+function namedMove(game, tier, levelChange, payFactor) {
+  const level = Math.max(0, Math.min(game.industry.seats.length - 2, game.player.level + levelChange));
+  return makeOffer(game, level, payFactor, 'headhunter', { tier });
+}
 
 const TECH = [
+  {
+    id: 'foundingEngineer',
+    title: 'A founding role',
+    weight: (game) => (canMove(game) && game.org?.tier !== 'startup' && game.player.level >= 1 && game.player.level <= 4 ? 0.35 : 0),
+    onDraw: (game) => namedMove(game, 'startup', 1, 0.85),
+    text: (game, offer) => `A former teammate has raised a seed round and wants you as a founder-level hire: ${offer.company}, ${titleOf(game, offer.level)}, ${formatMoney(offer.salary)} and a percent of the company. Nine in ten startups never sell.`,
+    choices: [
+      { label: 'Join the startup', tag: 'bold', apply: (game, offer) => {
+        acceptOffer(game, offer);
+        return 'A bigger title, a smaller salary, and a lottery ticket. The office is a WeWork.';
+      } },
+      { label: 'Stay where the paycheck is', tag: 'safe', apply: () => 'You wish them luck, and mean it.' },
+    ],
+  },
+  {
+    id: 'internalTransfer',
+    title: 'An internal transfer',
+    weight: (game) => (game.player.quartersAtLevel >= 8 && game.player.level >= 1 ? 0.5 : 0),
+    text: 'The new AI platform team is hiring from inside: same level, a new manager, the roadmap everyone wants to be on.',
+    choices: [
+      { label: 'Transfer', tag: 'ambitious', apply: (game) => {
+        game.player.motivation += 10;
+        game.player.alignment = 1;
+        game.player.readiness *= 0.8;
+        game.player.quartersAtLevel = 0;
+        return 'A fresh start: new problems, new people, and a manager who has to learn what you can do.';
+      } },
+      { label: 'Stay with the team you know', tag: 'safe', apply: (game) => {
+        game.player.alignment += 0.03;
+        return 'Your manager is quietly relieved.';
+      } },
+    ],
+  },
   {
     id: 'cve',
     title: 'A critical CVE',
@@ -136,7 +179,7 @@ const TECH = [
     choices: [
       { label: 'Ask for a retention refresh', tag: 'bold', apply: (game) => {
         if (game.player.alignment > 1.05) {
-          game.player.salary = payInBand(game.industry, game.player.level, game.player.salary * 1.06);
+          game.player.salary = payInBand(employerIndustry(game), game.player.level, game.player.salary * 1.06);
           return 'A refresh grant: about a 6% raise in real terms.';
         }
         game.player.motivation -= 4;
@@ -220,6 +263,24 @@ const TECH = [
 
 const CONSULTING = [
   {
+    id: 'executiveMba',
+    title: 'The sponsored MBA',
+    weight: (game) => (game.player.level >= 2 && game.player.level <= 4 && !game.flags.mbaDone ? 0.4 : 0),
+    text: 'The firm will sponsor half of an executive MBA: every other weekend for two years, and $90,000 of your own.',
+    choices: [
+      { label: 'Enrol', tag: 'ambitious', apply: (game) => {
+        game.flags.mbaDone = true;
+        game.player.skill += 5;
+        game.player.readiness += 20;
+        game.player.informants += 2;
+        game.player.health -= 4;
+        game.player.motivation -= 4;
+        return `${paymentPlan(game, 90000, 8)} a quarter for two years. Cases on Saturday, clients on Monday, and a network that will outlast the firm.`;
+      } },
+      { label: 'Not now', tag: 'safe', apply: () => 'You keep your weekends.' },
+    ],
+  },
+  {
     id: 'deathMarch',
     title: 'Staffed on a death march',
     weight: () => 0.9,
@@ -269,7 +330,7 @@ const CONSULTING = [
     text: 'Your client\'s COO offers you a role in-house: strategy team, a 35% raise, home for dinner.',
     choices: [
       { label: 'Take the exit', tag: 'bold', apply: (game) => {
-        const offer = makeOffer(game, game.player.level, 1.35, 'headhunter');
+        const offer = makeOffer(game, game.player.level, 1.35, 'headhunter', { tier: 'stable' });
         acceptOffer(game, { ...offer, company: `${offer.company} (in-house)` });
         return 'You hand in your notice. The partners take you to a farewell dinner.';
       } },
@@ -385,6 +446,34 @@ const CONSULTING = [
 ];
 
 const PRIVATE_EQUITY = [
+  {
+    id: 'portcoOperator',
+    title: 'Run a portfolio company',
+    weight: (game) => (canMove(game) && game.player.level >= 2 && game.player.level <= 5 ? 0.35 : 0),
+    onDraw: (game) => namedMove(game, 'stable', 1, 0.9),
+    text: (game, offer) => `The partners want one of their own as COO of a portfolio company: ${offer.company}, ${titleOf(game, offer.level)}, ${formatMoney(offer.salary)}. Operating, not investing: saner hours, slower money.`,
+    choices: [
+      { label: 'Take the operating seat', tag: 'bold', apply: (game, offer) => {
+        acceptOffer(game, offer);
+        return 'You trade the deal team for a plant in Ohio and a P&L of your own.';
+      } },
+      { label: 'Stay on the deal team', tag: 'safe', apply: () => 'Carry is where the money is.' },
+    ],
+  },
+  {
+    id: 'ownFund',
+    title: 'A fund of your own',
+    weight: (game) => (canMove(game) && game.player.level >= 4 && game.org?.tier !== 'startup' ? 0.2 : 0),
+    onDraw: (game) => namedMove(game, 'startup', 0, 0.7),
+    text: (game, offer) => `Two LPs say they would anchor a first-time fund if you raised one: ${offer.company}, ${formatMoney(offer.salary)} in fees, and the carry is all yours. Most first funds never raise a second.`,
+    choices: [
+      { label: 'Raise the fund', tag: 'bold', apply: (game, offer) => {
+        acceptOffer(game, offer);
+        return 'Your name on the door, and two years of pitching to pension funds.';
+      } },
+      { label: 'Not yet', tag: 'safe', apply: () => 'You keep your seat at the big table.' },
+    ],
+  },
   {
     id: 'icGrilling',
     title: 'Investment committee',
@@ -529,6 +618,39 @@ const PRIVATE_EQUITY = [
 
 const ACADEMIA = [
   {
+    id: 'sideConsulting',
+    title: 'The advisory board',
+    weight: (game) => (game.player.level >= 2 ? 0.5 : 0),
+    text: 'A biotech wants you on its scientific advisory board: $40,000 a year for a day a month, and options.',
+    choices: [
+      { label: 'Join the board', tag: 'bold', apply: (game) => {
+        game.savings += 40000 * 0.7;
+        game.lifetimeEarnings += 40000;
+        scaleQuarter(game, 0.95);
+        return 'A second income, and a little less time in the lab.';
+      } },
+      { label: 'Protect your research time', tag: 'safe', apply: () => 'The grant renewal needs you more.' },
+    ],
+  },
+  {
+    id: 'visitingChair',
+    title: 'A call from a top department',
+    weight: (game) => (canMove(game) && game.player.level >= 2 && game.org?.tier !== 'aggressive' ? 0.3 : 0),
+    onDraw: (game) => namedMove(game, 'aggressive', 0, 1.1),
+    text: (game, offer) => `${offer.company} wants you: ${titleOf(game, offer.level)}, ${formatMoney(offer.salary)}, a bigger lab and a higher bar. Your family would have to move.`,
+    choices: [
+      { label: 'Accept the chair', tag: 'ambitious', apply: (game, offer) => {
+        game.player.motivation -= 3;
+        acceptOffer(game, offer);
+        return 'Boxes, a new city, and colleagues whose names you cited in your thesis.';
+      } },
+      { label: 'Stay', tag: 'safe', apply: (game) => {
+        game.player.motivation += 2;
+        return 'Your department counter-offers with a parking spot.';
+      } },
+    ],
+  },
+  {
     id: 'plagiarism',
     title: 'A plagiarised paper',
     weight: () => 0.6,
@@ -601,7 +723,7 @@ const ACADEMIA = [
     choices: [
       { label: 'Use it for a retention package', tag: 'bold', apply: (game, data, random) => {
         if (random.chance(0.6)) {
-          game.player.salary = payInBand(game.industry, game.player.level, game.player.salary * 1.12);
+          game.player.salary = payInBand(employerIndustry(game), game.player.level, game.player.salary * 1.12);
           game.player.industry.grantQuarters = Math.max(game.player.industry.grantQuarters, 4);
           return 'A 12% raise, a reduced teaching load and a new postdoc line.';
         }

@@ -14,11 +14,33 @@ export const LAST_NAMES = [
   'Ueda', 'Varga', 'Wallace', 'Xu', 'Yilmaz', 'Zhang', 'Abbott', 'Bauer', 'Chowdhury', 'Diaz',
 ];
 
+// Employers by industry and tier. Invented names, chosen to sound like the
+// kind of firm each tier is.
 export const COMPANY_NAMES = {
-  tech: ['Stackwell', 'Nimbus Labs', 'Parallax Systems', 'Quanta Cloud', 'Brightwire'],
-  consulting: ['Hartley & Vance', 'Meridian Partners', 'Crestline Advisory', 'Northgate Group'],
-  privateEquity: ['Blackthorn Capital', 'Summit Ridge Partners', 'Ironbridge Equity', 'Argent Holdings'],
-  academia: ['Halvorsen University', 'Easton Institute', 'Weller College', 'Lakemont University'],
+  tech: {
+    aggressive: ['Vantage Systems', 'Kestrel AI', 'Orbitly', 'Hyperion Cloud', 'Northstar Labs'],
+    mid: ['Brightwire', 'Parallax Systems', 'Quanta Cloud', 'Stackwell', 'Nimbus Software'],
+    stable: ['Allied Data Corporation', 'Continental Software', 'Midland Systems Group', 'Keystone Enterprise IT', 'Harbor Insurance Technology'],
+    startup: ['Fernlight', 'Pivotly', 'Thimble', 'Lumen Labs', 'Quillbase', 'Tandem.ai', 'Sproutstack'],
+  },
+  consulting: {
+    aggressive: ['Hartley & Vance', 'Sterling Strategy Group', 'Ashford Partners'],
+    mid: ['Meridian Partners', 'Crestline Advisory', 'Calder & Ross'],
+    stable: ['Northgate Group', 'Harbor & Lane Consulting', 'Whitfield Advisory'],
+    startup: ['Brightpath Advisory'],
+  },
+  privateEquity: {
+    aggressive: ['Blackthorn Capital', 'Summit Ridge Partners', 'Granite Peak Capital'],
+    mid: ['Ironbridge Equity', 'Argent Holdings', 'Westbrook Partners'],
+    stable: ['Cedar Row Capital', 'Lakeshore Partners', 'Old Mill Equity'],
+    startup: ['First Light Ventures'],
+  },
+  academia: {
+    aggressive: ['Halvorsen Institute of Technology', 'Easton University', 'Carrow Institute'],
+    mid: ['Lakemont University', 'Redfield State University', 'Ashbury University'],
+    stable: ['Weller College', 'Brook Valley State', 'Saint Aldric College'],
+    startup: ['Open Minerva Institute'],
+  },
 };
 
 export const DIVISION_NAMES = {

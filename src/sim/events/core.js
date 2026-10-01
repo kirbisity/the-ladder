@@ -7,7 +7,7 @@ import { agentsAtLevel } from '../org.js';
 import { managerOf } from '../game.js';
 import {
   peers, samePeerLevel, findPeer, schedule, hasLoyalFriend, employed, bumpRelationship, scaleQuarter,
-  bonusQuarter, forceHours, byIndustry, record, formatMoney, setPlan, clamp,
+  bonusQuarter, forceHours, byIndustry, record, formatMoney, setPlan, clamp, politicalOdds, savvy,
 } from './helpers.js';
 
 export const CORE_DECK = [
@@ -16,7 +16,7 @@ export const CORE_DECK = [
     id: 'layoffRumor',
     category: 'macro',
     title: 'Restructuring whispers',
-    weight: (game) => (employed(game) && game.flags.layoffAt === null ? (game.market === 'recession' ? 3 : 1) : 0),
+    weight: (game) => (employed(game) && game.flags.layoffAt === null ? (game.market === 'recession' ? 3 : 1) * (game.org.industry.layoffMultiplier ?? 1) : 0),
     text: (game) => (hasLoyalFriend(game)
       ? 'A friend pulls you aside: finance has a list, and it lands next quarter.'
       : 'The all-hands is cancelled. Calendars fill with "sync" meetings with HR.'),
@@ -34,7 +34,7 @@ export const CORE_DECK = [
         return 'Recruiters start hearing from you. Your focus slips a little.';
       } },
       { label: 'Ask your manager straight out', tag: 'bold', apply: (game, data, random) => {
-        if (game.player.alignment > 1.05 && random.chance(0.7)) {
+        if (game.player.alignment > 1.05 && random.chance(savvy(game, 0.7))) {
           game.player.alignment += 0.1;
           return 'Your manager levels with you, and makes sure your name is not on the list.';
         }
@@ -47,7 +47,7 @@ export const CORE_DECK = [
     id: 'surpriseLayoffs',
     category: 'macro',
     title: 'Surprise cuts',
-    weight: (game) => (employed(game) && game.flags.layoffAt === null && !hasLoyalFriend(game) ? (game.market === 'recession' ? 1.5 : 0.3) : 0),
+    weight: (game) => (employed(game) && game.flags.layoffAt === null && !hasLoyalFriend(game) ? (game.market === 'recession' ? 1.5 : 0.3) * (game.org.industry.layoffMultiplier ?? 1) : 0),
     text: 'A calendar invite titled "Org update" lands for Friday at 4 PM. Nobody warned you.',
     onDraw: (game) => {
       game.flags.layoffAt = game.quarterIndex;
@@ -147,7 +147,7 @@ export const CORE_DECK = [
         return 'You are early to the new thing. It costs some evenings.';
       } },
       { label: 'Keep the old work alive quietly', tag: 'bold', apply: (game, data, random) => {
-        if (random.chance(0.35)) {
+        if (random.chance(savvy(game, 0.35))) {
           game.player.readiness += 20;
           return 'Six months later the old work saves the new direction. You look prescient.';
         }
@@ -181,7 +181,7 @@ export const CORE_DECK = [
       { label: 'Confront them privately', tag: 'bold', apply: (game, data, random) => {
         const peer = findPeer(game, data.peerId);
         bumpRelationship(peer, -12, game);
-        if (random.chance(0.5)) {
+        if (random.chance(savvy(game, 0.5))) {
           bonusQuarter(game, 4);
           return 'They mumble an apology and send a correcting email.';
         }
@@ -298,7 +298,7 @@ export const CORE_DECK = [
         const peer = findPeer(game, data.peerId);
         if (peer) peer.readiness -= 25;
         game.player.readiness += 6;
-        if (random.chance(0.4)) {
+        if (random.chance(savvy(game, 0.4, false))) {
           bumpRelationship(peer, -45, game);
           return 'It works, but they find out. Watch your back.';
         }
@@ -319,7 +319,7 @@ export const CORE_DECK = [
     }),
     choices: [
       { label: 'Pitch your boldest idea', tag: 'bold', apply: (game, data, random) => {
-        if (random.chance(clamp(game.player.pol / 140, 0.2, 0.85))) {
+        if (random.chance(politicalOdds(game))) {
           game.player.readiness += 12;
           return 'They take notes. Your idea shows up in the next all-hands.';
         }
@@ -435,7 +435,7 @@ export const CORE_DECK = [
     choices: [
       { label: 'Fight for a counter-offer', tag: 'kind', apply: (game, data, random) => {
         game.player.alignment -= 0.04;
-        if (random.chance(0.5)) return 'They stay. Finance is annoyed with you.';
+        if (random.chance(savvy(game, 0.5))) return 'They stay. Finance is annoyed with you.';
         bonusQuarter(game, -5);
         return 'They leave anyway. The team scrambles.';
       } },

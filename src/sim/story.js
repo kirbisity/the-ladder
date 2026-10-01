@@ -140,6 +140,8 @@ export function careerSummary(game) {
   const house = first(journal, 'house');
   if (house) life.push(`bought a house at ${Math.floor(house.age)}`);
   if (first(journal, 'startupWin')) life.push('got rich on a friend\'s startup');
+  const divorce = first(journal, 'divorce');
+  if (divorce) life.push(`divorced at ${Math.floor(divorce.age)}, when a long search out of work broke the marriage and took half of everything`);
   if (life.length) paragraphs.push(`Outside the office, ${player.name.split(' ')[0]} ${life.join(', ')}.`);
 
   // Industry colour.
@@ -148,6 +150,16 @@ export function careerSummary(game) {
     paragraphs.push(`The research record: ${plural(state.papers, 'paper')}, ${Math.round(state.citations)} citations and ${plural(state.grants, 'grant')}.`);
   } else if (industry.subStat === 'dealFlow' && count(journal, 'deal')) {
     paragraphs.push(`${capitalise(plural(count(journal, 'deal'), 'deal'))} closed with ${player.name.split(' ')[0]} on the team.`);
+  }
+
+  // Startups.
+  const exits = journal.filter((entry) => entry.kind === 'startupExit');
+  const folds = journal.filter((entry) => entry.kind === 'startupFolded');
+  if (exits.length) {
+    const best = exits.reduce((top, entry) => ((entry.payout ?? 0) > (top.payout ?? 0) ? entry : top));
+    paragraphs.push(`${best.company} was bought while ${player.name.split(' ')[0]} was there${best.payout ? `, and the equity paid ${money(best.payout)}` : ''}.${folds.length ? ` ${folds.map((entry) => entry.company).join(' and ')} folded.` : ''}`);
+  } else if (folds.length) {
+    paragraphs.push(`The startup bets did not pay: ${folds.map((entry) => entry.company).join(' and ')} ran out of runway, and the equity with ${folds.length === 1 ? 'it' : 'them'}.`);
   }
 
   // Money.

@@ -627,7 +627,7 @@ function cached(key, build) {
 }
 
 /** The model used for every car in the game: change it here (or per call) to restyle them all. */
-export const DEFAULT_CAR_STYLE = 'blocky';
+export const DEFAULT_CAR_STYLE = 'smooth';
 export const drawCar = (context, k, x, y, kind, z = 0, style = DEFAULT_CAR_STYLE) => drawProp(context, cached(`car:${kind}:${style}`, () => buildCar(kind, style)), k.iso(x, y, z), k.unit);
 export const drawHouse = (context, k, x, y, kind) => drawProp(context, cached(`house:${kind}`, () => buildHouse(kind)), k.iso(x, y), k.unit);
 export const drawApartment = (context, k, x, y, kind) => drawProp(context, cached(`apt:${kind}`, () => buildApartment(kind)), k.iso(x, y), k.unit);

@@ -4,7 +4,7 @@
 
 import { TIME, PERFORMANCE, READINESS, ORG, PEERS, SKILL, RELATIONSHIP, PROJECTS, MOTIVATION } from '../config.js';
 import {
-  createAgent, freshQuarter, clamp, clampVitals, onBurnoutLeave, payInBand, effectiveHours, strainOf, projectSpec, stagnationYears,
+  createAgent, freshQuarter, clamp, clampVitals, onBurnoutLeave, payInBand, effectiveHours, strainOf, projectSpec, projectsOpenTo, stagnationYears,
   CORE, CITIZENSHIP, POLITICS, RECOVERY, RATINGS,
 } from './agent.js';
 import { FIRST_NAMES, LAST_NAMES, COMPANY_NAMES, DIVISION_NAMES, TEAM_NAMES } from './names.js';
@@ -65,8 +65,9 @@ export function createOrganization(random, industry, ageOffset = 0) {
   return org;
 }
 
+// Everyone in the game goes by first name and last initial.
 export function randomName(random) {
-  return `${random.pick(FIRST_NAMES)} ${random.pick(LAST_NAMES)}`;
+  return `${random.pick(FIRST_NAMES)} ${random.pick(LAST_NAMES).charAt(0)}`;
 }
 
 /** A new simulated worker, sized for the level they are hired into. */
@@ -136,7 +137,7 @@ export function choosePeerPlan(peer, industry, random, pressure = 0) {
     risk += 0.08 * Math.max(0, hours - 8) * (1 - peer.personality.ambition);
     if (peer.health < 60) risk += (60 - peer.health) / 60 * strain * 4;
     if (peer.motivation < 45) risk += (45 - peer.motivation) / 45 * (1 - shares[RECOVERY] * 2) * 2;
-    if (peer.burnout.active) risk += shares[RECOVERY] >= MOTIVATION.burnoutRestShare && hours <= MOTIVATION.burnoutMaxHours ? 0 : 5;
+    if (peer.burnout.active) risk += shares[RECOVERY] >= MOTIVATION.burnoutRestShare ? 0 : 5;
     const fear = 1 + pressure + (peer.pip.active ? 1 : 0);
     const utility = peer.personality.ambition * gain * fear - peer.personality.selfPreservation * risk + random.normal(0, 0.05);
     if (utility > bestUtility) {
@@ -146,9 +147,8 @@ export function choosePeerPlan(peer, industry, random, pressure = 0) {
   }
   peer.plan.hours = best.hours;
   peer.plan.shares = best.shares.slice();
-  const projects = ['maintenance', 'demo', 'demo', industry.project.id];
-  if (peer.level >= PROJECTS.catalog.moonshot.unlockLevel && peer.personality.ambition > 0.7) projects.push('moonshot');
-  peer.plan.project = random.pick(projects);
+  const open = projectsOpenTo(peer, industry).filter((project) => !project.risky || peer.personality.ambition > 0.7);
+  peer.plan.project = random.weighted(open, (project) => (project.role === 'visible' ? 2 : 1)).id;
 }
 
 // ── Quarter close ──────────────────────────────────────────────────────
@@ -157,22 +157,38 @@ export function choosePeerPlan(peer, industry, random, pressure = 0) {
 export function resolveProject(agent, industry, random) {
   const quarter = agent.quarter;
   const project = projectSpec(quarter.projectId, industry);
-  // On medical leave the project waits; it neither lands nor fails.
-  if (!project || onBurnoutLeave(agent)) return null;
+  // On leave the project waits; it neither lands nor fails.
+  if (!project || onLeaveThisQuarter(agent)) return null;
   let success = quarter.projectProgress >= 1;
   if (success && project.risky) {
-    success = random.chance(Math.min(1, PROJECTS.moonshotLanding * (agent.traits.moonshotLanding ?? 1)));
+    success = random.chance(Math.min(1, PROJECTS.riskyLanding * (agent.traits.moonshotLanding ?? 1)));
   }
   quarter.projectSuccess = success;
   if (success) {
     quarter.performanceBonus = (quarter.performanceBonus ?? 0) + project.successBonus;
     agent.readiness += project.readiness ?? 0;
+    applyProjectEffects(agent, project);
     if (project.impact === 'high') agent.motivation += MOTIVATION.highImpactLift;
   } else {
     quarter.performanceBonus = (quarter.performanceBonus ?? 0) - project.failurePenalty;
     if (project.impact !== 'low') agent.motivation -= MOTIVATION.projectFailureHit;
   }
   return { project, success };
+}
+
+// What a landed project does to the industry meter.
+const BOUNDED_STATS = new Set(['techDebt', 'clientScore', 'dealFlow']);
+
+function applyProjectEffects(agent, project) {
+  for (const [stat, change] of Object.entries(project.effects ?? {})) {
+    const next = (agent.industry[stat] ?? 0) + change;
+    agent.industry[stat] = BOUNDED_STATS.has(stat) ? clamp(next, 0, 100) : Math.max(0, next);
+  }
+}
+
+/** On sick leave or FMLA for most of the quarter: not rated, not PIP'd. */
+export function onLeaveThisQuarter(agent) {
+  return onBurnoutLeave(agent) || (agent.quarter.leaveDays ?? 0) >= 30;
 }
 
 export function quarterPerformance(agent, random, industry) {
@@ -194,7 +210,7 @@ export function quarterPerformance(agent, random, industry) {
 export function rateLevels(org, levelCount) {
   for (let level = 0; level < levelCount; level += 1) {
     for (const agent of agentsAtLevel(org, level)) {
-      if (!onBurnoutLeave(agent)) continue;
+      if (!onLeaveThisQuarter(agent)) continue;
       agent.quarter.rating = 'onLeave';
       agent.quarter.rank = null;
       agent.moodFromRating = 0;
@@ -397,7 +413,8 @@ export function layoffScore(agent, levelMedianSalary, random) {
 export function runLayoffs(org, industry, share, random) {
   const cut = [];
   for (let level = 0; level < industry.seats.length - 1; level += 1) {
-    const pool = agentsAtLevel(org, level).filter((agent) => !agent.tenured);
+    // Tenure and FMLA both protect a job from a layoff list.
+    const pool = agentsAtLevel(org, level).filter((agent) => !agent.tenured && !agent.quarter.leaveDays);
     if (pool.length === 0) continue;
     const salaries = pool.map((agent) => agent.salary).sort((a, b) => a - b);
     const median = salaries[Math.floor(salaries.length / 2)];

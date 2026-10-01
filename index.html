@@ -107,8 +107,11 @@
       <canvas id="office" class="office" aria-label="Your workplace"></canvas>
       <div class="labels" id="labels" aria-hidden="true"></div>
       <div class="banner burnout-banner" id="burnout-banner" hidden>
-        <strong>Burnout.</strong> Put at least 35% into Recovery and work 9 hours or fewer until it lifts, or you will break down.
+        <span><strong>Burnout.</strong> Put 35% or more into Recovery: it counts as sick leave, and the more you rest the faster it lifts.</span>
+        <button class="button small" data-action="holiday" data-days="10" id="banner-holiday">Two weeks off</button>
+        <button class="button small" data-action="fmla" id="banner-fmla" hidden>Take FMLA</button>
       </div>
+      <div class="banner leave-banner" id="leave-banner" hidden></div>
       <div class="banner pip-banner" id="pip-banner" hidden>
         <strong>On a PIP.</strong> One quarter to get out of the bottom bracket.
       </div>
@@ -116,6 +119,7 @@
         <button class="side-button" data-action="panel-org"><span class="side-icon org" aria-hidden="true"></span>Org tree</button>
         <button class="side-button" data-action="panel-performance"><span class="side-icon star" aria-hidden="true"></span>Performance</button>
         <button class="side-button" data-action="panel-career"><span class="side-icon book" aria-hidden="true"></span>Skills</button>
+        <button class="side-button" data-action="panel-timeoff"><span class="side-icon sun" aria-hidden="true"></span>Time off</button>
         <div class="side-row">
           <button class="side-mini" data-action="sound" id="sound-button" title="Sound">Sound off</button>
           <button class="side-mini" data-action="menu" title="Menu">Menu</button>
@@ -173,6 +177,11 @@
     </footer>
   </section>
 
+  <div class="cutscene" id="cutscene" hidden>
+    <canvas class="cutscene-canvas" aria-label="Cut scene"></canvas>
+    <p class="cutscene-caption" aria-live="polite"></p>
+    <button class="button small cutscene-skip" data-action="skip-scene">Skip</button>
+  </div>
   <div class="modal" id="modal" hidden>
     <div class="modal-card" id="modal-card" role="dialog" aria-modal="true"></div>
   </div>

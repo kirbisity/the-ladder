@@ -2,10 +2,12 @@
 // its fog of war, performance, skills and life, help, and the end. Each
 // returns HTML for the modal card; main.js wires the buttons.
 
-import { RATING_LABELS, RATINGS, dailyCoreOutput, stagnationYears, projectSpec, CORE, POLITICS } from '../sim/agent.js';
+import { RATING_LABELS, RATINGS, dailyCoreOutput, stagnationYears, projectSpec, projectsOpenTo, CORE, POLITICS } from '../sim/agent.js';
 import { employedAgents, agentsAtLevel, TEAM_COUNT } from '../sim/org.js';
-import { titleOf, formatMoney, netWorth, managerOf, teamHappiness, quarterlyExpenses, dryPowder } from '../sim/game.js';
-import { PROJECTS, READINESS, INDUSTRY_STATS, ORG, TIME, MOTIVATION, RELATIONSHIP, CHARACTERS, INDUSTRIES } from '../config.js';
+import { titleOf, formatMoney, netWorth, managerOf, teamHappiness, quarterlyExpenses, dryPowder, fmlaStatus, holidayStatus } from '../sim/game.js';
+import { careerSummary } from '../sim/story.js';
+import { drawPerson } from './figures.js';
+import { PROJECTS, READINESS, INDUSTRY_STATS, ORG, TIME, MOTIVATION, RELATIONSHIP, CHARACTERS, INDUSTRIES, HOLIDAY } from '../config.js';
 
 export function escapeHtml(text) {
   return String(text).replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
@@ -15,14 +17,31 @@ const RATING_COLORS = {
   greatlyExceeds: '#46b96b', exceeds: '#8fd36f', meetAll: '#f5c542', meetMost: '#f0a24a', meetSome: '#e5484d', onLeave: '#7d899c',
 };
 
+const portraitCache = new Map();
+
+/** A head-and-shoulders portrait, drawn with the same features as the office and the cut scenes. */
 export function portrait(look, size = 64) {
-  return `<svg class="portrait" viewBox="0 0 64 64" width="${size}" height="${size}" aria-hidden="true">
-    <rect width="64" height="64" rx="14" fill="#223047"/>
-    <path d="M12 64 C 14 46, 22 42, 32 42 C 42 42, 50 46, 52 64 Z" fill="${look.suit}"/>
-    <path d="M28 43 L32 52 L36 43 Z" fill="#ffffff"/>
-    <circle cx="32" cy="28" r="12" fill="${look.skin}"/>
-    <path d="M19 27 C 19 14, 45 12, 45 27 C 41 21, 26 21, 19 27 Z" fill="${look.hair}"/>
-  </svg>`;
+  const key = `${JSON.stringify(look)}|${size}`;
+  if (!portraitCache.has(key) && typeof document !== 'undefined') {
+    const ratio = 2;
+    const canvas = document.createElement('canvas');
+    canvas.width = size * ratio;
+    canvas.height = size * ratio;
+    const context = canvas.getContext('2d');
+    context.scale(ratio, ratio);
+    context.fillStyle = '#223047';
+    context.beginPath();
+    context.roundRect(0, 0, size, size, size * 0.22);
+    context.fill();
+    context.save();
+    context.beginPath();
+    context.roundRect(0, 0, size, size, size * 0.22);
+    context.clip();
+    drawPerson(context, size * 0.5, size * 1.95, size * 0.17, look, { pose: 'standing' });
+    context.restore();
+    portraitCache.set(key, canvas.toDataURL());
+  }
+  return `<img class="portrait" src="${portraitCache.get(key) ?? ''}" width="${size}" height="${size}" alt="">`;
 }
 
 function figure(label, value) {
@@ -329,11 +348,7 @@ export function historyChart(game) {
 // ── Project picker ─────────────────────────────────────────────────────
 
 export function availableProjects(game) {
-  const player = game.player;
-  const list = ['maintenance', 'demo', 'workshop'];
-  if (player.level >= PROJECTS.catalog.moonshot.unlockLevel || player.traits.moonshotUnlocked) list.splice(2, 0, 'moonshot');
-  list.push(game.industry.project.id);
-  return list;
+  return projectsOpenTo(game.player, game.industry).map((project) => project.id);
 }
 
 /** Share of a project this plan would finish in a quarter, at today's state. */
@@ -356,32 +371,24 @@ function totalBandwidthShare(player, index) {
 
 export function projectPanel(game) {
   const current = game.player.plan.project;
-  const rows = availableProjects(game).map((id) => {
-    const project = projectSpec(id, game.industry);
-    const odds = Math.min(1, projectedCompletion(game, id));
-    const risk = project.risky ? `<span class="tag hot">Lands ${Math.round(PROJECTS.moonshotLanding * (game.player.traits.moonshotLanding ?? 1) * 100)}% if done</span>` : '';
-    return `<button class="choice" data-project="${id}" ${id === current ? 'style="border-color:#5f9bff"' : ''}>
-      <span style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><span>${escapeHtml(project.name)}</span>
-      <span class="tag-row"><span class="tag ${project.impact === 'high' ? 'hot' : project.impact === 'medium' ? 'warn' : 'blue'}">Impact: ${project.impact}</span>${risk}
-      <span class="tag ${odds >= 1 ? 'good' : 'bad'}">On pace: ${Math.round(odds * 100)}%</span></span></span>
-      <span class="choice-blurb">${projectBlurb(id)}</span></button>`;
+  const open = new Set(availableProjects(game));
+  const landing = Math.round(Math.min(1, PROJECTS.riskyLanding * (game.player.traits.moonshotLanding ?? 1)) * 100);
+  const locked = game.industry.projects.filter((project) => !open.has(project.id))
+    .map((project) => `${escapeHtml(project.name)} (at ${escapeHtml(titleOf(game, project.unlockLevel))})`);
+  const rows = game.industry.projects.filter((project) => open.has(project.id)).map((project) => {
+    const odds = Math.min(1, projectedCompletion(game, project.id));
+    const risk = project.risky ? `<span class="tag hot">Lands ${landing}% if done</span>` : '';
+    const runsOn = project.usesCitizenship ? '<span class="tag blue">Mentoring</span>' : '';
+    return `<button class="choice" data-project="${project.id}" ${project.id === current ? 'style="border-color:#5f9bff"' : ''}>
+      <span class="choice-line"><span>${escapeHtml(project.name)}</span>
+      <span class="tag-row"><span class="tag ${project.impact === 'high' ? 'hot' : project.impact === 'medium' ? 'warn' : 'blue'}">Impact: ${project.impact}</span>${risk}${runsOn}
+      <span class="tag pace ${odds >= 1 ? 'good' : 'bad'}">On pace: ${Math.round(odds * 100)}%</span></span></span>
+      <span class="choice-blurb">${escapeHtml(project.blurb ?? '')}</span></button>`;
   }).join('');
-  return `${head('Choose this quarter\'s project', 'Project selection')}
+  return `${head(`${escapeHtml(game.industry.name)} · this quarter's project`, 'Project selection')}
     <p class="explain">Finishing it by the deadline lifts your review; missing it costs you. "On pace" is how much your current plan would get done this quarter.</p>
-    <div class="choices">${rows}</div>`;
-}
-
-function projectBlurb(id) {
-  return {
-    maintenance: 'Low effort, low risk, small credit. Hard to fail.',
-    demo: 'A visible deliverable. Success lifts motivation and readiness.',
-    moonshot: 'Huge credit and readiness if it lands. Often it does not.',
-    workshop: 'Runs on Mentoring bandwidth. Builds readiness and goodwill.',
-    refactor: 'Pays down tech debt: fewer 2 AM pages.',
-    pitch: 'Win new client work. Readiness if it lands.',
-    deck: 'Feeds deal flow: more deals close.',
-    grant: 'A proposal; if it is done, a chance of funding that boosts research output for two years.',
-  }[id] ?? '';
+    <div class="choices project-choices">${rows}</div>
+    ${locked.length ? `<p class="locked-line">Later: ${locked.join(' · ')}</p>` : ''}`;
 }
 
 // ── Help ───────────────────────────────────────────────────────────────
@@ -402,10 +409,16 @@ export const HELP_PAGES = [
     'Readiness without a chair fades. Peers want the same chairs; someone junior jumping past you hurts.',
     'The Dedicated–Open slider trades focus and layoff protection for recruiter calls and a faster job search.',
   ] },
+  { title: 'Burnout and time off', items: [
+    'Motivation under 20% is burnout: the screen greys, bandwidth halves, and productivity drains toward nothing as motivation falls.',
+    'Put Recovery at 35% or more and it counts as sick leave (no rating, no PIP), and the more you rest the faster you climb back.',
+    'Time off: holidays of one, two or four weeks (15 paid days a year), or after a year with an employer, FMLA: twelve unpaid, job-protected weeks.',
+  ] },
   { title: 'How it ends', items: [
-    'Retire at 62 with the highest title and the most wealth you can.',
-    'Health at zero is death. Motivation at zero is a breakdown. Out of work with no savings left is homelessness.',
-    'Burnout greys the screen. Rest it out (35%+ Recovery, 9 hours or fewer) and it counts as leave; work through it and you will break down.',
+    'Retire at 62 with the highest title and the most wealth you can, and read the story of your career.',
+    'Or retire early: once your net worth covers 25 years of spending (the FIRE number), the game offers you the door.',
+    'Health at zero is death. Out of work with no savings left is homelessness.',
+    'Motivation at zero is a breakdown, but the last 10% resists: only a long stretch of burnout with no rest gets you there.',
   ] },
 ];
 
@@ -419,11 +432,57 @@ export function helpPanel(page) {
       ${page < HELP_PAGES.length - 1 ? `<button class="button small primary" data-help="${page + 1}">Next</button>` : '<button class="button small primary" data-action="close-modal">Got it</button>'}</div>`;
 }
 
+// ── Time off ───────────────────────────────────────────────────────────
+
+export function timeOffPanel(game) {
+  const holiday = holidayStatus(game);
+  const fmla = fmlaStatus(game);
+  const options = HOLIDAY.options.map((days) => {
+    const paid = game.employment.employed ? Math.min(days, holiday.paidLeft) : 0;
+    const unpaid = game.employment.employed ? days - paid : 0;
+    const label = { 5: 'A week away', 10: 'Two weeks away', 20: 'A month away' }[days];
+    const detail = game.employment.employed
+      ? `${unpaid ? `${unpaid} unpaid days · ` : 'Paid time off · '}travel ${formatMoney(days * HOLIDAY.costPerDay)}${days > 10 ? ' · your manager will notice' : ''}`
+      : `Travel ${formatMoney(days * HOLIDAY.costPerDay)} · the job search slows`;
+    return `<button class="choice" data-action="holiday" data-days="${days}" ${holiday.allowed ? '' : 'disabled'}>
+      <span class="choice-line"><span>${label}</span><span class="tag ${unpaid ? 'warn' : 'good'}">${days} workdays</span></span>
+      <span class="choice-blurb">${escapeHtml(detail)}</span></button>`;
+  }).join('');
+  return `${head('Recovery', 'Time off')}
+    <p class="lead">${escapeHtml(holiday.reason)}</p>
+    <div class="choices">${options}
+      <button class="choice" data-action="fmla" ${fmla.eligible ? '' : 'disabled'}>
+        <span class="choice-line"><span>FMLA leave</span><span class="tag blue">60 workdays</span></span>
+        <span class="choice-blurb">${escapeHtml(fmla.reason)}</span></button>
+    </div>
+    <p class="explain">Days away recover health and motivation faster than resting at your desk. You are rated on the days you work; a month or more away counts as leave.</p>`;
+}
+
+// ── Settings ───────────────────────────────────────────────────────────
+
+export function settingsPanel(settings, soundOn, endScenes, interimScenes) {
+  const sceneButtons = (scenes) => Object.entries(scenes)
+    .map(([id, label]) => `<button class="button small" data-scene="${id}">${escapeHtml(label)}</button>`).join('');
+  return `${head('Menu', 'Settings')}
+    <div class="settings-rows">
+      <div class="settings-row"><span>Sound</span><button class="button small" data-action="sound">${soundOn ? 'On' : 'Off'}</button></div>
+      <div class="settings-row"><span>Cut scenes for big moments</span><button class="button small" data-action="toggle-cutscenes">${settings.cutscenes ? 'On' : 'Off'}</button></div>
+    </div>
+    <details class="developer"><summary>Developer</summary>
+      <p class="explain">Replay any cut scene with the current character. Nothing in the career changes.</p>
+      <div class="modal-kicker">Endings</div>
+      <div class="scene-grid">${sceneButtons(endScenes)}</div>
+      <div class="modal-kicker">Moments</div>
+      <div class="scene-grid">${sceneButtons(interimScenes)}</div>
+    </details>`;
+}
+
 export function menuPanel(hasGame) {
   return `${head('Paused', 'Menu')}
     <div class="choices">
       ${hasGame ? '<button class="choice" data-action="close-modal">Resume</button>' : ''}
       <button class="choice" data-action="help">How to play</button>
+      <button class="choice" data-action="settings">Settings</button>
       ${hasGame ? '<button class="choice" data-action="save-quit">Save and return to title</button>' : ''}
       <button class="choice" data-action="new-career">Start a new career</button>
     </div>`;
@@ -434,13 +493,36 @@ export function menuPanel(hasGame) {
 const OUTCOMES = {
   retired: { title: 'Retirement', line: (game, outcome) => `At ${Math.floor(outcome.age)} you hand in your badge. The highest chair you held: ${outcome.title}.` },
   death: { title: 'Death', line: (game, outcome) => `Your heart gave out at ${Math.floor(outcome.age)}. The ${game.industry.name.toLowerCase()} world sent flowers and posted the role the next week.` },
-  breakdown: { title: 'Breakdown', line: (game, outcome) => `At ${Math.floor(outcome.age)} you could not go on. You worked on through burnout until nothing was left.` },
+  breakdown: { title: 'Breakdown', line: (game, outcome) => `At ${Math.floor(outcome.age)} you could not go on. Burnout ran on with no rest until nothing was left.` },
+  fire: { title: 'Financial independence', line: (game, outcome) => `At ${Math.floor(outcome.age)} you walk away from the ladder with ${formatMoney(outcome.netWorth)} and a one-way ticket.` },
   homeless: { title: 'Homeless', line: (game, outcome) => `At ${Math.floor(outcome.age)} the savings ran out before the job search did. You lost the apartment.` },
 };
+
+// Three paragraphs a page keeps the story readable without scrolling, even
+// on a phone.
+const STORY_PARAGRAPHS_PER_PAGE = 3;
+
+export function storyPageCount(game) {
+  return Math.ceil(careerSummary(game).paragraphs.length / STORY_PARAGRAPHS_PER_PAGE);
+}
+
+/** The career story, a page at a time. */
+export function storyPanel(game, page) {
+  const story = careerSummary(game);
+  const pages = Math.ceil(story.paragraphs.length / STORY_PARAGRAPHS_PER_PAGE);
+  const shown = story.paragraphs.slice(page * STORY_PARAGRAPHS_PER_PAGE, (page + 1) * STORY_PARAGRAPHS_PER_PAGE);
+  const dots = Array.from({ length: pages }, (_, index) => `<span class="${index === page ? 'on' : ''}"></span>`).join('');
+  return `${head(`Your story · ${page + 1} / ${pages}`, escapeHtml(story.verdict), false)}
+    <div class="story">${shown.map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`).join('')}</div>
+    <div class="pager"><button class="button small" data-story="${page - 1}">${page === 0 ? 'Summary' : 'Back'}</button>
+      <div class="pager-dots">${dots}</div>
+      ${page < pages - 1 ? `<button class="button small primary" data-story="${page + 1}">Next</button>` : '<button class="button small primary" data-story="-1">Finish</button>'}</div>`;
+}
 
 export function gameOverPanel(game) {
   const outcome = game.outcome;
   const entry = OUTCOMES[outcome.kind];
+  const verdict = careerSummary(game).verdict;
   const support = outcome.kind === 'breakdown'
     ? '<p class="support">This is a game. If work is wearing you down in real life, please talk to someone: in the US call or text 988; elsewhere, findahelpline.com lists free, confidential lines.</p>'
     : '';
@@ -449,7 +531,8 @@ export function gameOverPanel(game) {
     <div class="figures">${figure('Highest title', escapeHtml(outcome.title))}${figure('Net worth', formatMoney(outcome.netWorth))}${figure('Earned', formatMoney(outcome.lifetimeEarnings))}${figure('Score', outcome.score.toLocaleString())}</div>
     ${historyChart(game)}
     ${support}
-    <div class="actions"><button class="button" data-action="same-again">Same person, new career</button><button class="button primary" data-action="new-career">New career</button></div>`;
+    <div class="actions"><button class="button primary" data-story="0">Read your story: ${escapeHtml(verdict)}</button>
+      <button class="button" data-action="same-again">Same person again</button><button class="button" data-action="new-career">New career</button></div>`;
 }
 
 export function characterCards() {

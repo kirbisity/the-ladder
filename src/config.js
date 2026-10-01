@@ -63,21 +63,31 @@ export const MOTIVATION = {
   pipHit: 12,
   firedHit: 18,
   laidOffHit: 15,
-  // Below this the player is burned out: productivity at 0.4, a grey
-  // screen, and only real rest brings it back.
+  // Below this the player is burned out: a grey screen, bandwidth halved,
+  // and productivity falling from 0.4 at the line to nothing at zero.
+  // Motivation at zero never ends a career; it leaves you unable to work,
+  // which the reviews then punish.
   burnoutLine: 20,
   burnoutProductivity: 0.4,
-  burnoutMinQuarters: 2,
-  burnoutExitLine: 45,
-  // While burned out, rest is the only way up: at least this share of
-  // bandwidth on recovery and no more than these hours a day.
+  burnoutMinQuarters: 1,
+  burnoutExitLine: 40,
+  // Burned out, the motivation target sits this far below normal unless
+  // at least fullRecoveryShare of bandwidth goes to Recovery, and the more
+  // you rest the faster it climbs: full rest triples the pace.
+  burnoutDrag: 30,
+  fullRecoveryShare: 0.4,
+  restSpeedup: 2,
+  // Burned out with at least this much on Recovery counts as sick leave:
+  // the quarter is not rated, so no PIP, and nothing is earned toward a
+  // promotion either.
   burnoutRestShare: 0.35,
-  burnoutMaxHours: 9,
-  burnoutRecoveryBase: 25,
-  burnoutRecoveryPerRest: 70,
-  burnoutSlideTarget: -20,
-  // Burnout rested properly counts as medical leave: the quarter is not
-  // rated, so no PIP, but nothing is earned toward a promotion either.
+  // Motivation at zero is a breakdown and ends the career, but the last
+  // stretch resists: any fall inside the bottom breakdownBuffer points,
+  // day by day or in one blow, counts at bufferResistance of its size. A
+  // grinder in burnout with no rest takes about a year and a half to slide
+  // through it; a single firing near the bottom costs four points, not 18.
+  breakdownBuffer: 10,
+  bufferResistance: 0.25,
 };
 
 export const PERFORMANCE = {
@@ -170,6 +180,8 @@ export const MONEY = {
   // Out of work the lifestyle shrinks, but not to nothing.
   unemployedLifestyleShare: 0.2,
   unemploymentBenefitPerQuarter: 7000,
+  // The full premium to keep an employer plan after leaving: about $700 a month.
+  cobraPerQuarter: 2100,
   benefitQuarters: 2,
   severanceQuarters: 1,
   // Real return on savings a year, by market mood.
@@ -193,25 +205,110 @@ export const JOBS = {
   reentryDemoteAfterQuarters: 3,
 };
 
+// FMLA: twelve weeks of unpaid, job-protected leave, open after a year
+// with the employer and once a year after that. No work, no pay, no
+// rating; health and motivation recover half again as fast as resting at
+// work: a burned-out player comes back near 70%, not fully restored.
+export const FMLA = {
+  leaveDays: 60,
+  eligibleAfterQuarters: 4,
+  cooldownQuarters: 4,
+  recoveryBoost: 1.5,
+};
+
 export const EVENTS = {
-  chancePerQuarter: 0.75,
-  // The design's split; the last fifth is the industry's own events.
-  categoryWeights: { macro: 15, interpersonal: 40, lifestyle: 25, industry: 20 },
+  // One work event at the start of a quarter, from the design's split; the
+  // last share is the industry's own. Out of work, the job-search deck.
+  chancePerQuarter: 0.7,
+  categoryWeights: { macro: 15, interpersonal: 40, industry: 25 },
+  joblessChancePerQuarter: 0.8,
+  // Life does not wait for quarter boundaries: up to two personal events
+  // land on random days, employed or not.
+  lifeEventChance: 0.5,
+  secondLifeEventChance: 0.15,
+  firstLifeDay: 5,
+  lastLifeDay: 55,
 };
 
 // Projects are measured in standard days: what an average worker at the
-// level puts out in a day of core work.
+// level puts out in a day of core work (a 9-hour, 55%-delivery quarter is
+// about 60). Citizenship projects run on Mentoring bandwidth instead.
+// Every industry has its own list; each project has a role the bots and
+// peers choose by (safe, visible, big, risky, citizenship, special), and
+// effects on the industry meter when it lands.
 export const PROJECTS = {
   standardDayOutput: 5,
-  catalog: {
-    maintenance: { name: 'Maintenance backlog', effort: 25, impact: 'low', successBonus: 4, failurePenalty: 6 },
-    demo: { name: 'Product demo', effort: 40, impact: 'high', successBonus: 10, failurePenalty: 10, readiness: 8 },
-    moonshot: { name: 'Moonshot', effort: 60, impact: 'high', successBonus: 25, failurePenalty: 15, readiness: 25, risky: true, unlockLevel: 3 },
-    workshop: { name: 'Host a workshop', effort: 18, impact: 'medium', successBonus: 2, failurePenalty: 2, readiness: 10, usesCitizenship: true },
-  },
-  // A moonshot that is fully done still only lands this often.
-  moonshotLanding: 0.6,
+  // A risky project that is fully done still only lands this often.
+  riskyLanding: 0.6,
 };
+
+const TECH_PROJECTS = [
+  { id: 'oncall', role: 'safe', name: 'On-call rotation and bug queue', effort: 25, impact: 'low', successBonus: 4, failurePenalty: 6, effects: { techDebt: -4 },
+    blurb: 'Close tickets, carry the pager. Hard to fail, easy to overlook.' },
+  { id: 'feature', role: 'visible', name: 'Ship a feature behind a flag', effort: 42, impact: 'high', successBonus: 10, failurePenalty: 10, readiness: 8, effects: { techDebt: 6 },
+    blurb: 'Spec, build, dogfood, ramp to 100%. Leadership sees launches; debt grows.' },
+  { id: 'designDoc', role: 'special', name: 'Write the design doc and RFC', effort: 30, impact: 'medium', successBonus: 5, failurePenalty: 4, readiness: 10,
+    blurb: 'Survive the review with three principal engineers. Readiness for the next rung.' },
+  { id: 'migration', role: 'big', name: 'Lead a platform migration', effort: 58, impact: 'high', successBonus: 14, failurePenalty: 12, readiness: 12, unlockLevel: 2, effects: { techDebt: -20 },
+    blurb: 'Move forty services off the legacy stack without an outage.' },
+  { id: 'refactor', role: 'repair', name: 'Refactoring sprint', effort: 28, impact: 'low', successBonus: 2, failurePenalty: 4, effects: { techDebt: -45 },
+    blurb: 'Pay down tech debt: fewer 2 AM pages. Product will grumble.' },
+  { id: 'techTalk', role: 'citizenship', name: 'Give an internal tech talk series', effort: 60, impact: 'medium', successBonus: 2, failurePenalty: 2, readiness: 10, usesCitizenship: true,
+    blurb: 'Runs on Mentoring bandwidth. Goodwill and readiness.' },
+  { id: 'launch', role: 'risky', name: 'Launch a new product line', effort: 64, impact: 'high', successBonus: 25, failurePenalty: 15, readiness: 25, risky: true, unlockLevel: 3, effects: { techDebt: 12 },
+    blurb: 'Zero to GA in a quarter. Careers are made here, when it lands.' },
+];
+
+const CONSULTING_PROJECTS = [
+  { id: 'research', role: 'safe', name: 'Benchmarking and market sizing', effort: 25, impact: 'low', successBonus: 4, failurePenalty: 6,
+    blurb: 'Spreadsheets, expert calls, a clean appendix.' },
+  { id: 'diligence', role: 'visible', name: 'Commercial due diligence sprint', effort: 42, impact: 'high', successBonus: 10, failurePenalty: 10, readiness: 6, effects: { clientScore: 8 },
+    blurb: 'Four weeks, one buyer, forty interviews, a red-flag memo.' },
+  { id: 'proposal', role: 'special', name: 'Write an RFP response', effort: 30, impact: 'high', successBonus: 8, failurePenalty: 8, readiness: 8, effects: { clientScore: 5 },
+    blurb: 'Business development: sell the next engagement.' },
+  { id: 'costProgram', role: 'big', name: 'Run a cost-reduction program', effort: 58, impact: 'high', successBonus: 14, failurePenalty: 12, readiness: 12, unlockLevel: 2, effects: { clientScore: 12 },
+    blurb: 'Find 15% of opex, then help the client defend it.' },
+  { id: 'article', role: 'repair', name: 'Publish a thought-leadership piece', effort: 28, impact: 'medium', successBonus: 4, failurePenalty: 3, readiness: 6,
+    blurb: 'A byline in the firm journal. Partners read it on planes.' },
+  { id: 'analystTraining', role: 'citizenship', name: 'Train the new analyst class', effort: 60, impact: 'medium', successBonus: 2, failurePenalty: 2, readiness: 10, usesCitizenship: true,
+    blurb: 'Runs on Mentoring bandwidth. The juniors remember who taught them.' },
+  { id: 'transformation', role: 'risky', name: 'Lead a digital transformation', effort: 66, impact: 'high', successBonus: 25, failurePenalty: 15, readiness: 25, risky: true, unlockLevel: 3, effects: { clientScore: 15 },
+    blurb: 'A three-year program sold in a quarter. Partner-making, if it lands.' },
+];
+
+const PE_PROJECTS = [
+  { id: 'lbo', role: 'safe', name: 'Build the LBO model', effort: 25, impact: 'low', successBonus: 4, failurePenalty: 6, effects: { dealFlow: 4 },
+    blurb: 'Three statements, a debt schedule, returns at five exit multiples.' },
+  { id: 'confirmatory', role: 'visible', name: 'Run confirmatory diligence', effort: 42, impact: 'high', successBonus: 10, failurePenalty: 10, readiness: 6, effects: { dealFlow: 12 },
+    blurb: 'Quality of earnings, legal, IT, management references.' },
+  { id: 'icMemo', role: 'special', name: 'Write the investment committee memo', effort: 32, impact: 'high', successBonus: 8, failurePenalty: 8, readiness: 10,
+    blurb: 'Sixty pages that the IC will tear apart in ninety minutes.' },
+  { id: 'valueCreation', role: 'big', name: 'Portfolio value-creation plan', effort: 56, impact: 'high', successBonus: 14, failurePenalty: 12, readiness: 12, unlockLevel: 2,
+    blurb: 'Pricing, procurement, a new CFO. EBITDA is the scoreboard.' },
+  { id: 'lpDeck', role: 'repair', name: 'Prepare the LP update deck', effort: 28, impact: 'medium', successBonus: 4, failurePenalty: 4, readiness: 4, effects: { dealFlow: 20 },
+    blurb: 'Keep the investors warm. Feeds deal flow and the next fund.' },
+  { id: 'analystClass', role: 'citizenship', name: 'Recruit and train the analyst class', effort: 60, impact: 'medium', successBonus: 2, failurePenalty: 2, readiness: 10, usesCitizenship: true,
+    blurb: 'Runs on Mentoring bandwidth. Superdays, then modelling boot camp.' },
+  { id: 'proprietary', role: 'risky', name: 'Source a proprietary deal', effort: 64, impact: 'high', successBonus: 25, failurePenalty: 15, readiness: 25, risky: true, unlockLevel: 3, effects: { dealFlow: 40 },
+    blurb: 'A founder who will not talk to bankers. If it closes, it is yours.' },
+];
+
+const ACADEMIA_PROJECTS = [
+  { id: 'teaching', role: 'safe', name: 'Teach your course load', effort: 25, impact: 'low', successBonus: 4, failurePenalty: 6,
+    blurb: 'Lectures, office hours, 180 midterms to grade.' },
+  { id: 'paper', role: 'visible', name: 'Write a journal paper', effort: 42, impact: 'high', successBonus: 8, failurePenalty: 8, readiness: 6, effects: { researchProgress: 60 },
+    blurb: 'Draft, co-author fights, submit. Moves you a paper closer.' },
+  { id: 'grant', role: 'special', name: 'Write a grant proposal', effort: 34, impact: 'high', successBonus: 6, failurePenalty: 4, readiness: 8, grant: true,
+    blurb: 'If it is in on time, a chance at two years of funding.' },
+  { id: 'labSeries', role: 'big', name: 'Run a lab experiment series', effort: 56, impact: 'high', successBonus: 12, failurePenalty: 10, readiness: 10, unlockLevel: 1, effects: { researchProgress: 90 },
+    blurb: 'Six months of data in three. The paper writes itself, almost.' },
+  { id: 'committee', role: 'repair', name: 'Serve on the hiring committee', effort: 20, impact: 'low', successBonus: 3, failurePenalty: 2, readiness: 8,
+    blurb: 'Read 300 applications. The department notices who does service.' },
+  { id: 'phdStudents', role: 'citizenship', name: 'Supervise PhD students', effort: 60, impact: 'medium', successBonus: 2, failurePenalty: 2, readiness: 10, usesCitizenship: true, effects: { researchProgress: 30 },
+    blurb: 'Runs on Mentoring bandwidth. Their papers carry your name.' },
+  { id: 'monograph', role: 'risky', name: 'Write a monograph', effort: 70, impact: 'high', successBonus: 22, failurePenalty: 12, readiness: 25, risky: true, unlockLevel: 2, effects: { citations: 40 },
+    blurb: 'The book that defines a field, or a manuscript in a drawer.' },
+];
 
 // Levels and money per industry. Industries are patches over the default:
 // a variant states only what differs.
@@ -232,7 +329,7 @@ const DEFAULT_INDUSTRY = {
   tenureFromLevel: null,
   contractQuarters: null,
   subStat: 'techDebt',
-  project: { id: 'refactor', name: 'Refactoring sprint', effort: 25, impact: 'low', successBonus: 2, failurePenalty: 4 },
+  projects: TECH_PROJECTS,
   bonusShare: [0, 0, 0.05, 0.1, 0.15, 0.2, 0.3, 0.5],
 };
 
@@ -252,7 +349,7 @@ export const INDUSTRIES = {
     upOrOutQuarters: 16,
     upOrOutBelowLevel: 5,
     subStat: 'utilization',
-    project: { id: 'pitch', name: 'Client pitch', effort: 30, impact: 'high', successBonus: 8, failurePenalty: 8, readiness: 6 },
+    projects: CONSULTING_PROJECTS,
     bonusShare: [0.05, 0.1, 0.15, 0.2, 0.25, 0.35, 0.6, 1],
   },
   privateEquity: {
@@ -267,7 +364,7 @@ export const INDUSTRIES = {
     upOrOutQuarters: 16,
     upOrOutBelowLevel: 4,
     subStat: 'dealFlow',
-    project: { id: 'deck', name: 'Pitch deck', effort: 30, impact: 'high', successBonus: 6, failurePenalty: 6, readiness: 4 },
+    projects: PE_PROJECTS,
     bonusShare: [0.1, 0.2, 0.3, 0.5, 0.7, 1, 1.5, 2.5],
   },
   academia: {
@@ -287,7 +384,7 @@ export const INDUSTRIES = {
     // Postdoc contracts end after 12 quarters.
     contractQuarters: 12,
     subStat: 'citations',
-    project: { id: 'grant', name: 'Grant proposal', effort: 30, impact: 'high', successBonus: 6, failurePenalty: 4, readiness: 8 },
+    projects: ACADEMIA_PROJECTS,
     bonusShare: [0, 0, 0, 0, 0, 0, 0, 0],
   },
 };
@@ -300,7 +397,6 @@ export const INDUSTRY_STATS = {
     growthPerCoreShare: 12,
     tiredGrowth: 1.5,
     naturalPaydown: 4,
-    refactorPaydown: 45,
     incidentChancePerDayAtFull: 0.1,
     // At full debt (6 incidents a quarter) this pulls the long-run health
     // level down ~15 points: a real cost of never refactoring, not a death.
@@ -319,7 +415,6 @@ export const INDUSTRY_STATS = {
     label: 'Deal flow velocity',
     sourcingWeight: 6,
     modellingWeight: 2,
-    pitchDeckBoost: 30,
     dealPerformance: 22,
     dealCarry: 0.15,
   },
@@ -335,53 +430,88 @@ export const INDUSTRY_STATS = {
   },
 };
 
-// The four templates from the design. Stats as given; traits as described.
+// The four characters. Everyone in the game goes by first name and last
+// initial. Stats as in the design; traits: Simon and Jennifer take long
+// hours well, Chloe badly, Joseph is an average Joe.
+// look: colours plus the features the portrait, office and cut scenes draw
+// (face shape, hair style, eyes, brows, nose, mouth, glasses, cheeks, stubble).
 export const CHARACTERS = [
   {
-    id: 'marcus',
-    name: 'Marcus Vance',
+    id: 'simon',
+    name: 'Simon C',
     mbti: 'INTJ',
     iq: 140,
     pol: 60,
     archetype: 'Systems Thinker',
-    blurb: 'Bonus to solitary architectural and technical work. Unstructured networking drains him badly.',
-    traits: { coreBonus: 1.15, networkingDrain: 45, networkingHealthDrain: 10 },
-    look: { skin: '#e0b48f', hair: '#3a2a20', suit: '#2f3a4a' },
+    blurb: 'Bonus to solitary technical work, and long hours wear him down slowly. Unstructured networking drains him badly.',
+    traits: { coreBonus: 1.15, networkingDrain: 45, networkingHealthDrain: 10, strainResistance: 0.6, exhaustionResistance: 0.65 },
+    look: {
+      skin: '#f1d2b0', hair: '#121212', suit: '#2f3a4a', shirt: '#ffffff',
+      face: 'round', hairStyle: 'sideSwept', brows: 'thickCurved', eyes: 'monolid', nose: 'soft', mouth: 'gentle',
+    },
   },
   {
-    id: 'elena',
-    name: 'Elena Rostova',
+    id: 'jennifer',
+    name: 'Jennifer B',
     mbti: 'ENFP',
     iq: 140,
     pol: 110,
     archetype: 'Charismatic Catalyst',
-    blurb: 'Builds relationships and alliances fast. Long stretches of isolated desk work sap her motivation.',
-    traits: { relationshipBonus: 1.5, politicsBonus: 1.2, deskWorkDrain: 50, deskWorkLimit: 0.45 },
-    look: { skin: '#f1c6a6', hair: '#8a4b2a', suit: '#4a3260' },
+    blurb: 'Builds relationships and alliances fast, and keeps going on long days. Long stretches of isolated desk work sap her motivation.',
+    traits: { relationshipBonus: 1.5, politicsBonus: 1.2, deskWorkDrain: 50, deskWorkLimit: 0.45, strainResistance: 0.6, exhaustionResistance: 0.65 },
+    look: {
+      skin: '#f4d6b8', hair: '#0e0e0e', suit: '#4a3260', shirt: '#f3e8ee',
+      face: 'soft', hairStyle: 'shoulderStraight', brows: 'soft', eyes: 'innerDouble', nose: 'delicate', mouth: 'smileTeeth',
+    },
   },
   {
-    id: 'maya',
-    name: 'Maya Lin',
+    id: 'chloe',
+    name: 'Chloe C',
     mbti: 'ENTP',
     iq: 150,
     pol: 95,
     archetype: 'Disruptive Innovator',
-    blurb: 'Moonshots open from day one and land more often. Clashes with rigid, traditional leadership.',
-    traits: { moonshotUnlocked: true, moonshotLanding: 1.25, rigidManagerClash: 0.25 },
-    look: { skin: '#e9c39c', hair: '#151515', suit: '#25505a' },
+    blurb: 'Moonshots open from day one and land more often. Long hours burn her out fast, and she clashes with rigid leadership.',
+    traits: { moonshotUnlocked: true, moonshotLanding: 1.25, rigidManagerClash: 0.25, strainResistance: 1.35, exhaustionResistance: 1.35 },
+    look: {
+      skin: '#f0cdaa', hair: '#1b1512', suit: '#25505a', shirt: '#fff6e8',
+      face: 'round', hairStyle: 'bob', brows: 'soft', eyes: 'large', nose: 'soft', mouth: 'animated', glasses: 'thickBlack', cheeks: 'flushed',
+    },
   },
   {
-    id: 'david',
-    name: 'David Thorne',
+    id: 'joseph',
+    name: 'Joseph J',
     mbti: 'ISTJ',
     iq: 130,
     pol: 105,
-    archetype: 'The Anchor',
-    blurb: 'Shrugs off long hours: strain and exhaustion hit him far less. Slow to adapt when strategy pivots.',
-    traits: { strainResistance: 0.55, exhaustionResistance: 0.6, pivotPenalty: 1.6 },
-    look: { skin: '#c99a76', hair: '#5a5a5a', suit: '#3b3b3b' },
+    archetype: 'The Average Joe',
+    blurb: 'No special strengths, no special weaknesses. Steady, composed, and exactly as tired after a long day as anyone.',
+    traits: {},
+    look: {
+      skin: '#e2b893', hair: '#3a2a1e', suit: '#3b3b3b', shirt: '#dfe7f0',
+      face: 'structured', hairStyle: 'cleanShort', brows: 'straight', eyes: 'focused', nose: 'bridge', mouth: 'composed', glasses: 'aviator', stubble: true,
+    },
   },
 ];
+
+// Holidays: paid time off covers the first fifteen days a year; anything
+// longer is unpaid. A day away recovers half again as fast as resting at
+// work, and travel costs money. Past two weeks, your manager notices.
+export const HOLIDAY = {
+  ptoDaysPerYear: 15,
+  options: [5, 10, 20],
+  recoveryBoost: 1.5,
+  costPerDay: 220,
+  alignmentCostPerWeekPastTwo: 0.03,
+};
+
+// FIRE: financially independent once net worth covers 25 years of spending
+// (the 4% rule). The game asks, at most once every two years.
+export const FIRE = {
+  yearsOfSpending: 25,
+  askEveryQuarters: 8,
+  minimumAge: 30,
+};
 
 // What a peer's personality looks like, drawn per agent.
 export const PEERS = {

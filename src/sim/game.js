@@ -5,11 +5,11 @@
 
 import {
   TIME, MONEY, JOBS, HEALTH, MOTIVATION, READINESS, RELATIONSHIP, EVENTS as EVENT_DIALS,
-  INDUSTRIES, INDUSTRY_STATS, CHARACTERS, ORG, PROJECTS,
+  INDUSTRIES, INDUSTRY_STATS, CHARACTERS, ORG, PROJECTS, FMLA, HOLIDAY, FIRE,
 } from '../config.js';
 import { createRandom } from './random.js';
 import {
-  createAgent, stepDay, clamp, clampVitals, defaultPlan, payInBand, utilizationOf, RATING_LABELS,
+  createAgent, stepDay, clamp, clampVitals, defaultPlan, payInBand, projectFor, projectSpec, utilizationOf, RATING_LABELS,
   CORE, CITIZENSHIP, POLITICS, RECOVERY,
 } from './agent.js';
 import {
@@ -17,7 +17,8 @@ import {
   applyReviewRules, applyTenureReviews, rollDepartures, fillVacancies, decayUnusedReadiness,
   updateAlignment, runLayoffs, ageAgents, startQuarterFor, employedAgents, agentsAtLevel,
 } from './org.js';
-import { drawEvent, eventById, offerEvent } from './events.js';
+import { drawEvent, drawLifeEvent, eventById, offerEvent, fireEvent } from './events.js';
+import { record } from './story.js';
 import { COMPANY_NAMES as INDUSTRY_COMPANY_POOL } from './names.js';
 
 export const MARKET_STATES = ['boom', 'normal', 'recession'];
@@ -36,7 +37,7 @@ const MARKET_TRANSITIONS = {
  * Returns:
  *   the game state, in the plan phase of the first quarter
  */
-export function createGame({ seed = Date.now() % 1e9, characterId = 'marcus', industryId = 'tech', playerName = null } = {}) {
+export function createGame({ seed = Date.now() % 1e9, characterId = 'simon', industryId = 'tech', playerName = null } = {}) {
   const random = createRandom(seed);
   const character = CHARACTERS.find((entry) => entry.id === characterId) ?? CHARACTERS[0];
   const industry = INDUSTRIES[industryId] ?? INDUSTRIES.tech;
@@ -86,7 +87,13 @@ export function createGame({ seed = Date.now() % 1e9, characterId = 'marcus', in
     promotions: 0,
     lastReport: null,
     weekDeltas: { health: 0, motivation: 0 },
+    fmla: { daysLeft: 0, lastStartQuarter: null },
+    holiday: { daysLeft: 0, unpaidLeft: 0, usedThisYear: 0, year: 0 },
+    fireAskedQuarter: null,
+    lifeEventDays: [],
+    journal: [],
   };
+  player.plan.project = projectFor(industry, 'safe').id;
   joinOrganization(game, createOrganization(random, industry), 0);
   beginQuarter(game);
   return game;
@@ -112,6 +119,7 @@ export function joinOrganization(game, org, level) {
   for (const peer of org.agents) peer.relationship = Math.round(game.random.normal(0, 10));
   org.agents.push(player);
   game.org = org;
+  if (game.journal) record(game, 'joined', { company: org.companyName, title: game.industry.titles[level] });
   game.employment.employed = true;
   game.employment.unemployedQuarters = 0;
   game.flags.revealed = [];
@@ -135,6 +143,7 @@ export function managerOf(game) {
 function loseJob(game, reason) {
   const player = game.player;
   const employment = game.employment;
+  record(game, 'lostJob', { reason, company: game.org.companyName, title: titleOf(game, player.level) });
   player.departed = reason;
   game.org.agents = game.org.agents.filter((agent) => agent !== player);
   game.lastOrg = game.org;
@@ -142,6 +151,9 @@ function loseJob(game, reason) {
   employment.employed = false;
   employment.unemployedQuarters = 0;
   employment.firedFor = reason;
+  game.flags.cobraDecided = false;
+  game.flags.cobra = false;
+  game.fmla.daysLeft = 0;
   employment.benefitQuartersLeft = reason === 'quit' ? 0 : MONEY.benefitQuarters;
   employment.lastLevel = player.level;
   player.pip = { active: false, quarters: 0 };
@@ -164,6 +176,7 @@ export function quitJob(game) {
 
 /** Take a job at a new company. */
 export function acceptOffer(game, offer) {
+  if (!game.employment.employed) record(game, 'rehired', { quartersOut: game.employment.unemployedQuarters });
   if (game.org) {
     game.org.agents = game.org.agents.filter((agent) => agent !== game.player);
   }
@@ -209,15 +222,124 @@ export function beginQuarter(game) {
     game.eventQueue.push({ event: offerEvent(), data: game.pendingOffer });
     game.pendingOffer = null;
   }
+  if (fireReady(game)) {
+    game.fireAskedQuarter = game.quarterIndex;
+    game.eventQueue.unshift({ event: fireEvent(), data: { number: fireNumber(game) } });
+  }
   // The first quarter is quiet: a new hire gets to find their desk first.
-  if (game.quarterIndex > 0 && random.chance(EVENT_DIALS.chancePerQuarter)) {
+  // Out of work, the quarter opens with the job hunt instead of the office.
+  const chance = game.employment.employed ? EVENT_DIALS.chancePerQuarter : EVENT_DIALS.joblessChancePerQuarter;
+  if (game.quarterIndex > 0 && random.chance(chance)) {
     const drawn = drawEvent(game, random);
     if (drawn) {
       const data = drawn.onDraw ? drawn.onDraw(game, random) ?? {} : {};
       game.eventQueue.push({ event: drawn, data });
     }
   }
+  game.lifeEventDays = [];
+  if (game.quarterIndex > 0 && random.chance(EVENT_DIALS.lifeEventChance)) {
+    game.lifeEventDays.push(random.int(EVENT_DIALS.firstLifeDay, EVENT_DIALS.lastLifeDay));
+    if (random.chance(EVENT_DIALS.secondLifeEventChance)) game.lifeEventDays.push(random.int(EVENT_DIALS.firstLifeDay, EVENT_DIALS.lastLifeDay));
+  }
   nextEvent(game);
+}
+
+// ── FIRE ───────────────────────────────────────────────────────────────
+
+/** Net worth that covers this many years of today's spending: the 4% rule. */
+export function fireNumber(game) {
+  return quarterlyExpenses(game) * 4 * FIRE.yearsOfSpending;
+}
+
+/** Financially independent, old enough, and not asked recently. */
+export function fireReady(game) {
+  const age = game.player.age;
+  const asked = game.fireAskedQuarter;
+  return age >= FIRE.minimumAge && age < TIME.retirementAge - 1
+    && netWorth(game) >= fireNumber(game)
+    && (asked === null || asked === undefined || game.quarterIndex - asked >= FIRE.askEveryQuarters);
+}
+
+/** Retire early, on your own terms. */
+export function retireEarly(game) {
+  record(game, 'fire');
+  endGame(game, 'fire');
+}
+
+// ── Holidays ───────────────────────────────────────────────────────────
+
+/**
+ * Whether a holiday can start now, and what it would cost.
+ *
+ * Returns:
+ *   { allowed, reason, paidLeft }
+ */
+export function holidayStatus(game) {
+  const year = Math.floor(game.quarterIndex / 4);
+  const used = game.holiday.year === year ? game.holiday.usedThisYear : 0;
+  const paidLeft = Math.max(0, HOLIDAY.ptoDaysPerYear - used);
+  if (game.holiday.daysLeft > 0) return { allowed: false, reason: `On holiday: ${game.holiday.daysLeft} days left.`, paidLeft };
+  if (game.fmla.daysLeft > 0) return { allowed: false, reason: 'You are already on FMLA leave.', paidLeft };
+  if (!game.employment.employed) return { allowed: true, reason: 'Between jobs: a trip costs money and pauses the search a little.', paidLeft: 0 };
+  return { allowed: true, reason: `${paidLeft} paid days left this year; anything past that is unpaid.`, paidLeft };
+}
+
+/** Go away for a while: recovery with a price. Returns the message. */
+export function takeHoliday(game, days) {
+  const status = holidayStatus(game);
+  if (!status.allowed) return status.reason;
+  const year = Math.floor(game.quarterIndex / 4);
+  if (game.holiday.year !== year) {
+    game.holiday.year = year;
+    game.holiday.usedThisYear = 0;
+  }
+  const unpaid = game.employment.employed ? Math.max(0, days - status.paidLeft) : 0;
+  game.holiday.daysLeft = days;
+  game.holiday.unpaidLeft = unpaid;
+  game.holiday.usedThisYear += days;
+  const cost = days * HOLIDAY.costPerDay;
+  game.savings -= cost;
+  const weeksPastTwo = Math.max(0, days - 10) / 5;
+  if (game.employment.employed) game.player.alignment -= HOLIDAY.alignmentCostPerWeekPastTwo * weeksPastTwo;
+  if (!game.employment.employed) game.flags.searchBoost = (game.flags.searchBoost ?? 0) - 0.02 * days / 5;
+  record(game, 'holiday', { days });
+  log(game, `You take ${days} days off.`);
+  return `${days} days away${unpaid ? `, ${unpaid} of them unpaid` : ''}. Travel: ${formatMoney(cost)}. The laptop stays home.`;
+}
+
+// ── FMLA ───────────────────────────────────────────────────────────────
+
+/**
+ * Whether the player can take FMLA leave now, and if not, why not.
+ *
+ * Returns:
+ *   { eligible, reason, daysLeft }
+ */
+export function fmlaStatus(game) {
+  const fmla = game.fmla;
+  if (fmla.daysLeft > 0) return { eligible: false, reason: `On leave: ${fmla.daysLeft} days left.`, daysLeft: fmla.daysLeft };
+  if (game.holiday.daysLeft > 0) return { eligible: false, reason: 'You are on holiday.' };
+  if (!game.employment.employed) return { eligible: false, reason: 'FMLA protects a job you have. You are between jobs.' };
+  if (game.player.quartersEmployed < FMLA.eligibleAfterQuarters) {
+    const quarters = FMLA.eligibleAfterQuarters - game.player.quartersEmployed;
+    return { eligible: false, reason: `Eligible after a year with your employer: ${quarters} more quarter${quarters === 1 ? '' : 's'}.` };
+  }
+  if (fmla.lastStartQuarter !== null && game.quarterIndex - fmla.lastStartQuarter < FMLA.cooldownQuarters) {
+    return { eligible: false, reason: 'FMLA allows twelve weeks in any twelve months; yours are used.' };
+  }
+  return { eligible: true, reason: 'Twelve weeks off, unpaid, with your job protected: no rating, no PIP, no layoff.' };
+}
+
+/** Start twelve weeks of FMLA leave. Returns the status message. */
+export function takeFmla(game) {
+  const status = fmlaStatus(game);
+  if (!status.eligible) return status.reason;
+  game.fmla.daysLeft = FMLA.leaveDays;
+  game.fmla.lastStartQuarter = game.quarterIndex;
+  game.player.pip.active = false;
+  record(game, 'fmla');
+  log(game, 'You start twelve weeks of FMLA leave.');
+  return 'Twelve weeks of FMLA leave start now. The laptop stays closed.';
 }
 
 function nextEvent(game) {
@@ -303,20 +425,46 @@ export function startRunning(game) {
  *   notes for the player from today, and whether the quarter is over
  */
 export function runDay(game) {
-  if (game.phase !== 'running') return { notes: [], quarterOver: false };
+  if (game.phase !== 'running' || game.currentEvent) return { notes: [], quarterOver: false };
   const random = game.random;
+  // Life does not wait for the quarter to end.
+  if (game.lifeEventDays.includes(game.day)) {
+    game.lifeEventDays = game.lifeEventDays.filter((day) => day !== game.day);
+    const drawn = drawLifeEvent(game, random);
+    if (drawn) {
+      const data = drawn.onDraw ? drawn.onDraw(game, random) ?? {} : {};
+      game.currentEvent = { event: drawn, data };
+      prepareCurrentEvent(game);
+      return { notes: [{ kind: 'event', text: drawn.title }], quarterOver: false };
+    }
+  }
   const employed = game.employment.employed;
   const player = game.player;
   const healthBefore = player.health;
   const motivationBefore = player.motivation;
+  const onFmla = employed && game.fmla.daysLeft > 0;
+  const onHoliday = game.holiday.daysLeft > 0;
+  const onLeave = onFmla || onHoliday;
   const context = {
     industry: game.industry,
     random,
     employed,
+    onLeave,
     outputModifier: game.flags.outputModifier,
     moodModifier: game.flags.moodModifier ?? 0,
   };
+  context.leaveBoost = onFmla ? FMLA.recoveryBoost : HOLIDAY.recoveryBoost;
   const notes = stepDay(player, context);
+  if (onFmla) {
+    player.quarter.unpaidDays = (player.quarter.unpaidDays ?? 0) + 1;
+    game.fmla.daysLeft -= 1;
+    if (game.fmla.daysLeft === 0) notes.push({ kind: 'leaveOver', text: 'Your FMLA leave is over. Back to your desk on Monday.' });
+  } else if (onHoliday) {
+    if (game.holiday.daysLeft <= game.holiday.unpaidLeft) player.quarter.unpaidDays = (player.quarter.unpaidDays ?? 0) + 1;
+    game.holiday.daysLeft -= 1;
+    if (game.holiday.daysLeft === 0) notes.push({ kind: 'leaveOver', text: 'Holiday over. The inbox has 1,400 unread messages.' });
+  }
+  if (notes.some((note) => note.kind === 'burnout')) record(game, 'burnout');
   if (game.org) {
     const peerContext = { industry: game.industry, random, employed: true, outputModifier: 1 };
     for (const agent of employedAgents(game.org)) {
@@ -326,6 +474,7 @@ export function runDay(game) {
   game.day += 1;
   trackWeek(game, player.health - healthBefore, player.motivation - motivationBefore);
   if (player.health <= 0) endGame(game, 'death');
+  else if (player.motivation <= 0) endGame(game, 'breakdown');
   else if (player.motivation <= 0) endGame(game, 'breakdown');
   const quarterOver = game.day >= TIME.daysPerQuarter || Boolean(game.outcome);
   if (quarterOver && !game.outcome) game.phase = 'review';
@@ -338,10 +487,16 @@ function trackWeek(game, healthChange, motivationChange) {
   week.motivation = week.motivation * 0.8 + motivationChange * 5 * 0.2;
 }
 
-/** Run the rest of the quarter without stopping. */
-export function finishQuarterDays(game) {
+/**
+ * Run the rest of the quarter without stopping, answering any event that
+ * lands mid-quarter with the given chooser (the first option by default).
+ */
+export function finishQuarterDays(game, choose = () => 0) {
   if (game.phase === 'plan') startRunning(game);
-  while (game.phase === 'running') runDay(game);
+  while (game.phase === 'running') {
+    if (game.currentEvent) chooseEventOption(game, choose(game, game.currentEvent.choices));
+    else runDay(game);
+  }
 }
 
 // ── Quarter close ──────────────────────────────────────────────────────
@@ -425,13 +580,18 @@ function closeEmployedQuarter(game, report) {
   for (const entry of tenureResults) {
     if (entry.agent === player) {
       report.notes.push(entry.granted ? 'Tenure granted. Nobody can PIP you now.' : 'Tenure denied. You have a year to find somewhere else... starting now.');
+      record(game, entry.granted ? 'promoted' : 'tenureDenied', { title: titleOf(game, player.level) });
       if (entry.granted) {
         report.promoted = true;
         game.promotions += 1;
       }
     }
   }
+  const leaveDays = player.quarter.leaveDays ?? 0;
+  if (leaveDays >= 30) report.notes.push(`On leave for ${leaveDays} days: no rating, no PIP, and your job is waiting.`);
+  else if (leaveDays > 0) report.notes.push(`${leaveDays} days away. Rated on the days you worked.`);
   report.pipStarted = Boolean(player.quarter.pipStarted);
+  if (report.pipStarted) record(game, 'pip');
   if (player.quarter.pipStarted) report.notes.push('You are on a Performance Improvement Plan. One quarter to climb out of the bottom bracket.');
   if (player.quarter.pipCleared) report.notes.push('PIP cleared. Breathe.');
 
@@ -442,6 +602,7 @@ function closeEmployedQuarter(game, report) {
     report.layoffs = cut.length;
     report.notes.push(`Layoffs: ${cut.length} people in the division are cut.`);
     report.stinger = 'layoff';
+    if (!player.quarter.terminated) record(game, 'layoffSurvived', { cut: cut.length });
   }
 
   if (player.quarter.terminated) {
@@ -470,6 +631,7 @@ function closeEmployedQuarter(game, report) {
       report.promoted = true;
       game.promotions += 1;
       report.notes.push(`Promoted to ${titleOf(game, player.level)}.`);
+      record(game, 'promoted', { title: titleOf(game, player.level) });
       report.chime = true;
       for (const passed of promotion.passedOver) passed.relationship -= RELATIONSHIP.leapfrogLoss;
       pickManager(game);
@@ -481,6 +643,7 @@ function closeEmployedQuarter(game, report) {
       const jumper = promotion.agent;
       if (jumper && promotion.quartersAtFormerLevel < player.quartersAtLevel) {
         player.motivation -= MOTIVATION.leapfrogHit;
+        record(game, 'leapfrogged', { by: jumper.name });
         report.notes.push(`Leapfrogged: ${jumper.name}, junior to you, takes the ${titleOf(game, promotion.level)} chair you were ready for.`);
         report.leapfrogged = true;
       } else if (!report.passedOver) {
@@ -523,7 +686,9 @@ function closeUnemployedQuarter(game, report) {
   const ratingBoost = { greatlyExceeds: 0.15, exceeds: 0.1, meetAll: 0.05, meetMost: 0, meetSome: -0.1 }[player.lastRating] ?? 0;
   const marketFactor = game.market === 'boom' ? 1.3 : game.market === 'recession' ? 0.6 : 1;
   const agePenalty = Math.max(0, player.age - JOBS.searchAgePenaltyFrom) * 0.02;
-  const chance = clamp((JOBS.searchBase + JOBS.searchOpen * player.plan.openness + ratingBoost
+  const boost = game.flags.searchBoost ?? 0;
+  game.flags.searchBoost = 0;
+  const chance = clamp((JOBS.searchBase + JOBS.searchOpen * player.plan.openness + ratingBoost + boost
     - JOBS.searchStigmaPerQuarter * (employment.unemployedQuarters - 1) - agePenalty) * marketFactor, 0.03, 0.95);
   report.searchChance = chance;
   if (random.chance(chance)) {
@@ -633,7 +798,6 @@ function closeIndustryQuarter(game, agent, report) {
   const random = game.random;
   const quarter = agent.quarter;
   if (industry.subStat === 'techDebt') {
-    if (quarter.projectId === 'refactor' && quarter.projectSuccess) state.techDebt = Math.max(0, state.techDebt - INDUSTRY_STATS.techDebt.refactorPaydown);
     if (report && quarter.incidents > 0) report.notes.push(`${quarter.incidents} pager incident${quarter.incidents > 1 ? 's' : ''} this quarter (tech debt ${Math.round(state.techDebt)}).`);
   } else if (industry.subStat === 'utilization') {
     const dials = INDUSTRY_STATS.utilization;
@@ -648,7 +812,6 @@ function closeIndustryQuarter(game, agent, report) {
     }
   } else if (industry.subStat === 'dealFlow') {
     const dials = INDUSTRY_STATS.dealFlow;
-    if (quarter.projectId === 'deck' && quarter.projectSuccess) state.dealFlow = Math.min(100, state.dealFlow + dials.pitchDeckBoost);
     const canClose = game.org && dryPowder(game) > 10;
     if (canClose && random.chance(state.dealFlow / 100)) {
       quarter.performanceBonus = (quarter.performanceBonus ?? 0) + dials.dealPerformance;
@@ -659,6 +822,7 @@ function closeIndustryQuarter(game, agent, report) {
         game.savings += carry * 0.7;
         game.lifetimeEarnings += carry;
         if (report) report.notes.push(`A deal closes.${carry ? ` Carry: ${formatMoney(carry)}.` : ''}`);
+        record(game, 'deal');
       }
     }
   } else if (industry.subStat === 'citations') {
@@ -666,7 +830,7 @@ function closeIndustryQuarter(game, agent, report) {
     state.paperAges += state.papers;
     state.citations += dials.citationsPerPaperPerQuarter * state.papers;
     quarter.performanceBonus = (quarter.performanceBonus ?? 0) + 8 * quarter.papers;
-    if (quarter.projectId === 'grant' && quarter.projectSuccess) {
+    if (projectSpec(quarter.projectId, industry)?.grant && quarter.projectSuccess) {
       if (random.chance(dials.grantChancePerProposal * agent.pol / 100 + 0.1)) {
         state.grants += 1;
         state.grantQuarters = 8;
@@ -697,10 +861,17 @@ export function quarterlyExpenses(game) {
     ? game.player.salary * (1 - taxRate(game.player.salary))
     : employment.lastTakeHome;
   const share = employment.employed ? MONEY.lifestyleShare : MONEY.unemployedLifestyleShare;
-  const lifestyle = MONEY.livingFloor + share * Math.max(0, takeHome - MONEY.livingFloor);
+  // Committed costs come first: the floor, family, housing, bills, cover.
+  // Lifestyle is a share of whatever is left, so a family on a modest salary
+  // squeezes its spending rather than borrowing for it.
   const family = game.dependents * 14000 + (game.married ? 6000 : 0);
   const mortgage = game.homeEquity > 0 ? 9000 : 0;
-  return (lifestyle + family + mortgage) / 4;
+  const rent = game.homeEquity > 0 ? 0 : game.rentPremium ?? 0;
+  const plans = (game.paymentPlans ?? []).reduce((sum, plan) => sum + plan.perQuarter * 4, 0);
+  const cobra = !employment.employed && game.flags.cobra ? MONEY.cobraPerQuarter * 4 : 0;
+  const committed = MONEY.livingFloor + family + mortgage + rent + plans + cobra;
+  const lifestyle = share * Math.max(0, takeHome - committed);
+  return (committed + lifestyle) / 4;
 }
 
 function payQuarter(game, report) {
@@ -709,7 +880,9 @@ function payQuarter(game, report) {
   let income = 0;
   let takeHome = 0;
   if (employment.employed) {
-    income = player.salary / 4;
+    // FMLA is unpaid: leave days earn nothing.
+    const leaveShare = Math.min(1, (player.quarter.unpaidDays ?? 0) / TIME.daysPerQuarter);
+    income = player.salary / 4 * (1 - leaveShare);
     takeHome = income * (1 - taxRate(player.salary));
     employment.lastTakeHome = player.salary * (1 - taxRate(player.salary));
     if (game.quarterIndex % 4 === 3) {
@@ -728,6 +901,8 @@ function payQuarter(game, report) {
     employment.benefitQuartersLeft -= 1;
   }
   const expenses = quarterlyExpenses(game);
+  game.paymentPlans = (game.paymentPlans ?? []).map((plan) => ({ ...plan, quartersLeft: plan.quartersLeft - 1 }))
+    .filter((plan) => plan.quartersLeft > 0);
   const rate = MONEY.returns[game.market] / 4;
   const returns = game.savings > 0 ? game.savings * rate : game.savings * 0.02;
   game.homeEquity *= 1.0075;
@@ -767,6 +942,7 @@ function rollHealthScare(game, report) {
   if (player.health < HEALTH.dangerLine && game.random.chance(HEALTH.scareChancePerQuarter)) {
     player.health -= HEALTH.scareDamage;
     report.notes.push('Chest pains on the train home. A night in the ER.');
+    record(game, 'healthScare');
     report.healthScare = true;
   }
 }
@@ -786,7 +962,6 @@ function checkOutcome(game, report) {
   const player = game.player;
   if (game.outcome) return;
   if (player.health <= 0) endGame(game, 'death');
-  else if (player.motivation <= 0) endGame(game, 'breakdown');
   else if (!game.employment.employed && game.savings <= 0) endGame(game, 'homeless');
   else if (player.age >= TIME.retirementAge) endGame(game, 'retired');
 }
@@ -803,9 +978,9 @@ export function endGame(game, kind) {
     netWorth: netWorth(game),
     lifetimeEarnings: game.lifetimeEarnings,
     quarters: game.quarterIndex + 1,
-    score: careerScore(game),
   };
   game.phase = 'over';
+  game.outcome.score = careerScore(game);
 }
 
 /**
@@ -816,8 +991,10 @@ export function endGame(game, kind) {
 export function careerScore(game) {
   const peak = Math.max(game.peakLevel, game.player.level);
   const prestige = (peak + 1) * 1000;
+  // Retiring early is its own prize: a year of freedom is worth 150 points.
+  const freedom = game.outcome?.kind === 'fire' ? Math.max(0, TIME.retirementAge - game.player.age) * 150 : 0;
   const wealth = 2000 * Math.log10(Math.max(1, netWorth(game) / 50000));
-  return Math.round(prestige + wealth);
+  return Math.round(prestige + wealth + freedom);
 }
 
 function snapshot(game, report) {

@@ -60,7 +60,7 @@
     check(frame, 'character pick');
     click('[data-character="jennifer"]');
     await settle(frame);
-    check(frame, 'character pick with detail');
+    check(frame, 'character profile');
     click('[data-action="pick-character"]');
     await settle(frame);
     check(frame, 'industry pick');

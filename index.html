@@ -35,7 +35,18 @@
       <span class="step">1 / 3</span>
     </header>
     <div class="pick-grid characters" id="character-grid"></div>
-    <div class="pick-detail" id="character-detail" aria-live="polite"></div>
+    <p class="pick-hint">Choose someone to read their stats.</p>
+  </section>
+
+  <!-- Character stats -->
+  <section id="screen-profile" class="screen screen-pick screen-profile" data-screen="profile" hidden>
+    <header class="pick-header">
+      <button class="button ghost small" data-action="back-roster">Back</button>
+      <h2>Their stats</h2>
+      <span class="step">1 / 3</span>
+    </header>
+    <div class="profile-card" id="profile-body"></div>
+    <div class="profile-actions"><button class="button primary" data-action="pick-character">Begin</button></div>
   </section>
 
   <!-- Industry -->

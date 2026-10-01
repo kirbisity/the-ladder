@@ -724,23 +724,81 @@ export function gameOverPanel(game) {
       <button class="button" data-action="same-again">Same person again</button><button class="button" data-action="new-career">New career</button></div>`;
 }
 
-/** Compact cards for the roster; the selected one is described below the grid. */
-export function characterCards(selectedId = null) {
-  return CHARACTERS.map((character) => `<button class="pick-card character ${character.id === selectedId ? 'selected' : ''}" data-character="${character.id}" aria-pressed="${character.id === selectedId}">
+const DIFFICULTY_LABELS = { 1: 'Easier climb', 2: 'Moderate climb', 3: 'Hard climb' };
+const DIFFICULTY_NOTES = {
+  1: 'In our simulations this person reaches Director or higher in more than half of careers.',
+  2: 'Reaches Director or higher in a good share of careers, if they play to their strengths and watch their health.',
+  3: 'Expect a good, steady career at a senior level; the top chairs are a long shot.',
+};
+
+/** Three pips and a word: how hard this character's climb is on average. */
+export function difficultyBadge(level) {
+  const pips = [1, 2, 3].map((pip) => `<i class="${pip <= level ? 'on' : ''}"></i>`).join('');
+  return `<span class="difficulty d${level}" title="${escapeHtml(DIFFICULTY_NOTES[level])}"><span class="pips">${pips}</span>${DIFFICULTY_LABELS[level]}</span>`;
+}
+
+/** Compact cards for the roster; clicking one opens that character's stats page. */
+export function characterCards() {
+  return CHARACTERS.map((character) => `<button class="pick-card character" data-character="${character.id}">
     ${portrait(character.look, 64)}
     <h3>${escapeHtml(character.name)}</h3>
     <div class="tag-row"><span class="tag blue">${character.mbti}</span><span class="tag">IQ ${character.iq}</span><span class="tag">Pol ${character.pol}</span></div>
     <p class="archetype">${escapeHtml(character.archetype)}</p>
+    ${difficultyBadge(character.difficulty)}
   </button>`).join('');
 }
 
-/** The selected character, in full, with the button that commits to them. */
-export function characterDetail(characterId) {
+function ratioWord(ratio) {
+  if (ratio >= 1.6) return 'far above average';
+  if (ratio >= 1.15) return 'above average';
+  if (ratio >= 0.87) return 'average';
+  if (ratio >= 0.6) return 'below average';
+  return 'far below average';
+}
+
+/** One stat as a bar (1 = average, at the tick) with its plain-words reading. */
+function statRow(label, ratio, detail = '') {
+  const width = Math.max(4, Math.min(100, ratio / 2.5 * 100));
+  return `<div class="stat-row"><div class="stat-top"><span>${label}</span><strong>${ratioWord(ratio)}</strong></div>
+    <div class="stat-bar"><div style="width:${width}%"></div><i style="left:${1 / 2.5 * 100}%"></i></div>${detail ? `<small>${detail}</small>` : ''}</div>`;
+}
+
+/** Everything about a character: stats, traits, quirks, difficulty, and the button that begins. */
+export function characterProfile(characterId) {
   const character = CHARACTERS.find((entry) => entry.id === characterId);
-  if (!character) return '<p class="explain">Pick someone to read about them. Everyone runs the same rules; only their numbers differ.</p>';
-  return `<div class="pick-detail-text"><h3>${escapeHtml(character.name)} · ${escapeHtml(character.archetype)}</h3>
-      <p>${escapeHtml(character.blurb)}</p></div>
-    <button class="button primary" data-action="pick-character">Be ${escapeHtml(character.name.split(' ')[0])}</button>`;
+  if (!character) return '';
+  const t = character.traits;
+  const hoursBody = 1 / (t.strainResistance ?? 1);
+  const hoursMood = 1 / (t.exhaustionResistance ?? 1);
+  const rows = [
+    statRow('Intelligence', character.iq / 130, `IQ ${character.iq}: more output from every hour of focus.`),
+    statRow('Political skill', character.pol / 100, `${character.pol}: how far networking, calibration and gambles in events pay off.`),
+    statRow('Body under long hours', hoursBody, 'How well health holds when the days get long.'),
+    statRow('Mood under long hours', hoursMood, 'How well motivation holds when the days get long.'),
+    statRow('Shrugs off bad news', 1 + (t.steadiness ?? 0) * 2, t.steadiness ? `Takes ${Math.round((1 - t.steadiness) * 100)}% of every blow to mood.` : 'Takes blows to mood in full.'),
+    statRow('Leadership', t.leadership ?? 1, 'Pull toward manager and director chairs.'),
+    statRow('Reads the room in events', t.eventSavvy ?? 1, 'Odds on political gambles in events.'),
+    statRow('Output at the desk', t.coreBonus ?? 1),
+    statRow('Networking pays back', t.politicsBonus ?? 1),
+    statRow('Builds relationships', t.relationshipBonus ?? 1),
+    statRow('Need for freedom', 1 + (t.autonomyNeed ?? 0), t.autonomyNeed ? 'Motivation tracks how much say the job gives: best in a university, worst in finance.' : ''),
+    statRow('Lift from exciting projects', t.noveltyLift ?? 1),
+  ].join('');
+  const quirks = [];
+  if (t.networkingDrain) quirks.push('Networking drains mood: every hour past the first tenth of the day costs.');
+  if (t.networkingHealthDrain) quirks.push('Networking also costs health.');
+  if (t.deskWorkDrain) quirks.push(`Gets restless when more than ${Math.round(t.deskWorkLimit * 100)}% of the day is heads-down delivery.`);
+  if (t.moonshotUnlocked) quirks.push(`Can take moonshot projects from the first day, and lands them ${Math.round((t.moonshotLanding - 1) * 100)}% more often.`);
+  if (t.rigidManagerClash) quirks.push('Clashes with rigid, demanding managers.');
+  if (quirks.length === 0) quirks.push('No quirks: a plain, balanced profile.');
+  return `<div class="profile-head">
+      ${portrait(character.look, 96)}
+      <div class="profile-title"><div class="modal-kicker">${character.mbti} · ${escapeHtml(character.archetype)}</div>
+        <h2>${escapeHtml(character.name)}</h2>${difficultyBadge(character.difficulty)}</div>
+    </div>
+    <p class="profile-blurb">${escapeHtml(character.blurb)} <span class="muted">${escapeHtml(DIFFICULTY_NOTES[character.difficulty])}</span></p>
+    <div class="profile-stats">${rows}</div>
+    <ul class="quirks">${quirks.map((quirk) => `<li>${escapeHtml(quirk)}</li>`).join('')}</ul>`;
 }
 
 const INDUSTRY_BLURBS = {

@@ -357,6 +357,27 @@ export function fireNumber(game) {
   return quarterlyExpenses(game) * 4 * FIRE.retiredSpendingShare * (FIRE.yearsOfSpending + FIRE.extraYearsPerYearEarly * yearsEarly);
 }
 
+/**
+ * Where the player stands against their FIRE number, and when, at the pace
+ * of the last two years, they would reach it (null when they are not on a
+ * pace to by 70).
+ */
+export function fireProgress(game) {
+  const number = fireNumber(game);
+  const worth = netWorth(game);
+  const history = game.history;
+  const past = history[Math.max(0, history.length - 9)];
+  const years = past ? (game.player.age - past.age) : 0;
+  const annualGain = years > 0.5 ? (worth - past.netWorth) / years : 0;
+  let projectedAge = null;
+  if (worth >= number) projectedAge = game.player.age;
+  else if (annualGain > 0) {
+    const age = game.player.age + (number - worth) / annualGain;
+    if (age <= 70) projectedAge = age;
+  }
+  return { number, worth, share: number > 0 ? Math.min(1, Math.max(0, worth / number)) : 0, annualGain, projectedAge };
+}
+
 /** Financially independent, old enough, and not asked recently. */
 export function fireReady(game) {
   const age = game.player.age;
@@ -1258,6 +1279,7 @@ function snapshot(game, report) {
     motivation: player.motivation,
     level: player.level,
     netWorth: netWorth(game),
+    fire: fireNumber(game),
     salary: game.employment.employed ? player.salary : 0,
     income: report.income ?? 0,
     rating: report.rating,

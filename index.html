@@ -74,14 +74,14 @@
   <section id="screen-game" class="screen game" data-screen="game" hidden>
     <header class="hud">
       <div class="panel vitals">
-        <div class="vital" id="vital-health">
+        <div class="vital" id="vital-health" data-action="panel-vitals" role="button" tabindex="0" title="What moves your health">
           <span class="vital-icon heart" aria-hidden="true"></span>
           <div class="vital-body">
             <div class="bar health-bar"><div class="bar-fill"></div><span class="bar-label">Health: 0%</span></div>
             <span class="vital-delta"></span>
           </div>
         </div>
-        <div class="vital" id="vital-motivation">
+        <div class="vital" id="vital-motivation" data-action="panel-vitals" role="button" tabindex="0" title="What moves your motivation">
           <span class="vital-icon battery" aria-hidden="true"><span class="battery-level"></span></span>
           <div class="vital-body">
             <div class="bar motivation-bar"><div class="bar-fill"></div><span class="bar-label">Motivation: 0%</span></div>
@@ -98,6 +98,7 @@
         <div class="clock-controls">
           <button class="button primary run" id="run-button" data-action="run">Start quarter</button>
           <button class="button small" id="speed-button" data-action="speed" title="Speed">1×</button>
+          <button class="button small autopilot" id="autopilot-button" data-action="autopilot" aria-pressed="false" title="Run whole quarters; answer events as you last did">Autopilot</button>
           <label class="auto"><input type="checkbox" id="auto-advance"> Auto</label>
         </div>
       </div>
@@ -105,7 +106,7 @@
         <span class="stat-icon cake" aria-hidden="true"></span>
         <span class="stat-value" id="age-value">Age: 22</span>
       </div>
-      <div class="panel stat wealth">
+      <div class="panel stat wealth" data-action="panel-money" role="button" tabindex="0" title="Money and financial independence">
         <span class="stat-icon coin" aria-hidden="true">$</span>
         <div class="wealth-body">
           <span class="stat-value" id="wealth-value">$0</span>

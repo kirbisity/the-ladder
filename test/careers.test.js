@@ -8,7 +8,7 @@ import {
   trackWeightedOutput, experiencedSkill,
 } from '../src/sim/org.js';
 import { managementMix } from '../src/sim/agent.js';
-import { createGame, chooseEventOption, finishQuarterDays, closeQuarter, startRunning, makeOffer } from '../src/sim/game.js';
+import { createGame, chooseEventOption, finishQuarterDays, closeQuarter, startRunning, makeOffer, fireReady, netWorth, fireNumber } from '../src/sim/game.js';
 import { createRandom } from '../src/sim/random.js';
 import { INDUSTRIES, COMPANY_TIERS, MONEY, ORG, TIME } from '../src/config.js';
 
@@ -176,4 +176,27 @@ test('moving to a smaller employer rounds the title up only below the fork', () 
   }
   assert.ok(bumpedBelow > 0, 'the scenario: some offers come from smaller employers and bump the title');
   assert.equal(bumpedAbove, 0);
+});
+
+test('a startup unicorn exit can make someone financially independent overnight', () => {
+  const startup = COMPANY_TIERS.startup;
+  const saved = { fail: startup.failPerQuarter, exit: startup.exitPerQuarter, unicorn: startup.unicornChance };
+  try {
+    startup.failPerQuarter = 0;
+    startup.exitPerQuarter = 1;
+    startup.unicornChance = 1;
+    const game = createGame({ seed: 95, characterId: 'joseph', industryId: 'tech', startTier: 'startup' });
+    game.player.age = 26;
+    assert.equal(fireReady(game), false, 'the scenario: not independent before the exit');
+    playQuarterAsIs(game);
+    const exit = game.journal.find((entry) => entry.kind === 'startupExit');
+    assert.ok(exit.payout > game.player.salary * startup.unicornMultiple[0] * 0.9);
+    assert.ok(netWorth(game) >= fireNumber(game), 'rich overnight: past the FIRE number at once');
+    game.fireAskedQuarter = null;
+    assert.equal(fireReady(game), true, 'and the game offers the door');
+  } finally {
+    startup.failPerQuarter = saved.fail;
+    startup.exitPerQuarter = saved.exit;
+    startup.unicornChance = saved.unicorn;
+  }
 });

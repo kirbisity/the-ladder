@@ -300,3 +300,18 @@ test('a university is gentler on age than a high-growth tech company', () => {
   assert.ok(vitalsBreakdown(university).health.ageCost < vitalsBreakdown(grind).health.ageCost / 2);
   assert.ok(vitalsBreakdown(university).comfortableHours > vitalsBreakdown(grind).comfortableHours);
 });
+
+test('autopilot repeats the last answer for a kind of event, and asks about anything new', async () => {
+  const { rememberAnswer, pickRemembered } = await import('../src/sim/autopilot.js');
+  const memory = {};
+  const choices = [{ label: 'Take it', tag: 'safe' }, { label: 'Fight it', tag: 'bold' }];
+  assert.equal(pickRemembered(memory, 'layoffRumor', choices), null, 'a new kind of event is the player\'s to answer');
+  rememberAnswer(memory, 'layoffRumor', choices[1], 1);
+  assert.equal(pickRemembered(memory, 'layoffRumor', choices), 1);
+  assert.equal(pickRemembered(memory, 'reorg', choices), null, 'another kind of event is still new');
+  const changed = [{ label: 'Accept: Director at $400k', tag: 'bold' }, { label: 'Decline', tag: 'safe' }];
+  assert.equal(pickRemembered(memory, 'layoffRumor', changed), 0, 'the same tag stands in when a label carries new details');
+  rememberAnswer(memory, 'fireOffer', choices[0], 0);
+  assert.equal(pickRemembered(memory, 'fireOffer', choices), null, 'retiring is never decided for you');
+  assert.equal(pickRemembered(memory, 'layoffRumor', [{ label: 'Other', tag: 'rest' }]), null, 'an old answer that is gone is a new question');
+});

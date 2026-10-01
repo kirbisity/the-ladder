@@ -218,6 +218,7 @@ h2, h3 { margin: 0; text-wrap: balance; }
   z-index: 2;
 }
 .vitals { padding: 10px 14px; display: grid; gap: 6px; }
+.vital[data-action], .stat.wealth[data-action] { cursor: pointer; }
 .vital { display: flex; align-items: center; gap: 10px; }
 .vital-body { flex: 1; min-width: 0; display: grid; gap: 1px; }
 .bar {
@@ -268,6 +269,7 @@ h2, h3 { margin: 0; text-wrap: balance; }
 .clock-controls .run { flex: 1; min-height: 38px; padding: 6px 12px; }
 .run.pulse { animation: pulse 1.6s ease-in-out infinite; }
 @keyframes pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(95, 155, 255, 0.6); } 50% { box-shadow: 0 0 0 8px rgba(95, 155, 255, 0); } }
+.autopilot.on { background: #2f6ad8; border-color: #5f9bff; color: #fff; }
 .auto { display: flex; align-items: center; gap: 4px; font-family: 'Barlow Condensed', sans-serif; font-weight: 600; text-transform: uppercase; color: var(--ink-soft); cursor: pointer; }
 
 .stat { display: flex; align-items: center; gap: 10px; padding: 10px 16px; }
@@ -862,3 +864,21 @@ details.developer[open] summary { margin-bottom: 8px; }
   .settings-rows { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
   .modal-close { min-height: 36px; padding: 0 8px; }
 }
+
+@media (max-height: 460px) {
+  .vitals-table td { padding: 2px 6px; font-size: 13px; }
+  .modal-card .lead { font-size: 14px; margin: 0; }
+  .modal-card .notes li { font-size: 13px; padding: 2px 0; }
+  .modal-card .figure { padding: 4px 8px; }
+  .modal-card .figure strong { font-size: 18px; }
+  .rating-ladder { display: none; }
+}
+/* ── Vitals and money popups ─────────────────────────────────── */
+.vitals-table td:last-child { text-align: right; font-weight: 700; }
+.vitals-table tr.bad td:last-child { color: #ff8a8d; }
+.vitals-table tr.good td:last-child { color: #7fe3a0; }
+.vitals-table tr.total td { border-top: 2px solid var(--panel-line); font-weight: 700; color: var(--gold); }
+.vitals-log li { display: flex; justify-content: space-between; gap: 12px; }
+.vitals-log em { color: var(--ink-faint); font-style: normal; font-size: 13px; text-align: right; }
+.progress.fire div { background: linear-gradient(90deg, #7f5af0, #c78bff); }
+.fire-tracker { display: grid; gap: 8px; }

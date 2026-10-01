@@ -7,6 +7,8 @@ import {
   titleOf, formatMoney, netWorth, quarterlyExpenses, takeFmla, fmlaStatus, takeHoliday, holidayStatus,
 } from '../sim/game.js';
 import { serializeGame, deserializeGame } from '../sim/save.js';
+import { rememberAnswer, pickRemembered } from '../sim/autopilot.js';
+import { downloadShareDocument } from './share.js';
 import { RATING_LABELS, totalBandwidth, effectiveHours, projectSpec, dailyCoreOutput, onBurnoutLeave } from '../sim/agent.js';
 import { agentsAtLevel, employedAgents } from '../sim/org.js';
 import { CHARACTERS, INDUSTRIES, TIME, BANDWIDTH, MOTIVATION, ORG } from '../config.js';
@@ -14,7 +16,7 @@ import { createOffice, officeTier } from './office.js';
 import { peerLook } from './figures.js';
 import { createAudio } from './audio.js';
 import {
-  eventPanel, reviewPanel, orgPanel, performancePanel, careerPanel, projectPanel, helpPanel, menuPanel,
+  eventPanel, reviewPanel, moneyPanel, vitalsPanel, orgPanel, performancePanel, careerPanel, projectPanel, helpPanel, menuPanel,
   gameOverPanel, storyPanel, timeOffPanel, settingsPanel, characterCards, characterDetail, industryCards, employerCards, industryMeter, projectedCompletion, escapeHtml,
 } from './panels.js';
 import { createIntro } from './intro.js';
@@ -48,11 +50,16 @@ const app = {
   paused: false,
   speedIndex: 0,
   auto: false,
+  // Autopilot: whole quarters run at once, known events answered as last time.
+  autopilot: false,
+  answers: {},
+  lastAutopilot: 0,
   dayAccumulator: 0,
   visualTime: 0,
   modal: null,
   orgTab: 'chart',
   careerTab: 'profile',
+  vitalsTab: 'health',
   orgNode: null,
   lastHudUpdate: 0,
   lastLabelDay: -1,
@@ -92,7 +99,7 @@ function playJournalScenes() {
   const journal = game.journal ?? [];
   const fresh = journal.slice(app.journalSeen ?? journal.length);
   app.journalSeen = journal.length;
-  if (!settings.cutscenes || game.outcome || fresh.length === 0) return;
+  if (!settings.cutscenes || game.outcome || fresh.length === 0 || app.autopilot) return;
   const scenes = new Set(fresh.map((entry) => JOURNAL_SCENES[entry.kind]).filter(Boolean));
   const winner = SCENE_PRIORITY.find((scene) => scenes.has(scene));
   if (winner) cutscenes.play(winner, sceneData(game), () => updateHud(true));
@@ -189,6 +196,7 @@ function afterQuarterOpened() {
     showGameOver();
     return;
   }
+  if (app.autopilot && answerKnownEvents()) return;
   if (game.currentEvent) {
     openModal('event', eventPanel(game));
     return;
@@ -241,12 +249,14 @@ function handleNote(note) {
     playJournalScenes();
     app.paused = true;
     audio.setState({ burnout: true, running: false });
+    if (app.autopilot) setAutopilot(false, 'Autopilot off: burnout. Rest, then switch it back on.');
     toast(fmlaStatus(app.game).eligible
       ? 'Burnout. The quarter is paused: move Recovery to 35% or more, or take FMLA leave, then resume.'
       : 'Burnout. The quarter is paused: move Recovery to 35% or more, then resume.');
     updateHud(true);
   } else if (note.kind === 'event') {
-    openModal('event', eventPanel(app.game));
+    // Autopilot answers it, or asks, once the day's work is done.
+    if (!app.autopilot) openModal('event', eventPanel(app.game));
   } else if (note.kind === 'leaveOver') {
     toast(note.text);
   } else if (note.kind === 'incident') {
@@ -275,12 +285,71 @@ function finishQuarter() {
     showGameOver();
     return;
   }
+  if (app.autopilot) {
+    // Autopilot only stops the quarter for what needs a new plan.
+    if (report.lostJob || report.pipStarted) {
+      setAutopilot(false, report.lostJob ? 'Autopilot off: you lost the job.' : 'Autopilot off: you are on a PIP.');
+      openModal('review', reviewPanel(game, report));
+      return;
+    }
+    toast(`${report.promoted ? 'Promoted · ' : ''}${RATING_LABELS[report.rating] ?? 'Quarter closed'}${report.rank ? ` · rank ${report.rank}/${report.poolSize}` : ''}`);
+    afterQuarterOpened();
+    return;
+  }
   if (app.auto && !report.promoted && !report.lostJob && !report.leapfrogged && report.rating !== 'meetSome') {
     toast(`${RATING_LABELS[report.rating] ?? 'Quarter closed'} · rank ${report.rank ?? '—'}/${report.poolSize ?? '—'}`);
     afterQuarterOpened();
     return;
   }
   openModal('review', reviewPanel(game, report));
+}
+
+// ── Autopilot ──────────────────────────────────────────────────────────
+
+const AUTOPILOT_INTERVAL_MS = 120;
+
+function setAutopilot(on, message = null) {
+  app.autopilot = on;
+  if (message) toast(message);
+  $('#autopilot-button').classList.toggle('on', on);
+  $('#autopilot-button').setAttribute('aria-pressed', String(on));
+  $('#autopilot-button').textContent = on ? 'Autopilot on' : 'Autopilot';
+  if (on) app.paused = false;
+}
+
+/** Answer events as last time. Returns true when a new kind of event needs the player. */
+function answerKnownEvents() {
+  const game = app.game;
+  let guard = 0;
+  while (game.currentEvent && guard < 12) {
+    guard += 1;
+    const { event, choices } = game.currentEvent;
+    const index = pickRemembered(app.answers, event.id, choices);
+    if (index === null) {
+      openModal('event', eventPanel(game));
+      return true;
+    }
+    const label = choices[index].label;
+    chooseEventOption(game, index);
+    toast(`${event.title}: ${label}`);
+  }
+  return false;
+}
+
+/** One quarter at a time, the whole simulation, with the same plan as the last. */
+function autopilotStep(now) {
+  const game = app.game;
+  if (app.modal || cutscenes.isPlaying() || game.outcome || now - app.lastAutopilot < AUTOPILOT_INTERVAL_MS) return;
+  app.lastAutopilot = now;
+  if (answerKnownEvents()) return;
+  if (game.phase === 'plan' && !startRunning(game)) return;
+  let guard = 0;
+  while (app.autopilot && game.phase === 'running' && !game.currentEvent && !app.modal && !game.outcome && guard < 200) {
+    guard += 1;
+    stepOneDay();
+  }
+  if (game.currentEvent && !app.modal) answerKnownEvents();
+  updateHud(true);
 }
 
 function frame(now) {
@@ -290,7 +359,8 @@ function frame(now) {
     const game = app.game;
     const speed = SPEEDS[app.speedIndex];
     const running = game.phase === 'running' && !app.paused && !app.modal && !cutscenes.isPlaying();
-    if (running) {
+    if (app.autopilot) autopilotStep(now);
+    else if (running) {
       app.dayAccumulator += seconds * DAYS_PER_SECOND * speed;
       while (app.dayAccumulator >= 1 && game.phase === 'running' && !app.paused && !app.modal) {
         app.dayAccumulator -= 1;
@@ -673,12 +743,21 @@ function handleAction(action, target) {
       openModal('settings', settingsPanel(settings, audio.isEnabled(), END_SCENES, INTERIM_SCENES));
       break;
     case 'skip-scene': cutscenes.skip(); break;
+    case 'share-story':
+      if (game.outcome) {
+        downloadShareDocument(game);
+        toast('Saved: one self-contained page with the story, the ending and the charts.');
+      }
+      break;
+    case 'autopilot': setAutopilot(!app.autopilot, app.autopilot ? null : 'Autopilot on: quarters run by themselves, and you are asked only about new kinds of events.'); break;
     case 'speed':
       app.speedIndex = (app.speedIndex + 1) % SPEEDS.length;
       updateHud(true);
       break;
     case 'panel-org': openModal('org', orgPanel(game, app.orgTab, app.orgNode), true); break;
     case 'panel-performance': openModal('performance', performancePanel(game)); break;
+    case 'panel-vitals': openModal('vitals', vitalsPanel(game, app.vitalsTab), true); break;
+    case 'panel-money': openModal('money', moneyPanel(game), true); break;
     case 'panel-career': openModal('career', careerPanel(game, app.careerTab), true); break;
     case 'pick-project': openModal('project', projectPanel(game)); break;
     case 'review-continue': afterQuarterOpened(); break;
@@ -718,7 +797,10 @@ function bindInput() {
     }
     const choice = event.target.closest('[data-choice]');
     if (choice && app.modal === 'event') {
-      const result = chooseEventOption(app.game, Number(choice.dataset.choice));
+      const picked = Number(choice.dataset.choice);
+      const asked = app.game.currentEvent;
+      if (asked) rememberAnswer(app.answers, asked.event.id, asked.choices[picked], picked);
+      const result = chooseEventOption(app.game, picked);
       if (result) toast(result);
       playJournalScenes();
       afterQuarterOpened();
@@ -772,6 +854,12 @@ function bindInput() {
       openModal('help', helpPanel(Number(help.dataset.help)));
       return;
     }
+    const vitalsTab = event.target.closest('[data-vitals-tab]');
+    if (vitalsTab) {
+      app.vitalsTab = vitalsTab.dataset.vitalsTab;
+      openModal('vitals', vitalsPanel(app.game, app.vitalsTab), true);
+      return;
+    }
     const careerTab = event.target.closest('[data-career-tab]');
     if (careerTab) {
       app.careerTab = careerTab.dataset.careerTab;
@@ -794,9 +882,15 @@ function bindInput() {
     if (tab) selectTab(tab.dataset.tab);
   });
   $('#modal').addEventListener('click', (event) => {
-    if (event.target.id === 'modal' && ['org', 'performance', 'career', 'help', 'project', 'menu', 'timeoff', 'settings'].includes(app.modal)) closeModal();
+    if (event.target.id === 'modal' && ['org', 'performance', 'career', 'help', 'project', 'menu', 'timeoff', 'settings', 'vitals', 'money'].includes(app.modal)) closeModal();
   });
   document.addEventListener('keydown', (event) => {
+    const pressable = event.target.closest?.('[role="button"][data-action]');
+    if (pressable && (event.key === 'Enter' || event.key === ' ')) {
+      event.preventDefault();
+      pressable.click();
+      return;
+    }
     if (event.key === 'Escape' && cutscenes.isPlaying()) cutscenes.skip();
     else if (event.key === 'Escape' && ['org', 'performance', 'career', 'help', 'project', 'menu', 'timeoff', 'settings'].includes(app.modal)) closeModal();
     if (event.key === ' ' && app.screen === 'game' && !app.modal && event.target === document.body) {

@@ -140,6 +140,8 @@ export function careerSummary(game) {
   const house = first(journal, 'house');
   if (house) life.push(`bought a house at ${Math.floor(house.age)}`);
   if (first(journal, 'startupWin')) life.push('got rich on a friend\'s startup');
+  if (first(journal, 'bereaved')) life.push('lost a parent');
+  if (first(journal, 'ipo')) life.push('rode a company to its IPO');
   const divorce = first(journal, 'divorce');
   if (divorce) life.push(`divorced at ${Math.floor(divorce.age)}, when a long search out of work broke the marriage and took half of everything`);
   if (life.length) paragraphs.push(`Outside the office, ${player.name.split(' ')[0]} ${life.join(', ')}.`);

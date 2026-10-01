@@ -10,8 +10,9 @@ import { prepareCurrentEvent } from './game.js';
 import { tieredIndustry } from './org.js';
 
 // Version 2 added FMLA, the career journal and mid-quarter events; 3 the
-// renamed roster, holidays and FIRE; 4 company tiers and career tracks.
-export const SAVE_VERSION = 4;
+// renamed roster, holidays and FIRE; 4 company tiers and career tracks;
+// 5 aging (the vitals log) and event cooldowns.
+export const SAVE_VERSION = 5;
 
 function eventToData(entry) {
   return entry ? { id: entry.event.id, data: entry.data } : null;

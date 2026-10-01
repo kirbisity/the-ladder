@@ -5,6 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { benchCharacter } from '../tools/characters.js';
+import { playCareer } from '../src/sim/bots.js';
 import { CHARACTERS } from '../src/config.js';
 
 const CAREERS = 10;
@@ -52,4 +53,25 @@ test('Chloe does best in academia; Eve trails Joseph', () => {
   assert.ok(chloeAcademia.director > tech.chloe.director);
   assert.ok(tech.eve.management <= tech.joseph.management);
   assert.ok(tech.eve.director <= tech.joseph.director);
+});
+
+function medianFireAge(industryId, tier) {
+  const ages = [];
+  for (const characterId of ['joseph', 'simon', 'adam', 'eve']) {
+    for (let index = 0; index < 4; index += 1) {
+      const result = playCareer({ seed: 7000 + index, characterId, industryId, policyName: 'adaptive', tierLock: tier });
+      ages.push(result.fireReadyAge ?? 99);
+    }
+  }
+  return ages.sort((a, b) => a - b)[ages.length >> 1];
+}
+
+test('the higher the tier, the sooner tech reaches financial independence; a university rarely does', () => {
+  const aggressive = medianFireAge('tech', 'aggressive');
+  const mid = medianFireAge('tech', 'mid');
+  const stable = medianFireAge('tech', 'stable');
+  assert.ok(aggressive < mid && mid < stable, `${aggressive} < ${mid} < ${stable}`);
+  assert.ok(aggressive <= 38, `high-growth tech is financially independent by about 35 (${aggressive})`);
+  assert.ok(stable >= 44 && stable <= 56, `steady tech around 50 (${stable})`);
+  assert.ok(medianFireAge('academia', 'stable') > stable + 5, 'a university pay does not usually get there early');
 });

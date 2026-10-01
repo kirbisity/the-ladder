@@ -41,10 +41,12 @@ Play: <https://kirbisity.github.io/the-ladder/>
 - **Characters**: Simon C (INTJ, takes long hours well, hates networking),
   Jennifer B (ENFP, takes long hours well, a natural networker), Chloe C
   (ENTP, moonshots, needs fun and autonomy), Joseph J (ISTJ, an average Joe),
-  Richard K (ESTJ, works the room), Chris W (INTP, IQ 150, sustains extreme
+  Richard K (ENFJ, works the room), Christian W (INTP, IQ 150, sustains extreme
   hours), Adam R (ENTJ, the natural leader) and Eve M (ISFJ, steady, but long
   hours wear her down). Everyone in the game goes by first name and last
-  initial, and they differ only in numbers on the character card.
+  initial, and they differ only in numbers on the character card. Each is a
+  3D model (a small software renderer, like Slope Lab's skier) built from their
+  look card, so portraits, the office and every cut scene show the same face.
 - **Industries** are patches over one default, each with its own seven
   projects and its own event deck: tech (on-call, migrations, RTO mandates,
   CVEs), consulting (up or out, utilization, death-march cases, sales
@@ -95,7 +97,7 @@ stays rare, and each defeat state is reachable.
 `tools/characters.js` plays every character with the same policy and prints
 how high they climb, how often they lose jobs and how they end;
 `test/characters.test.js` pins how the characters relate (Joseph lands
-senior, Adam leads, Chris sustains twelve-hour days, Chloe does best in
+senior, Adam leads, Christian sustains twelve-hour days, Chloe does best in
 academia). The outcome report plays each character at each kind of
 employer and writes a page:
 

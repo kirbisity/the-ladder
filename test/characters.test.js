@@ -29,22 +29,23 @@ test('Adam is the likeliest leader of them all', () => {
 });
 
 test('Simon and Richard climb about as often, Richard on networking', () => {
-  assert.ok(Math.abs(tech.simon.director - tech.richard.director) <= 0.3);
+  // Simon was made sharper (IQ 145, better politics) after this was set, so he now leads Richard in tech.
+  assert.ok(Math.abs(tech.simon.director - tech.richard.director) <= 0.45);
   assert.ok(tech.richard.politicsShare > tech.simon.politicsShare + 0.2);
   assert.ok(tech.simon.director > tech.joseph.director && tech.richard.director > tech.joseph.director);
 });
 
-test('Chris out-produces everyone but is no likelier a manager than Simon or Richard', () => {
+test('Christian out-produces everyone but is no likelier a manager than Simon or Richard', () => {
   for (const character of CHARACTERS) {
-    if (character.id !== 'chris') assert.ok(tech.chris.topRatings >= tech[character.id].topRatings);
+    if (character.id !== 'christian') assert.ok(tech.christian.topRatings >= tech[character.id].topRatings);
   }
-  assert.ok(tech.chris.management <= Math.max(tech.simon.management, tech.richard.management));
+  assert.ok(tech.christian.management <= Math.max(tech.simon.management, tech.richard.management));
 });
 
-test('twelve-hour weeks: Chris sustains them, Simon strains, Chloe and Eve break', () => {
-  const long = Object.fromEntries(['chris', 'simon', 'chloe', 'eve'].map((id) => [id, benchCharacter(id, 'tech', CAREERS, 'longHours')]));
-  assert.ok(long.chris.retired >= 0.9 && long.chris.burnouts < 0.2);
-  assert.ok(long.simon.retired >= 0.8 && long.simon.lowHealth > long.chris.lowHealth);
+test('twelve-hour weeks: Christian sustains them, Simon strains, Chloe and Eve break', () => {
+  const long = Object.fromEntries(['christian', 'simon', 'chloe', 'eve'].map((id) => [id, benchCharacter(id, 'tech', CAREERS, 'longHours')]));
+  assert.ok(long.christian.retired >= 0.9 && long.christian.burnouts < 0.2);
+  assert.ok(long.simon.retired >= 0.8 && long.simon.lowHealth > long.christian.lowHealth);
   assert.ok(long.chloe.retired < 0.5 && long.eve.retired < 0.5);
 });
 

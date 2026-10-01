@@ -233,3 +233,22 @@ test('an event that holds the hours up gives way to burnout', () => {
   setPlan(game, { hours: 8 });
   assert.equal(game.player.plan.hours, 8);
 });
+
+test('the player can choose the kind of first employer; invalid choices fall back to the industry mix', () => {
+  for (const tier of ['aggressive', 'mid', 'stable']) {
+    const game = createGame({ seed: 81, industryId: 'consulting', startTier: tier });
+    assert.equal(game.org.tier, tier);
+    assert.equal(game.startTier, tier);
+    assert.equal(game.tierLock, null, 'a start choice does not pin later job hops');
+  }
+  const startup = createGame({ seed: 82, industryId: 'tech', startTier: 'startup' });
+  assert.equal(startup.org.tier, 'startup');
+  const academic = createGame({ seed: 83, industryId: 'academia', startTier: 'startup' });
+  assert.equal(academic.startTier, null, 'academia has no startups');
+  assert.ok(academic.org.tier in { aggressive: 1, mid: 1, stable: 1 });
+  const lowPay = createGame({ seed: 84, industryId: 'tech', startTier: 'stable' }).player.salary;
+  const highPay = createGame({ seed: 84, industryId: 'tech', startTier: 'aggressive' }).player.salary;
+  assert.ok(highPay > lowPay, 'a high-growth employer pays more to start');
+  const pick = createGame({ seed: 85, industryId: 'tech', startTier: 'startup' });
+  assert.equal(pick.player.salary, pick.org.industry.salaries[0], 'the salary is the band base the picker advertises');
+});

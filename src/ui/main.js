@@ -15,7 +15,7 @@ import { peerLook } from './figures.js';
 import { createAudio } from './audio.js';
 import {
   eventPanel, reviewPanel, orgPanel, performancePanel, careerPanel, projectPanel, helpPanel, menuPanel,
-  gameOverPanel, storyPanel, timeOffPanel, settingsPanel, characterCards, characterDetail, industryCards, industryMeter, projectedCompletion, escapeHtml,
+  gameOverPanel, storyPanel, timeOffPanel, settingsPanel, characterCards, characterDetail, industryCards, employerCards, industryMeter, projectedCompletion, escapeHtml,
 } from './panels.js';
 import { createIntro } from './intro.js';
 import { createCutscenePlayer, END_SCENES, INTERIM_SCENES, JOURNAL_SCENES, endingSceneFor, sceneData } from './cutscenes.js';
@@ -147,9 +147,9 @@ function sampleSceneData() {
   return { look: character.look, name: character.name, firstName: character.name.split(' ')[0], age: 62, born: 1990, died: 2052, title: 'Director', company: 'Stackwell', seed: 7, netWorth: 1e6 };
 }
 
-function startCareer(characterId, industryId) {
+function startCareer(characterId, industryId, startTier = null) {
   const seed = Math.floor(Math.random() * 1e9);
-  app.game = createGame({ seed, characterId, industryId });
+  app.game = createGame({ seed, characterId, industryId, startTier });
   app.paused = false;
   app.dayAccumulator = 0;
   app.readinessChimed = false;
@@ -643,6 +643,7 @@ function handleAction(action, target) {
     }
     case 'back-title': showScreen('title'); break;
     case 'back-character': showScreen('character'); break;
+    case 'back-industry': showScreen('industry'); break;
     case 'help': openModal('help', helpPanel(0)); break;
     case 'close-modal':
       if (app.modal === 'over') break;
@@ -698,7 +699,7 @@ function handleAction(action, target) {
     case 'same-again': {
       const { character, industry } = game;
       closeModal();
-      startCareer(character.id, industry.id);
+      startCareer(character.id, industry.id, game.startTier);
       break;
     }
     case 'intro-next': intro.next(); break;
@@ -737,7 +738,14 @@ function bindInput() {
     const industry = event.target.closest('[data-industry]');
     if (industry) {
       app.pick.industryId = industry.dataset.industry;
-      startCareer(app.pick.characterId, app.pick.industryId);
+      $('#employer-grid').innerHTML = employerCards(app.pick.industryId);
+      showScreen('employer');
+      return;
+    }
+    const employer = event.target.closest('[data-employer]');
+    if (employer) {
+      const tier = employer.dataset.employer === 'random' ? null : employer.dataset.employer;
+      startCareer(app.pick.characterId, app.pick.industryId, tier);
       return;
     }
     const project = event.target.closest('[data-project]');

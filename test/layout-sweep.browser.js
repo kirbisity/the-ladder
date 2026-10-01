@@ -64,7 +64,14 @@
     click('[data-action="pick-character"]');
     await settle(frame);
     check(frame, 'industry pick');
+    click('[data-industry="tech"]');
+    await settle(frame);
+    check(frame, 'employer pick (five choices)');
+    click('[data-action="back-industry"]');
     click('[data-industry="academia"]');
+    await settle(frame);
+    check(frame, 'employer pick');
+    click('[data-employer="stable"]');
     await settle(frame);
     check(frame, 'intro');
     click('[data-action="intro-skip"]');

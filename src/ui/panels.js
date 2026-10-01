@@ -7,7 +7,7 @@ import { employedAgents, agentsAtLevel, TEAM_COUNT } from '../sim/org.js';
 import { titleOf, formatMoney, netWorth, managerOf, teamHappiness, quarterlyExpenses, dryPowder, fmlaStatus, holidayStatus, employerIndustry, fireNumber } from '../sim/game.js';
 import { careerSummary } from '../sim/story.js';
 import { drawPerson } from './figures.js';
-import { PROJECTS, READINESS, INDUSTRY_STATS, ORG, TIME, MOTIVATION, RELATIONSHIP, CHARACTERS, INDUSTRIES, HOLIDAY, COMPANY_TIERS, MONEY } from '../config.js';
+import { PROJECTS, READINESS, INDUSTRY_STATS, ORG, TIME, MOTIVATION, RELATIONSHIP, CHARACTERS, INDUSTRIES, HOLIDAY, COMPANY_TIERS, MONEY, TIER_MIX } from '../config.js';
 
 export function escapeHtml(text) {
   return String(text).replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
@@ -499,6 +499,7 @@ export const HELP_PAGES = [
     'Raises follow your standing a few years behind it, and are never cut. Paid more than your recent work is worth, you are first on a layoff list unless someone above vouches for you.',
   ] },
   { title: 'Employers', items: [
+    'You choose the kind of employer for your first job, or take a surprise; later offers come from the whole market.',
     'High-growth companies review every quarter, PIP the most, grow fast and pay the most. Established ones review twice a year; steady ones once, with fewer PIPs and more politics.',
     'Startups pay less plus equity: most fold, a few sell and pay out. Companies drift between tiers over the years.',
     'Higher tiers lose people their jobs more often, and get them to financial independence sooner. Moving to a smaller employer can round your title up; a bigger one may down-level you.',
@@ -666,6 +667,35 @@ export function industryCards() {
       <p class="blurb">${escapeHtml(industry.titles[0])} → ${escapeHtml(industry.titles[industry.titles.length - 1])}</p>
     </button>`;
   }).join('');
+}
+
+const TIER_ORDER = ['startup', 'aggressive', 'mid', 'stable'];
+const TIER_TAGS = {
+  startup: ['Reviews twice a year', 'Equity, may fold'],
+  aggressive: ['Quarterly reviews', 'Fast promotions'],
+  mid: ['Reviews twice a year', 'Some politics'],
+  stable: ['Annual reviews', 'Politics count'],
+};
+
+/** The kinds of employer an industry has, plus a random one, for the first-job pick. */
+export function employerCards(industryId) {
+  const industry = INDUSTRIES[industryId];
+  const tiers = TIER_ORDER.filter((tier) => TIER_MIX[industryId]?.[tier]);
+  const cards = tiers.map((tier) => {
+    const entry = Math.round(industry.salaries[0] * COMPANY_TIERS[tier].pay / 1000) * 1000;
+    const risk = tier === 'startup' ? 'Highest risk' : tier === 'aggressive' ? 'High risk, high reward' : tier === 'mid' ? 'Balanced' : 'Safest';
+    return `<button class="pick-card employer" data-employer="${tier}">
+      <h3>${escapeHtml(COMPANY_TIERS[tier].name)}</h3>
+      <div class="tag-row"><span class="tag good">${formatMoney(entry)} start</span><span class="tag">${risk}</span>${TIER_TAGS[tier].map((tag) => `<span class="tag">${tag}</span>`).join('')}</div>
+      <p>${escapeHtml(COMPANY_TIERS[tier].blurb)}</p>
+    </button>`;
+  });
+  cards.push(`<button class="pick-card employer" data-employer="random">
+    <h3>Surprise me</h3>
+    <div class="tag-row"><span class="tag blue">Drawn by the industry's mix</span></div>
+    <p>Take whatever the market offers a new graduate. Later job hops draw from the whole market either way.</p>
+  </button>`);
+  return cards.join('');
 }
 
 export function industryMeter(game) {

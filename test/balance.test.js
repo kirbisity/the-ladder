@@ -1,0 +1,61 @@
+// Whole careers played by policy bots. These pin the balance targets as
+// relationships between play styles, not as tuning numbers, so retuning a
+// dial cannot quietly make grinding safe or careful play fatal.
+
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { playCareer } from '../src/sim/bots.js';
+
+const CAREERS = 12;
+
+function sweep(policyName, characterId = 'marcus', industryId = 'tech') {
+  const results = [];
+  for (let index = 0; index < CAREERS; index += 1) {
+    results.push(playCareer({ seed: 5000 + index, characterId, industryId, policyName }));
+  }
+  const share = (predicate) => results.filter(predicate).length / results.length;
+  return { results, share };
+}
+
+const grinder = sweep('grinder');
+const balanced = sweep('balanced');
+const minimal = sweep('minimal');
+const adaptive = sweep('adaptive');
+
+test('grinding sixteen-hour-ish weeks ends most careers in death or breakdown', () => {
+  const failed = grinder.share((entry) => entry.outcome === 'death' || entry.outcome === 'breakdown');
+  assert.ok(failed >= 0.6, `grinder failed ${failed}`);
+});
+
+test('steady, balanced play survives to retirement in nearly every career', () => {
+  assert.ok(balanced.share((entry) => entry.outcome === 'retired') >= 0.8);
+  assert.ok(adaptive.share((entry) => entry.outcome === 'retired') >= 0.8);
+});
+
+test('minimal effort survives but stays near the bottom of the ladder', () => {
+  assert.ok(minimal.share((entry) => entry.outcome === 'retired') >= 0.5);
+  assert.equal(minimal.share((entry) => entry.peakLevel >= 5), 0);
+});
+
+test('the top chair is rare even for careful, adaptive play', () => {
+  assert.ok(adaptive.share((entry) => entry.peakLevel >= 3) >= 0.8, 'the middle is reachable');
+  assert.ok(adaptive.share((entry) => entry.peakLevel === 7) <= 0.25, 'the top is not');
+});
+
+test('effort pays: balanced play out-climbs minimal play', () => {
+  const median = (sample) => sample.results.map((entry) => entry.peakLevel).sort((a, b) => a - b)[CAREERS >> 1];
+  assert.ok(median(balanced) > median(minimal));
+});
+
+test('the Anchor lasts years longer than the Systems Thinker on the same grind', () => {
+  const anchor = sweep('grinder', 'david');
+  const medianEnd = (sample) => sample.results.map((entry) => entry.age).sort((a, b) => a - b)[CAREERS >> 1];
+  assert.ok(medianEnd(anchor) > medianEnd(grinder) + 3, `${medianEnd(anchor)} vs ${medianEnd(grinder)}`);
+});
+
+test('every defeat state is reachable by some style of play', () => {
+  const coaster = sweep('coaster');
+  assert.ok(grinder.share((entry) => entry.outcome === 'death') > 0, 'death');
+  assert.ok(grinder.share((entry) => entry.outcome === 'breakdown') > 0, 'breakdown');
+  assert.ok(coaster.share((entry) => entry.outcome === 'homeless') > 0, 'homelessness');
+});

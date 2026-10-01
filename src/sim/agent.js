@@ -4,7 +4,7 @@
 
 import {
   BANDWIDTH, HEALTH, MOTIVATION, PERFORMANCE, SKILL, READINESS, ORG, JOBS,
-  PROJECTS, INDUSTRY_STATS, TIME, MONEY, FMLA, TRACKS,
+  PROJECTS, INDUSTRY_STATS, TIME, MONEY, FMLA, TRACKS, AGING,
 } from '../config.js';
 
 export const CORE = 0;
@@ -201,21 +201,53 @@ export function skillMultiplier(agent) {
   return PERFORMANCE.skillFloor + PERFORMANCE.skillRange * clamp(agent.skill, 0, 100) / 100;
 }
 
-export function healthTarget(agent, context) {
+function addTerm(terms, label, value) {
+  if (terms && Math.abs(value) >= 0.05) terms.push({ label, value });
+}
+
+/** Years past the age where the body and mood start to fade, scaled by the employer. */
+export function agedYears(agent, sensitivity = 1) {
+  return Math.max(0, agent.age - AGING.from) * sensitivity;
+}
+
+/** How much more a long day costs at this age: 1 for the young. */
+export function strainAgeFactor(agent, sensitivity = 1) {
+  return 1 + AGING.strainPerYear * agedYears(agent, sensitivity);
+}
+
+/** The share of a blow to mood that lands: older people shrug more off. */
+export function blowResilience(age) {
+  return Math.max(AGING.resilienceFloor, 1 - AGING.resiliencePerYear * Math.max(0, age - 30));
+}
+
+/**
+ * The health a person drifts toward at their current plan. When `terms` is
+ * given, each contribution is pushed to it as { label, value }, for the
+ * vitals popup; the target is their sum.
+ */
+export function healthTarget(agent, context, terms = null) {
   const plan = agent.plan;
   const traits = agent.traits;
+  const sensitivity = context.ageSensitivity ?? 1;
   const strain = strainOf(plan.hours);
   const resistance = traits.strainResistance ?? 1;
-  let target = HEALTH.baseTarget;
-  target -= HEALTH.strainDamage * strain * strain * resistance;
-  target += HEALTH.restBonus * plan.shares[RECOVERY];
-  target -= HEALTH.ageWearPerYear * Math.max(0, agent.age - HEALTH.ageWearFrom);
-  if (traits.networkingHealthDrain) target -= traits.networkingHealthDrain * plan.shares[POLITICS];
-  target -= context.joblessStress ?? 0;
-  if (context.industry.subStat === 'utilization' && context.employed) {
-    target -= INDUSTRY_STATS.utilization.travelHealthPerUtilization * utilizationOf(plan);
-  }
-  return target;
+  const hoursCost = HEALTH.strainDamage * strain * strain * resistance;
+  const ageHoursCost = hoursCost * (strainAgeFactor(agent, sensitivity) - 1);
+  const rest = HEALTH.restBonus * plan.shares[RECOVERY];
+  const wear = HEALTH.ageWearPerYear * Math.max(0, agent.age - HEALTH.ageWearFrom) * sensitivity;
+  const networking = (traits.networkingHealthDrain ?? 0) * plan.shares[POLITICS];
+  const stress = context.joblessStress ?? 0;
+  const travel = context.industry.subStat === 'utilization' && context.employed
+    ? INDUSTRY_STATS.utilization.travelHealthPerUtilization * utilizationOf(plan) : 0;
+  addTerm(terms, 'A healthy baseline', HEALTH.baseTarget);
+  addTerm(terms, 'Long hours', -hoursCost);
+  addTerm(terms, 'Long hours hit harder with age', -ageHoursCost);
+  addTerm(terms, 'Rest', rest);
+  addTerm(terms, 'Age', -wear);
+  addTerm(terms, 'Networking', -networking);
+  addTerm(terms, 'Out-of-work stress', -stress);
+  addTerm(terms, 'Travel', -travel);
+  return HEALTH.baseTarget - hoursCost - ageHoursCost + rest - wear - networking - stress - travel;
 }
 
 export function stagnationYears(agent) {
@@ -223,30 +255,43 @@ export function stagnationYears(agent) {
   return Math.max(0, agent.quartersAtLevel / 4 - expected);
 }
 
-export function motivationTarget(agent, context) {
+/**
+ * The mood a person settles at. As with healthTarget, `terms` collects each
+ * contribution for the vitals popup.
+ */
+export function motivationTarget(agent, context, terms = null) {
   const plan = agent.plan;
   const shares = plan.shares;
   const traits = agent.traits;
+  const sensitivity = context.ageSensitivity ?? 1;
   const strain = strainOf(plan.hours);
-  let target = MOTIVATION.baseTarget;
-  target -= MOTIVATION.exhaustionDrain * strain * strain * (traits.exhaustionResistance ?? 1);
-  target += MOTIVATION.restBonus * shares[RECOVERY];
-  if (context.employed) {
-    target -= Math.min(MOTIVATION.stagnationCap, MOTIVATION.stagnationPerYear * stagnationYears(agent));
-  } else {
-    target -= context.unemployedMood ?? 15;
-  }
-  if (traits.deskWorkDrain) target -= traits.deskWorkDrain * Math.max(0, shares[CORE] - traits.deskWorkLimit);
-  if (traits.networkingDrain) target -= traits.networkingDrain * Math.max(0, shares[POLITICS] - 0.1);
-  if (traits.autonomyNeed && context.employed && context.industry) {
-    target += MOTIVATION.autonomyWeight * traits.autonomyNeed * ((context.industry.autonomy ?? 0.5) - 0.5);
-  }
-  target += agent.moodFromRating;
-  target += context.moodModifier ?? 0;
-  if (agent.burnout.active) {
-    target -= MOTIVATION.burnoutDrag * (1 - Math.min(1, shares[RECOVERY] / MOTIVATION.fullRecoveryShare));
-  }
-  return target;
+  const exhaustion = MOTIVATION.exhaustionDrain * strain * strain * (traits.exhaustionResistance ?? 1);
+  const ageExhaustion = exhaustion * (strainAgeFactor(agent, sensitivity) - 1);
+  const fade = AGING.motivationFadePerYear * agedYears(agent, sensitivity);
+  const rest = MOTIVATION.restBonus * shares[RECOVERY];
+  const stagnation = context.employed ? Math.min(MOTIVATION.stagnationCap, MOTIVATION.stagnationPerYear * stagnationYears(agent)) : 0;
+  const jobless = context.employed ? 0 : context.unemployedMood ?? 15;
+  const desk = traits.deskWorkDrain ? traits.deskWorkDrain * Math.max(0, shares[CORE] - traits.deskWorkLimit) : 0;
+  const networking = traits.networkingDrain ? traits.networkingDrain * Math.max(0, shares[POLITICS] - 0.1) : 0;
+  const autonomy = traits.autonomyNeed && context.employed && context.industry
+    ? MOTIVATION.autonomyWeight * traits.autonomyNeed * ((context.industry.autonomy ?? 0.5) - 0.5) : 0;
+  const burnoutDrag = agent.burnout.active
+    ? MOTIVATION.burnoutDrag * (1 - Math.min(1, shares[RECOVERY] / MOTIVATION.fullRecoveryShare)) : 0;
+  addTerm(terms, 'Baseline mood', MOTIVATION.baseTarget);
+  addTerm(terms, 'Long hours', -exhaustion);
+  addTerm(terms, 'Long hours hit harder with age', -ageExhaustion);
+  addTerm(terms, 'Rest', rest);
+  addTerm(terms, 'Age: enthusiasm mellows', -fade);
+  addTerm(terms, 'Stuck at one level', -stagnation);
+  addTerm(terms, 'Out of work', -jobless);
+  addTerm(terms, 'Desk work', -desk);
+  addTerm(terms, 'Networking', -networking);
+  addTerm(terms, 'Freedom in the job', autonomy);
+  addTerm(terms, 'Last review', agent.moodFromRating);
+  addTerm(terms, 'Recent events', context.moodModifier ?? 0);
+  addTerm(terms, 'Burnout', -burnoutDrag);
+  return MOTIVATION.baseTarget - exhaustion - ageExhaustion - fade + rest - stagnation - jobless - desk - networking
+    + autonomy + agent.moodFromRating + (context.moodModifier ?? 0) - burnoutDrag;
 }
 
 /** A quarter's health change toward its target: slow wear, quicker recovery. */

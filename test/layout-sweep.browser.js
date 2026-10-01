@@ -113,6 +113,7 @@
         check(frame, 'career ladder');
         click('[data-org-tab="chart"]');
       }
+      if (action === 'panel-org') { /* tabs checked above */ }
       if (action === 'panel-career') {
         for (const tab of ['career', 'money', 'profile']) {
           click(`[data-career-tab="${tab}"]`);
@@ -122,6 +123,16 @@
       }
       click('#modal-card [data-action="close-modal"]');
       await settle(frame);
+    }
+    for (const [action, label, tabs] of [['panel-vitals', 'vitals', ['health', 'motivation', 'events']], ['panel-money', 'money', []]]) {
+      win.theLadder.app.modal = null;
+      click(`[data-action="${action}"]`);
+      for (const tab of tabs.length ? tabs : [null]) {
+        if (tab) click(`[data-vitals-tab="${tab}"]`);
+        await settle(frame);
+        check(frame, `${label}${tab ? ` · ${tab}` : ''}`);
+      }
+      click('#modal-card [data-action="close-modal"]');
     }
     win.theLadder.app.modal = null;
     click('[data-action="menu"]');
@@ -136,7 +147,7 @@
       win.theLadder.cutscenes.skip();
     }
     click('#modal-card [data-action="close-modal"]');
-    for (let page = 0; page < 6; page += 1) {
+    for (let page = 0; page < 7; page += 1) {
       win.theLadder.app.modal = null;
       click('[data-action="menu"]');
       click('#modal-card [data-action="help"]');
@@ -168,7 +179,7 @@
     win.theLadder.advanceDays(1);
     await settle(frame);
     check(frame, 'game over');
-    for (let page = 0; page < 6; page += 1) {
+    for (let page = 0; page < 7; page += 1) {
       const next = page === 0 ? doc.querySelector('[data-story="0"]') : doc.querySelector(`[data-story="${page}"]`);
       if (!next) break;
       next.click();

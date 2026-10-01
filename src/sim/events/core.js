@@ -698,19 +698,6 @@ export const CORE_DECK = [
     ],
   },
   {
-    id: 'carTrouble',
-    category: 'lifestyle',
-    title: 'The transmission',
-    weight: () => 0.6,
-    text: 'The car makes a noise like a dying walrus.',
-    choices: [
-      { label: 'Fix it', tag: 'safe', apply: (game) => {
-        game.savings -= 6000;
-        return `${formatMoney(6000)} later, it runs.`;
-      } },
-    ],
-  },
-  {
     id: 'productionOutage',
     category: 'industry',
     industry: 'tech',

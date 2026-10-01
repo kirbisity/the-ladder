@@ -5,10 +5,10 @@
 
 import {
   TIME, MONEY, JOBS, HEALTH, MOTIVATION, READINESS, RELATIONSHIP, EVENTS as EVENT_DIALS,
-  INDUSTRIES, INDUSTRY_STATS, CHARACTERS, ORG, PROJECTS, FMLA, HOLIDAY, FIRE, COMPANY_TIERS, TIER_SHIFT, TIER_MIX, JOBLESS } from '../config.js';
+  INDUSTRIES, INDUSTRY_STATS, CHARACTERS, ORG, PROJECTS, FMLA, HOLIDAY, FIRE, COMPANY_TIERS, TIER_SHIFT, TIER_MIX, JOBLESS, AGING, BANDWIDTH } from '../config.js';
 import { createRandom } from './random.js';
 import {
-  createAgent, stepDay, clamp, clampVitals, defaultPlan, payInBand, projectFor, projectSpec, defaultTrack, utilizationOf, RATING_LABELS,
+  createAgent, stepDay, clamp, clampVitals, healthTarget, motivationTarget, blowResilience, strainAgeFactor, defaultPlan, payInBand, projectFor, projectSpec, defaultTrack, utilizationOf, RATING_LABELS,
   CORE, CITIZENSHIP, POLITICS, RECOVERY,
 } from './agent.js';
 import {
@@ -91,6 +91,8 @@ export function createGame({ seed = Date.now() % 1e9, characterId = 'simon', ind
     fireAskedQuarter: null,
     lifeEventDays: [],
     journal: [],
+    vitalsLog: [],
+    eventLast: {},
     // When set, every employer is this tier (for the per-tier report).
     tierLock,
     // The kind of employer the career opened at, when the player chose one.
@@ -176,7 +178,82 @@ function loseJob(game, reason) {
     log(game, `Severance: ${formatMoney(severance)}.`);
   }
   const hit = reason === 'laid off' ? MOTIVATION.laidOffHit : reason === 'quit' ? 0 : MOTIVATION.firedHit;
-  player.motivation -= hit;
+  const felt = hit * blowResilience(player.age);
+  player.motivation -= felt;
+  noteVitals(game, `Lost the job (${reason})`, 0, -felt);
+}
+
+/** What the player's body and mood run under today: the job, the strain of a long search, age. */
+function dayContext(game, employed) {
+  const context = {
+    industry: game.industry,
+    employed,
+    outputModifier: game.flags.outputModifier,
+    moodModifier: game.flags.moodModifier ?? 0,
+    ageSensitivity: ageSensitivityOf(game),
+  };
+  if (!employed) {
+    const quartersOut = game.employment.unemployedQuarters;
+    context.unemployedMood = Math.min(JOBLESS.moodCap, JOBLESS.moodBase + JOBLESS.moodPerQuarter * quartersOut);
+    context.joblessStress = Math.min(JOBLESS.stressCap, JOBLESS.stressPerQuarter * quartersOut);
+  }
+  return context;
+}
+
+/**
+ * Remember what an event did to the bars, for the vitals popup. Small
+ * changes are not worth a line.
+ */
+export function noteVitals(game, label, healthChange, motivationChange) {
+  if (Math.abs(healthChange) < 1 && Math.abs(motivationChange) < 1) return;
+  game.vitalsLog.push({
+    quarter: game.quarterIndex, age: game.player.age, label, health: Math.round(healthChange), motivation: Math.round(motivationChange),
+  });
+  if (game.vitalsLog.length > 40) game.vitalsLog.shift();
+}
+
+/** The rules the player's body and mood run under right now: the employer's age sensitivity. */
+export function ageSensitivityOf(game) {
+  return (game.org?.industry ?? game.industry).ageSensitivity ?? 1;
+}
+
+/**
+ * Everything the vitals popup shows: each bar's value, where it is headed
+ * and why, how age changes the picture, and the events that moved them.
+ */
+export function vitalsBreakdown(game) {
+  const player = game.player;
+  const sensitivity = ageSensitivityOf(game);
+  const employed = game.employment.employed;
+  const context = dayContext(game, employed);
+  const healthTerms = [];
+  const motivationTerms = [];
+  const healthAim = healthTarget(player, context, healthTerms);
+  const motivationAim = motivationTarget(player, context, motivationTerms);
+  const youngPlayer = { ...player, age: AGING.from };
+  const healthYoung = healthTarget(youngPlayer, { ...context, ageSensitivity: 0 });
+  const motivationYoung = motivationTarget(youngPlayer, { ...context, ageSensitivity: 0 });
+  return {
+    age: player.age,
+    sensitivity,
+    health: { value: player.health, target: healthAim, terms: healthTerms, ageCost: healthYoung - healthAim },
+    motivation: { value: player.motivation, target: motivationAim, terms: motivationTerms, ageCost: motivationYoung - motivationAim },
+    resilience: blowResilience(player.age),
+    strainFactor: strainAgeFactor(player, sensitivity),
+    // Hours at which the health target stays at 80: how long a day this body can sustain.
+    comfortableHours: comfortableHours(player, context),
+    log: game.vitalsLog.slice(-8).reverse(),
+  };
+}
+
+/** The longest day that still leaves the health target at 80 or better. */
+export function comfortableHours(agent, context) {
+  let best = BANDWIDTH.standardHours;
+  for (let hours = BANDWIDTH.standardHours; hours <= BANDWIDTH.maxHours; hours += 0.5) {
+    const trial = { ...agent, plan: { ...agent.plan, hours } };
+    if (healthTarget(trial, context) >= 80) best = hours;
+  }
+  return best;
 }
 
 /** The player resigns. Without an offer in hand this starts unemployment. */
@@ -277,7 +354,28 @@ export function beginQuarter(game) {
 /** Net worth that covers this many years of today's spending: the 4% rule. */
 export function fireNumber(game) {
   const yearsEarly = Math.max(0, FIRE.fullRuleAge - game.player.age);
-  return quarterlyExpenses(game) * 4 * (FIRE.yearsOfSpending + FIRE.extraYearsPerYearEarly * yearsEarly);
+  return quarterlyExpenses(game) * 4 * FIRE.retiredSpendingShare * (FIRE.yearsOfSpending + FIRE.extraYearsPerYearEarly * yearsEarly);
+}
+
+/**
+ * Where the player stands against their FIRE number, and when, at the pace
+ * of the last two years, they would reach it (null when they are not on a
+ * pace to by 70).
+ */
+export function fireProgress(game) {
+  const number = fireNumber(game);
+  const worth = netWorth(game);
+  const history = game.history;
+  const past = history[Math.max(0, history.length - 9)];
+  const years = past ? (game.player.age - past.age) : 0;
+  const annualGain = years > 0.5 ? (worth - past.netWorth) / years : 0;
+  let projectedAge = null;
+  if (worth >= number) projectedAge = game.player.age;
+  else if (annualGain > 0) {
+    const age = game.player.age + (number - worth) / annualGain;
+    if (age <= 70) projectedAge = age;
+  }
+  return { number, worth, share: number > 0 ? Math.min(1, Math.max(0, worth / number)) : 0, annualGain, projectedAge };
 }
 
 /** Financially independent, old enough, and not asked recently. */
@@ -396,9 +494,17 @@ export function chooseEventOption(game, choiceIndex) {
   const current = game.currentEvent;
   if (!current) return null;
   const choice = current.choices[clamp(choiceIndex, 0, current.choices.length - 1)];
+  const player = game.player;
+  const healthBefore = player.health;
+  const motivationBefore = player.motivation;
   const result = choice.apply ? choice.apply(game, current.data, game.random) : null;
   if (result) log(game, result);
-  clampVitals(game.player);
+  // With age, bad news lands softer: a blow to mood is cut to its resilient share.
+  if (player.motivation < motivationBefore) {
+    player.motivation = motivationBefore - (motivationBefore - player.motivation) * blowResilience(player.age);
+  }
+  noteVitals(game, current.event.title, player.health - healthBefore, player.motivation - motivationBefore);
+  clampVitals(player);
   game.lastEventResult = { title: current.event.title, choice: choice.label, result };
   nextEvent(game);
   return result;
@@ -474,19 +580,7 @@ export function runDay(game) {
   const onFmla = employed && game.fmla.daysLeft > 0;
   const onHoliday = game.holiday.daysLeft > 0;
   const onLeave = onFmla || onHoliday;
-  const context = {
-    industry: game.industry,
-    random,
-    employed,
-    onLeave,
-    outputModifier: game.flags.outputModifier,
-    moodModifier: game.flags.moodModifier ?? 0,
-  };
-  if (!employed) {
-    const quartersOut = game.employment.unemployedQuarters;
-    context.unemployedMood = Math.min(JOBLESS.moodCap, JOBLESS.moodBase + JOBLESS.moodPerQuarter * quartersOut);
-    context.joblessStress = Math.min(JOBLESS.stressCap, JOBLESS.stressPerQuarter * quartersOut);
-  }
+  const context = { ...dayContext(game, employed), random, onLeave };
   context.leaveBoost = onFmla ? FMLA.recoveryBoost : HOLIDAY.recoveryBoost;
   const notes = stepDay(player, context);
   if (onFmla) {
@@ -500,7 +594,7 @@ export function runDay(game) {
   }
   if (notes.some((note) => note.kind === 'burnout')) record(game, 'burnout');
   if (game.org) {
-    const peerContext = { industry: game.industry, random, employed: true, outputModifier: 1 };
+    const peerContext = { industry: game.industry, random, employed: true, outputModifier: 1, ageSensitivity: ageSensitivityOf(game) };
     for (const agent of employedAgents(game.org)) {
       if (agent !== player) stepDay(agent, peerContext);
     }
@@ -762,7 +856,9 @@ function closeStartupQuarter(game, report) {
     record(game, 'startupFolded', { company: org.companyName });
     game.equity = null;
   } else if (random.chance(startup.exitPerQuarter)) {
-    const multiple = random.between(startup.equityMultiple[0], startup.equityMultiple[1]);
+    const unicorn = random.chance(startup.unicornChance);
+    const [low, high] = unicorn ? startup.unicornMultiple : startup.equityMultiple;
+    const multiple = random.between(low, high);
     const payout = game.equity ? game.player.salary * multiple : 0;
     game.savings += payout * 0.8;
     game.lifetimeEarnings += payout;
@@ -801,7 +897,7 @@ function closeUnemployedQuarter(game, report) {
   report.unemployed = true;
   const ratingBoost = { greatlyExceeds: 0.15, exceeds: 0.1, meetAll: 0.05, meetMost: 0, meetSome: -0.1 }[player.lastRating] ?? 0;
   const marketFactor = game.market === 'boom' ? 1.3 : game.market === 'recession' ? 0.6 : 1;
-  const agePenalty = Math.max(0, player.age - JOBS.searchAgePenaltyFrom) * 0.02;
+  const agePenalty = Math.max(0, player.age - (game.industry.ageOutFrom < 90 ? game.industry.ageOutFrom + 2 : JOBS.searchAgePenaltyFrom)) * 0.02;
   const boost = game.flags.searchBoost ?? 0;
   game.flags.searchBoost = 0;
   const chance = clamp((JOBS.searchBase + JOBS.searchOpen * player.plan.openness + ratingBoost + boost
@@ -1047,7 +1143,8 @@ export function quarterlyExpenses(game) {
   const plans = (game.paymentPlans ?? []).reduce((sum, plan) => sum + plan.perQuarter * 4, 0);
   const cobra = !employment.employed && game.flags.cobra ? MONEY.cobraPerQuarter * 4 : 0;
   const committed = MONEY.livingFloor + family + mortgage + rent + plans + cobra;
-  const lifestyle = share * Math.max(0, takeHome - committed);
+  const spare = Math.max(0, takeHome - committed);
+  const lifestyle = share * Math.min(spare, MONEY.lifestyleCap) + share * (MONEY.lifestyleShareAbove / MONEY.lifestyleShare) * Math.max(0, spare - MONEY.lifestyleCap);
   return (committed + lifestyle) / 4;
 }
 
@@ -1182,6 +1279,7 @@ function snapshot(game, report) {
     motivation: player.motivation,
     level: player.level,
     netWorth: netWorth(game),
+    fire: fireNumber(game),
     salary: game.employment.employed ? player.salary : 0,
     income: report.income ?? 0,
     rating: report.rating,

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createGame, startRunning, runDay, closeQuarter, chooseEventOption, setPlan, rebalanceShares,
-  finishQuarterDays, quitJob, careerScore, makeOffer, acceptOffer, divorce, divorceChance,
+  finishQuarterDays, quitJob, careerScore, makeOffer, acceptOffer, divorce, divorceChance, vitalsBreakdown,
 } from '../src/sim/game.js';
 import { playCareer } from '../src/sim/bots.js';
 import { agentsAtLevel } from '../src/sim/org.js';
@@ -251,4 +251,67 @@ test('the player can choose the kind of first employer; invalid choices fall bac
   assert.ok(highPay > lowPay, 'a high-growth employer pays more to start');
   const pick = createGame({ seed: 85, industryId: 'tech', startTier: 'startup' });
   assert.equal(pick.player.salary, pick.org.industry.salaries[0], 'the salary is the band base the picker advertises');
+});
+
+function injectBlow(game, age) {
+  clearEvents(game);
+  game.player.age = age;
+  game.player.motivation = 80;
+  game.currentEvent = {
+    event: { id: 'testBlow', title: 'A bad day', category: 'interpersonal' },
+    data: {},
+    text: 'A bad day.',
+    choices: [{ label: 'Take it', tag: 'safe', apply: (innerGame) => { innerGame.player.motivation -= 20; return 'Ouch.'; } }],
+  };
+  chooseEventOption(game, 0);
+  return 80 - game.player.motivation;
+}
+
+test('the same blow to mood lands softer on an older player, and is remembered for the popup', () => {
+  const young = createGame({ seed: 91 });
+  const old = createGame({ seed: 91 });
+  const youngLoss = injectBlow(young, 26);
+  const oldLoss = injectBlow(old, 58);
+  assert.ok(youngLoss > 19 && oldLoss < youngLoss * 0.8, `young ${youngLoss}, old ${oldLoss}`);
+  const breakdown = vitalsBreakdown(old);
+  assert.equal(breakdown.log[0].label, 'A bad day');
+  assert.ok(breakdown.log[0].motivation <= -10);
+  assert.ok(breakdown.resilience < 1);
+});
+
+test('the vitals breakdown explains the target, and the age cost grows with age', () => {
+  const game = createGame({ seed: 92, industryId: 'tech', tierLock: 'aggressive' });
+  clearEvents(game);
+  game.player.age = 30;
+  const youngCost = vitalsBreakdown(game).health.ageCost;
+  game.player.age = 52;
+  const breakdown = vitalsBreakdown(game);
+  const sum = breakdown.health.terms.reduce((total, term) => total + term.value, 0);
+  assert.ok(Math.abs(sum - breakdown.health.target) < 1e-6);
+  assert.ok(breakdown.health.ageCost > youngCost && breakdown.health.ageCost > 3);
+  assert.ok(breakdown.motivation.ageCost > 3);
+  assert.ok(breakdown.comfortableHours < 12, 'an older body cannot sustain twelve-hour days');
+});
+
+test('a university is gentler on age than a high-growth tech company', () => {
+  const university = createGame({ seed: 93, industryId: 'academia', tierLock: 'mid' });
+  const grind = createGame({ seed: 93, industryId: 'tech', tierLock: 'aggressive' });
+  for (const game of [university, grind]) { clearEvents(game); game.player.age = 55; }
+  assert.ok(vitalsBreakdown(university).health.ageCost < vitalsBreakdown(grind).health.ageCost / 2);
+  assert.ok(vitalsBreakdown(university).comfortableHours > vitalsBreakdown(grind).comfortableHours);
+});
+
+test('autopilot repeats the last answer for a kind of event, and asks about anything new', async () => {
+  const { rememberAnswer, pickRemembered } = await import('../src/sim/autopilot.js');
+  const memory = {};
+  const choices = [{ label: 'Take it', tag: 'safe' }, { label: 'Fight it', tag: 'bold' }];
+  assert.equal(pickRemembered(memory, 'layoffRumor', choices), null, 'a new kind of event is the player\'s to answer');
+  rememberAnswer(memory, 'layoffRumor', choices[1], 1);
+  assert.equal(pickRemembered(memory, 'layoffRumor', choices), 1);
+  assert.equal(pickRemembered(memory, 'reorg', choices), null, 'another kind of event is still new');
+  const changed = [{ label: 'Accept: Director at $400k', tag: 'bold' }, { label: 'Decline', tag: 'safe' }];
+  assert.equal(pickRemembered(memory, 'layoffRumor', changed), 0, 'the same tag stands in when a label carries new details');
+  rememberAnswer(memory, 'fireOffer', choices[0], 0);
+  assert.equal(pickRemembered(memory, 'fireOffer', choices), null, 'retiring is never decided for you');
+  assert.equal(pickRemembered(memory, 'layoffRumor', [{ label: 'Other', tag: 'rest' }]), null, 'an old answer that is gone is a new question');
 });

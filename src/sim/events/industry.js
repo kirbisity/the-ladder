@@ -836,14 +836,16 @@ const ACADEMIA = [
   },
 ];
 
+import { MORE_TECH, MORE_CONSULTING, MORE_PRIVATE_EQUITY, MORE_ACADEMIA } from './moreIndustry.js';
+
 function tagIndustry(list, industry) {
   return list.map((event) => ({ ...event, category: 'industry', industry }));
 }
 
 export const INDUSTRY_DECK = [
-  ...tagIndustry(TECH, 'tech'),
-  ...tagIndustry(CONSULTING, 'consulting'),
-  ...tagIndustry(PRIVATE_EQUITY, 'privateEquity'),
-  ...tagIndustry(ACADEMIA, 'academia'),
+  ...tagIndustry([...TECH, ...MORE_TECH], 'tech'),
+  ...tagIndustry([...CONSULTING, ...MORE_CONSULTING], 'consulting'),
+  ...tagIndustry([...PRIVATE_EQUITY, ...MORE_PRIVATE_EQUITY], 'privateEquity'),
+  ...tagIndustry([...ACADEMIA, ...MORE_ACADEMIA], 'academia'),
 ];
 

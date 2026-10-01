@@ -838,4 +838,19 @@ export function sceneData(game) {
   };
 }
 
+/**
+ * A still of a scene at a chosen moment, as a PNG data URL, drawn offscreen:
+ * the picture the shareable page carries. Null for an unknown scene.
+ */
+export function snapshotScene(id, data, width = 640, height = 360, atShare = 0.7) {
+  const scene = SCENES[id];
+  if (!scene) return null;
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext('2d');
+  scene.draw(context, width, height, scene.duration * atShare, data);
+  return canvas.toDataURL('image/png');
+}
+
 export { drawHead };

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createAgent, effectiveHours, totalBandwidth, healthTarget, motivationTarget, stepDay, clampVitals,
-  onBurnoutLeave, RECOVERY,
+  onBurnoutLeave, RECOVERY, blowResilience,
 } from '../src/sim/agent.js';
 import { createRandom } from '../src/sim/random.js';
 import { INDUSTRIES, CHARACTERS, MOTIVATION } from '../src/config.js';
@@ -135,4 +135,43 @@ test('rest lifts burnout; only a long unrested grind slides into a breakdown', (
   assert.ok(grinding.motivation <= 0, 'a breakdown is reachable');
   assert.ok(days > 60 * 3, `but it takes a long time: ${days} days`);
   assert.equal(resting.plan.shares[RECOVERY], 0.5);
+});
+
+test('with age, long hours cost more health and mood, and enthusiasm mellows', () => {
+  const costOfLongDays = (age, target, sensitivity = 1) => {
+    const ctx = { ...context, ageSensitivity: sensitivity };
+    const standard = worker({ age });
+    const long = worker({ age });
+    long.plan.hours = 12;
+    return target(standard, ctx) - target(long, ctx);
+  };
+  assert.ok(costOfLongDays(52, healthTarget) > costOfLongDays(30, healthTarget) * 1.3, 'the same hours hurt the body more');
+  assert.ok(costOfLongDays(52, motivationTarget) > costOfLongDays(30, motivationTarget) * 1.3, 'and the mood');
+  const calm = (age) => motivationTarget(worker({ age }), { ...context, ageSensitivity: 1 });
+  assert.ok(calm(55) < calm(30) - 5, 'the mood a person settles at falls with age');
+  assert.equal(calm(30), calm(25), 'nothing changes before the line');
+});
+
+test('where the culture is gentler on age, age bites less', () => {
+  const aged = worker({ age: 55 });
+  const at = (sensitivity) => ({ health: healthTarget(aged, { ...context, ageSensitivity: sensitivity }), mood: motivationTarget(aged, { ...context, ageSensitivity: sensitivity }) });
+  assert.ok(at(0.5).health > at(1).health && at(1).health > at(1.3).health);
+  assert.ok(at(0.5).mood > at(1).mood && at(1).mood > at(1.3).mood);
+});
+
+test('the target is the sum of the terms the vitals popup lists', () => {
+  const aged = worker({ age: 48 });
+  aged.plan.hours = 11;
+  const healthTerms = [];
+  const moodTerms = [];
+  const ctx = { ...context, ageSensitivity: 1 };
+  assert.ok(Math.abs(healthTarget(aged, ctx, healthTerms) - healthTerms.reduce((sum, term) => sum + term.value, 0)) < 1e-9);
+  assert.ok(Math.abs(motivationTarget(aged, ctx, moodTerms) - moodTerms.reduce((sum, term) => sum + term.value, 0)) < 1e-9);
+  assert.ok(healthTerms.some((term) => /age/i.test(term.label)) && moodTerms.some((term) => /age/i.test(term.label)));
+});
+
+test('bad news lands softer with age, down to a floor', () => {
+  assert.equal(blowResilience(25), 1);
+  assert.ok(blowResilience(45) < 1 && blowResilience(60) < blowResilience(45));
+  assert.ok(blowResilience(120) >= 0.5);
 });

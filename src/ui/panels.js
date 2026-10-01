@@ -4,7 +4,7 @@
 
 import { RATING_LABELS, RATINGS, dailyCoreOutput, stagnationYears, projectSpec, projectsOpenTo, CORE, POLITICS } from '../sim/agent.js';
 import { employedAgents, agentsAtLevel, TEAM_COUNT } from '../sim/org.js';
-import { titleOf, formatMoney, netWorth, managerOf, teamHappiness, quarterlyExpenses, dryPowder, fmlaStatus, holidayStatus, employerIndustry, fireNumber } from '../sim/game.js';
+import { titleOf, formatMoney, netWorth, managerOf, teamHappiness, quarterlyExpenses, dryPowder, fmlaStatus, holidayStatus, employerIndustry, fireNumber, fireProgress, vitalsBreakdown } from '../sim/game.js';
 import { careerSummary } from '../sim/story.js';
 import { drawPerson } from './figures.js';
 import { PROJECTS, READINESS, INDUSTRY_STATS, ORG, TIME, MOTIVATION, RELATIONSHIP, CHARACTERS, INDUSTRIES, HOLIDAY, COMPANY_TIERS, MONEY, TIER_MIX } from '../config.js';
@@ -414,23 +414,104 @@ export function wealthChart(game) {
   const top = 18;
   const x = (index) => pad + index / (history.length - 1) * (width - 2 * pad);
   const worthValues = history.map((entry) => entry.netWorth);
-  const worthMax = Math.max(1, ...worthValues);
+  const fireValues = history.map((entry) => entry.fire ?? 0);
+  const worthMax = Math.max(1, ...worthValues, ...fireValues);
   const worthMin = Math.min(0, ...worthValues);
   const salaryMax = Math.max(1, ...history.map((entry) => entry.salary ?? 0));
   const yWorth = (value) => height - pad - (value - worthMin) / (worthMax - worthMin) * (height - pad - top);
   const ySalary = (value) => height - pad - value / salaryMax * (height - pad - top);
   const worthLine = history.map((entry, index) => `${index ? 'L' : 'M'}${x(index).toFixed(1)},${yWorth(entry.netWorth).toFixed(1)}`).join(' ');
   const worthArea = `${worthLine} L${x(history.length - 1).toFixed(1)},${yWorth(0).toFixed(1)} L${x(0).toFixed(1)},${yWorth(0).toFixed(1)} Z`;
+  const fireLine = history.map((entry, index) => `${index ? 'L' : 'M'}${x(index).toFixed(1)},${yWorth(entry.fire ?? 0).toFixed(1)}`).join(' ');
   const salaryLine = history.map((entry, index) => `${index ? 'L' : 'M'}${x(index).toFixed(1)},${ySalary(entry.salary ?? 0).toFixed(1)}`).join(' ');
   const last = history[history.length - 1];
-  return `<div><div class="modal-kicker">Money: <span style="color:#46b96b">net worth</span> (peak ${formatMoney(worthMax)}, now ${formatMoney(last.netWorth)}) · <span style="color:#f4c542">salary</span> (peak ${formatMoney(salaryMax)}, now ${last.salary ? formatMoney(last.salary) : 'none'})</div>
+  return `<div><div class="modal-kicker">Money: <span style="color:#46b96b">net worth</span> (peak ${formatMoney(worthMax)}, now ${formatMoney(last.netWorth)}) · <span style="color:#f4c542">salary</span> (peak ${formatMoney(salaryMax)}, now ${last.salary ? formatMoney(last.salary) : 'none'}) · <span style="color:#c78bff">FIRE number</span></div>
     <svg class="chart" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-label="Net worth and salary over the career">
       <rect width="${width}" height="${height}" rx="10" fill="rgba(255,255,255,0.04)"/>
       ${worthMin < 0 ? `<line x1="${pad}" x2="${width - pad}" y1="${yWorth(0).toFixed(1)}" y2="${yWorth(0).toFixed(1)}" stroke="rgba(255,255,255,0.25)" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"/>` : ''}
       <path d="${worthArea}" fill="rgba(70,185,107,0.25)" stroke="none"/>
       <path d="${worthLine}" fill="none" stroke="#46b96b" stroke-width="2" vector-effect="non-scaling-stroke"/>
+      <path d="${fireLine}" fill="none" stroke="#c78bff" stroke-width="2" stroke-dasharray="6 4" vector-effect="non-scaling-stroke"/>
       <path d="${salaryLine}" fill="none" stroke="#f4c542" stroke-width="2.5" vector-effect="non-scaling-stroke"/>
     </svg></div>`;
+}
+
+// ── Money popup and the FIRE tracker ───────────────────────────────────
+
+/** Click the money: the net worth and salary history, and how close FIRE is. */
+export function moneyPanel(game) {
+  const progress = fireProgress(game);
+  const ready = progress.worth >= progress.number;
+  const pace = progress.projectedAge === null
+    ? 'At the pace of the last two years you would not get there by 70.'
+    : ready ? 'You are there: the game will offer you the door.'
+      : `At the pace of the last two years: about age ${Math.round(progress.projectedAge)}.`;
+  const player = game.player;
+  return `${head('Money', `${escapeHtml(formatMoney(progress.worth))} net worth`)}
+    ${wealthChart(game) || '<p class="explain">The chart fills in as the quarters go by.</p>'}
+    <div class="fire-tracker">
+      <div class="panel-heading"><h3>Financial independence</h3><span class="panel-figure">${Math.round(progress.share * 100)}%</span></div>
+      <div class="progress fire"><div style="width:${progress.share * 100}%"></div></div>
+      <p>Your FIRE number is <strong>${escapeHtml(formatMoney(progress.number))}</strong> at ${Math.floor(player.age)}: what your retired life would cost, for as many years as you may have left (25 years of it at 60, more the earlier you go). ${pace}</p>
+    </div>
+    <div class="figures">${[
+      figure('Net worth', formatMoney(progress.worth)),
+      figure('FIRE number', formatMoney(progress.number)),
+      figure('Still to save', formatMoney(Math.max(0, progress.number - progress.worth))),
+      figure('Saved a year', `${progress.annualGain >= 0 ? '+' : '−'}${formatMoney(Math.abs(progress.annualGain))}`),
+    ].join('')}</div>
+    <p class="explain">When you reach it you can retire, which ends the career as a win, or keep working. A startup that sells, or a stock that soars, can get you there overnight.</p>`;
+}
+
+// ── Vitals popup ───────────────────────────────────────────────────────
+
+function signed(value) {
+  const rounded = Math.round(value * 10) / 10;
+  return `${rounded > 0 ? '+' : rounded < 0 ? '−' : ''}${Math.abs(rounded).toFixed(rounded % 1 === 0 ? 0 : 1)}`;
+}
+
+function describeSensitivity(sensitivity) {
+  if (sensitivity <= 0.6) return 'a gentle workplace for age';
+  if (sensitivity < 0.95) return 'a steady workplace; age bites a little less';
+  if (sensitivity < 1.15) return 'a typical workplace for age';
+  return 'a hard-driving workplace; age bites harder';
+}
+
+/**
+ * What moves a bar. Each bar drifts toward a target made of the listed
+ * terms; age lowers the target, makes long days cost more, and, for mood,
+ * softens bad news. The last events that moved either bar are listed.
+ */
+export function vitalsPanel(game, tab = 'health') {
+  const vitals = vitalsBreakdown(game);
+  if (tab === 'events') return vitalsEvents(game, vitals);
+  const bar = vitals[tab];
+  const tabs = `<div class="tabs">${[['health', 'Health'], ['motivation', 'Motivation'], ['events', 'Events']].map(([id, label]) => `<button class="button small ${tab === id ? 'primary' : ''}" data-vitals-tab="${id}">${label}</button>`).join('')}</div>`;
+  const rows = bar.terms.map((term, index) => `<tr class="${term.value < 0 ? 'bad' : index === 0 ? '' : 'good'}"><td>${escapeHtml(term.label)}</td><td>${signed(term.value)}</td></tr>`).join('');
+  const heading = tab === 'health' ? 'Health' : 'Motivation';
+  const ageNote = tab === 'health'
+    ? `Age costs you ${Math.max(0, bar.ageCost).toFixed(1)} points of health target today, and a long day hurts ${Math.round((vitals.strainFactor - 1) * 100)}% more than it did at 35. The longest day your body can sustain is about <strong>${vitals.comfortableHours} hours</strong>.`
+    : `Age costs you ${Math.max(0, bar.ageCost).toFixed(1)} points of mood target today: enthusiasm mellows, and long days drain more. But bad news lands softer: <strong>${Math.round(vitals.resilience * 100)}%</strong> of its size now, down from 100% at 30.`;
+  return `${head(`${heading}: ${Math.round(bar.value)}%`, `Where ${heading.toLowerCase()} is headed`)}${tabs}
+    <p class="lead">It drifts toward <strong>${Math.round(bar.target)}%</strong>${bar.value > bar.target ? ' (slowly, when it is falling)' : tab === 'health' ? ', and recovers faster than it wears' : ''}. At age ${Math.floor(vitals.age)} you are in ${describeSensitivity(vitals.sensitivity)}.</p>
+    <div class="table-wrap"><table class="peer-table vitals-table"><tbody>${rows}<tr class="total"><td>Target</td><td>${Math.round(bar.target)}</td></tr></tbody></table></div>
+    <p class="explain">${ageNote}</p>`;
+}
+
+/** The events that last moved either bar, and how age softens their blows. */
+function vitalsEvents(game, vitals) {
+  const tabs = `<div class="tabs">${[['health', 'Health'], ['motivation', 'Motivation'], ['events', 'Events']].map(([id, label]) => `<button class="button small ${id === 'events' ? 'primary' : ''}" data-vitals-tab="${id}">${label}</button>`).join('')}</div>`;
+  const log = vitals.log.length
+    ? vitals.log.map((entry) => {
+      const parts = [];
+      if (entry.health) parts.push(`health ${signed(entry.health)}`);
+      if (entry.motivation) parts.push(`motivation ${signed(entry.motivation)}`);
+      return `<li class="${entry.health < 0 || entry.motivation < 0 ? 'bad' : ''}"><span>${escapeHtml(entry.label)}</span><em>age ${Math.floor(entry.age)} · ${parts.join(', ')}</em></li>`;
+    }).join('')
+    : '<li><span>Nothing yet: events that move your health or mood are listed here.</span></li>';
+  return `${head('Events', 'What moved the bars')}${tabs}
+    <ul class="notes vitals-log">${log}</ul>
+    <p class="explain">Bad news to your mood lands at <strong>${Math.round(vitals.resilience * 100)}%</strong> of its size at your age (100% until 30). Illness, accidents and a body that has aged hit health at full size.</p>`;
 }
 
 // ── Project picker ─────────────────────────────────────────────────────
@@ -504,6 +585,12 @@ export const HELP_PAGES = [
     'Higher tiers lose people their jobs more often, and reach financial independence sooner. A smaller employer may round your title up; a bigger one may down-level you.',
     'The Dedicated–Open slider trades focus and layoff protection for recruiter calls and a faster job search.',
   ] },
+  { title: 'Age', items: [
+    'Past 35 the body and mood fade: the same long day costs more, and the mood you settle at falls. Click the health or motivation bar to see exactly why.',
+    'But bad news lands softer each year: older people shrug off blows to their mood that would have flattened them at 25.',
+    'It varies by workplace: a university is gentle on age; high-growth tech and finance grind people down, and push older people out.',
+    'Autopilot runs whole quarters on your last plan and answers events as you last did. It asks only about kinds of events it has not seen, and stops for burnout, a PIP or a lost job.',
+  ] },
   { title: 'Burnout and time off', items: [
     'Motivation under 20% is burnout: the screen greys, bandwidth halves, and productivity drains toward nothing as motivation falls.',
     'Put Recovery at 35% or more and it counts as sick leave (no rating, no PIP), and the more you rest the faster you climb back.',
@@ -511,7 +598,7 @@ export const HELP_PAGES = [
   ] },
   { title: 'How it ends', items: [
     'Retire at 62 with the highest title and the most wealth you can, and read the story of your career.',
-    'Or retire early: once your net worth covers your spending for life (25 years of it at 60, about 33 at 40: the FIRE number), the game offers you the door.',
+    'Or retire early: once your net worth covers your retired spending for life (the FIRE number: about 25 years of it at 60, more the earlier you go), the game offers you the door. Click the money to track it. High-growth tech can get you there by 35, steady tech by 50, a university rarely.',
     'Health at zero is death. Out of work, a long search costs more than money: stress and illness, a strained marriage, and, past the debt you can carry, homelessness.',
     'Motivation at zero is a breakdown, but the last 10% resists: only a long stretch of burnout with no rest gets you there.',
   ] },
@@ -614,6 +701,12 @@ export function storyPanel(game, page) {
       ${page < pages - 1 ? `<button class="button small primary" data-story="${page + 1}">Next</button>` : '<button class="button small primary" data-story="-1">Finish</button>'}</div>`;
 }
 
+/** The ending's title and one-line telling, for the end panel and the shareable page. */
+export function outcomeText(game) {
+  const entry = OUTCOMES[game.outcome.kind];
+  return { title: entry.title, line: entry.line(game, game.outcome) };
+}
+
 export function gameOverPanel(game) {
   const outcome = game.outcome;
   const entry = OUTCOMES[outcome.kind];
@@ -627,6 +720,7 @@ export function gameOverPanel(game) {
     ${historyChart(game)}
     ${support}
     <div class="actions"><button class="button primary" data-story="0">Read your story: ${escapeHtml(verdict)}</button>
+      <button class="button" data-action="share-story">Save a shareable page</button>
       <button class="button" data-action="same-again">Same person again</button><button class="button" data-action="new-career">New career</button></div>`;
 }
 

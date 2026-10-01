@@ -56,6 +56,15 @@ Play: <https://kirbisity.github.io/the-ladder/>
   car trouble, family.
 - **Time off**: holidays of one, two or four weeks (15 paid days a year),
   and FMLA.
+- **Age** fades body and mood past 35 (long days cost more, enthusiasm
+  mellows) while bad news lands softer. Click the health or motivation bar for
+  the breakdown. Universities are gentle on age; high-growth tech and finance
+  are not, and push older people out. **Autopilot** runs whole quarters and
+  answers events as you last did, asking only about new kinds.
+- **Money**: click it for the net worth chart and the FIRE tracker. High-growth
+  tech reaches financial independence around 35, steady tech around 50,
+  startups sometimes overnight; academia rarely. At the end, save a one-page
+  shareable story.
 - **Out of work**, the search costs more than money the longer it runs:
   mood sinks, stress raises the odds of illness and medical bills, a
   marriage may break (half of everything, plus lawyers), and debt piles up.

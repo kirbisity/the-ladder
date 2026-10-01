@@ -8,7 +8,7 @@ import {
   trackWeightedOutput, experiencedSkill,
 } from '../src/sim/org.js';
 import { managementMix } from '../src/sim/agent.js';
-import { createGame, chooseEventOption, finishQuarterDays, closeQuarter, startRunning, makeOffer } from '../src/sim/game.js';
+import { createGame, chooseEventOption, finishQuarterDays, closeQuarter, startRunning, makeOffer, fireReady, netWorth, fireNumber } from '../src/sim/game.js';
 import { createRandom } from '../src/sim/random.js';
 import { INDUSTRIES, COMPANY_TIERS, MONEY, ORG, TIME } from '../src/config.js';
 
@@ -87,13 +87,16 @@ test('up or out is an elite-firm rule: steady consultancies do not enforce it', 
 
 test('a steady employer rates once a year; a high-growth one every quarter', () => {
   for (const [tier, every] of [['stable', COMPANY_TIERS.stable.reviewEvery], ['aggressive', COMPANY_TIERS.aggressive.reviewEvery]]) {
-    const game = createGame({ seed: 31, characterId: 'joseph', tierLock: tier });
-    const reviews = [];
-    for (let quarter = 0; quarter < every * 2 && !game.outcome; quarter += 1) {
+    const game = createGame({ seed: 32, characterId: 'joseph', tierLock: tier });
+    const reviewed = [];
+    for (let quarter = 0; quarter < every * 3 && !game.outcome && game.employment.employed; quarter += 1) {
       const report = playQuarterAsIs(game);
-      if (game.employment.employed && !report.lostJob) reviews.push(Boolean(report.review));
+      if (report.review) reviewed.push(quarter);
     }
-    assert.equal(reviews.filter(Boolean).length, reviews.length / every, `${tier}: one review every ${every} quarters`);
+    assert.ok(reviewed.length >= 2, `${tier}: the scenario needs two reviews in a row`);
+    for (let index = 1; index < reviewed.length; index += 1) {
+      assert.equal(reviewed[index] - reviewed[index - 1], every, `${tier}: one review every ${every} quarters`);
+    }
   }
 });
 
@@ -173,4 +176,27 @@ test('moving to a smaller employer rounds the title up only below the fork', () 
   }
   assert.ok(bumpedBelow > 0, 'the scenario: some offers come from smaller employers and bump the title');
   assert.equal(bumpedAbove, 0);
+});
+
+test('a startup unicorn exit can make someone financially independent overnight', () => {
+  const startup = COMPANY_TIERS.startup;
+  const saved = { fail: startup.failPerQuarter, exit: startup.exitPerQuarter, unicorn: startup.unicornChance };
+  try {
+    startup.failPerQuarter = 0;
+    startup.exitPerQuarter = 1;
+    startup.unicornChance = 1;
+    const game = createGame({ seed: 95, characterId: 'joseph', industryId: 'tech', startTier: 'startup' });
+    game.player.age = 26;
+    assert.equal(fireReady(game), false, 'the scenario: not independent before the exit');
+    playQuarterAsIs(game);
+    const exit = game.journal.find((entry) => entry.kind === 'startupExit');
+    assert.ok(exit.payout > game.player.salary * startup.unicornMultiple[0] * 0.9);
+    assert.ok(netWorth(game) >= fireNumber(game), 'rich overnight: past the FIRE number at once');
+    game.fireAskedQuarter = null;
+    assert.equal(fireReady(game), true, 'and the game offers the door');
+  } finally {
+    startup.failPerQuarter = saved.fail;
+    startup.exitPerQuarter = saved.exit;
+    startup.unicornChance = saved.unicorn;
+  }
 });

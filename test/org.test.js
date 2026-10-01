@@ -2,10 +2,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createOrganization, agentsAtLevel, fillVacancies, rateLevels, applyReviewRules, runLayoffs,
-  choosePeerPlan, employedAgents, layoffScore,
+  choosePeerPlan, employedAgents, layoffScore, rollDepartures,
 } from '../src/sim/org.js';
 import { createRandom } from '../src/sim/random.js';
 import { INDUSTRIES, PERFORMANCE, MOTIVATION, ORG } from '../src/config.js';
+import { tieredIndustry } from '../src/sim/org.js';
 
 const industry = INDUSTRIES.tech;
 
@@ -130,4 +131,39 @@ test('peers choose their hours around their industry, and rest when burned out',
   burned.personality.selfPreservation = 0.6;
   choosePeerPlan(burned, industry, random);
   assert.ok(burned.plan.shares[3] >= MOTIVATION.burnoutRestShare);
+});
+
+test('older people are pushed out of aggressive tech far more than steady tech, and not out of a university', () => {
+  const pushedOutShare = (baseIndustry, tier) => {
+    let left = 0;
+    let total = 0;
+    for (let seed = 1; seed <= 20; seed += 1) {
+      const random = createRandom(seed);
+      const org = createOrganization(random, baseIndustry, { tier });
+      for (const agent of employedAgents(org)) agent.age = 52;
+      for (const agent of employedAgents(org)) { agent.plan.openness = 0; agent.motivation = 90; }
+      total += employedAgents(org).length;
+      left += rollDepartures(org, random, 'normal', null).filter((entry) => entry.reason === 'pushed out').length;
+    }
+    return left / total;
+  };
+  const aggressive = pushedOutShare(INDUSTRIES.tech, 'aggressive');
+  const stable = pushedOutShare(INDUSTRIES.tech, 'stable');
+  const university = pushedOutShare(INDUSTRIES.academia, 'mid');
+  assert.ok(aggressive > stable * 2, `aggressive ${aggressive}, stable ${stable}`);
+  assert.ok(stable > university && university === 0, `stable ${stable}, university ${university}`);
+});
+
+test('where age-out is strong, an older worker is likelier to be on the layoff list', () => {
+  const industryTech = tieredIndustry(INDUSTRIES.tech, 'aggressive');
+  const org = createOrganization(createRandom(5), INDUSTRIES.tech, { tier: 'aggressive' });
+  const [older, younger] = agentsAtLevel(org, 2);
+  for (const agent of [older, younger]) { agent.alignment = 1; agent.informants = 0; agent.lastRating = 'meetAll'; agent.salary = industryTech.salaries[2]; agent.recentStanding = 0.5; agent.plan.openness = 0.3; }
+  older.age = 50;
+  younger.age = 30;
+  const quiet = { normal: () => 0, next: () => 0.5 };
+  const median = industryTech.salaries[2];
+  assert.ok(layoffScore(older, median, quiet, industryTech) > layoffScore(younger, median, quiet, industryTech));
+  const university = tieredIndustry(INDUSTRIES.academia, 'mid');
+  assert.equal(layoffScore(older, university.salaries[2], quiet, university), layoffScore(younger, university.salaries[2], quiet, university));
 });

@@ -499,10 +499,9 @@ export const HELP_PAGES = [
     'Raises follow your standing a few years behind it, and are never cut. Paid more than your recent work is worth, you are first on a layoff list unless someone above vouches for you.',
   ] },
   { title: 'Employers', items: [
-    'You choose the kind of employer for your first job, or take a surprise; later offers come from the whole market.',
-    'High-growth companies review every quarter, PIP the most, grow fast and pay the most. Established ones review twice a year; steady ones once, with fewer PIPs and more politics.',
-    'Startups pay less plus equity: most fold, a few sell and pay out. Companies drift between tiers over the years.',
-    'Higher tiers lose people their jobs more often, and get them to financial independence sooner. Moving to a smaller employer can round your title up; a bigger one may down-level you.',
+    'You choose the kind of employer for your first job; later offers come from the whole market. High-growth companies review every quarter, PIP the most and pay the most; established ones review twice a year; steady ones once, with fewer PIPs and more politics.',
+    'Startups pay less plus equity: most fold, a few sell. Companies drift between tiers over the years.',
+    'Higher tiers lose people their jobs more often, and reach financial independence sooner. A smaller employer may round your title up; a bigger one may down-level you.',
     'The Dedicated–Open slider trades focus and layoff protection for recruiter calls and a faster job search.',
   ] },
   { title: 'Burnout and time off', items: [

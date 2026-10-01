@@ -4,7 +4,7 @@
 
 import {
   BANDWIDTH, HEALTH, MOTIVATION, PERFORMANCE, SKILL, READINESS, ORG, JOBS,
-  PROJECTS, INDUSTRY_STATS, TIME, MONEY, FMLA,
+  PROJECTS, INDUSTRY_STATS, TIME, MONEY, FMLA, TRACKS,
 } from '../config.js';
 
 export const CORE = 0;
@@ -46,6 +46,11 @@ export function payInBand(industry, level, salary) {
  */
 export function clampVitals(agent) {
   agent.health = Math.min(100, agent.health);
+  // A steady temperament shrugs off part of every blow to motivation.
+  const before = agent.motivationBefore ?? agent.motivation;
+  if (agent.traits.steadiness && agent.motivation < before) {
+    agent.motivation = before - (before - agent.motivation) * (1 - agent.traits.steadiness);
+  }
   resistBreakdown(agent);
   if (!agent.burnout.active && agent.motivation <= MOTIVATION.burnoutLine) {
     agent.burnout.active = true;
@@ -90,6 +95,8 @@ export function createAgent(fields) {
     age: TIME.startAge,
     level: 0,
     quartersAtLevel: 0,
+    // Years in this grade across employers: a new badge does not reset a plateau.
+    quartersInGrade: 0,
     quartersEmployed: 0,
     readiness: 0,
     skill: SKILL.startMean,
@@ -204,6 +211,7 @@ export function healthTarget(agent, context) {
   target += HEALTH.restBonus * plan.shares[RECOVERY];
   target -= HEALTH.ageWearPerYear * Math.max(0, agent.age - HEALTH.ageWearFrom);
   if (traits.networkingHealthDrain) target -= traits.networkingHealthDrain * plan.shares[POLITICS];
+  target -= context.joblessStress ?? 0;
   if (context.industry.subStat === 'utilization' && context.employed) {
     target -= INDUSTRY_STATS.utilization.travelHealthPerUtilization * utilizationOf(plan);
   }
@@ -230,12 +238,21 @@ export function motivationTarget(agent, context) {
   }
   if (traits.deskWorkDrain) target -= traits.deskWorkDrain * Math.max(0, shares[CORE] - traits.deskWorkLimit);
   if (traits.networkingDrain) target -= traits.networkingDrain * Math.max(0, shares[POLITICS] - 0.1);
+  if (traits.autonomyNeed && context.employed && context.industry) {
+    target += MOTIVATION.autonomyWeight * traits.autonomyNeed * ((context.industry.autonomy ?? 0.5) - 0.5);
+  }
   target += agent.moodFromRating;
   target += context.moodModifier ?? 0;
   if (agent.burnout.active) {
     target -= MOTIVATION.burnoutDrag * (1 - Math.min(1, shares[RECOVERY] / MOTIVATION.fullRecoveryShare));
   }
   return target;
+}
+
+/** A quarter's health change toward its target: slow wear, quicker recovery. */
+export function healthDrift(agent, target) {
+  const rate = target > agent.health ? HEALTH.recoveryDriftPerQuarter : HEALTH.driftPerQuarter;
+  return rate * (target - agent.health);
 }
 
 /** How fast motivation moves: burned out, rest speeds the climb back. */
@@ -299,11 +316,16 @@ export function stepDay(agent, context) {
     quarter.citizenship += citizenship;
 
     const levelFactor = 1 + READINESS.levelDifficulty * agent.level;
-    const politicsWeight = READINESS.politicsWeight * (1 + READINESS.politicsPerLevel * agent.level);
-    const readinessToday = (READINESS.citizenshipWeight * citizenship
+    const politicsWeight = READINESS.politicsWeight * (1 + READINESS.politicsPerLevel * agent.level)
+      * (agent.track ? TRACKS[agent.track].readinessPolitics : 1);
+    // Leadership pull matters from the first management rung up.
+    const leadership = agent.level >= READINESS.leadershipFromLevel ? (traits.leadership ?? 1) : 1;
+    const readinessToday = leadership * (READINESS.citizenshipWeight * citizenship
       + politicsWeight * politics * (agent.pol / 100) * (traits.politicsBonus ?? 1)) / levelFactor / days;
     agent.readiness += readinessToday;
     quarter.readinessGain += readinessToday;
+    quarter.readinessFromPolitics = (quarter.readinessFromPolitics ?? 0) + leadership * politicsWeight * politics
+      * (agent.pol / 100) * (traits.politicsBonus ?? 1) / levelFactor / days;
 
     advanceProject(agent, coreOutput, citizenship, context.industry);
     stepIndustryDay(agent, context, coreOutput, politics, notes);
@@ -311,7 +333,7 @@ export function stepDay(agent, context) {
   }
   agent.skill += SKILL.learnFromRest * shares[RECOVERY] * (1 - agent.skill / 100) / days;
 
-  agent.health += HEALTH.driftPerQuarter * (healthTarget(agent, context) - agent.health) / days;
+  agent.health += healthDrift(agent, healthTarget(agent, context)) / days;
   agent.motivation += motivationDrift(agent) * (motivationTarget(agent, context) - agent.motivation) / days;
   settleDay(agent, notes);
   return notes;
@@ -327,7 +349,7 @@ function stepLeaveDay(agent, context) {
   const working = agent.plan;
   agent.plan = { ...working, ...LEAVE_PLAN };
   const boost = context.leaveBoost ?? FMLA.recoveryBoost;
-  agent.health += boost * HEALTH.driftPerQuarter * (healthTarget(agent, { ...context, employed: false }) - agent.health) / days;
+  agent.health += boost * healthDrift(agent, healthTarget(agent, { ...context, employed: false })) / days;
   const target = motivationTarget(agent, { ...context, employed: true }) + 10;
   agent.motivation += boost * motivationDrift(agent) * (target - agent.motivation) / days;
   agent.skill += SKILL.learnFromRest * 0.5 * (1 - agent.skill / 100) / days;
@@ -371,6 +393,20 @@ function advanceProject(agent, coreOutput, citizenship, industry) {
     ? citizenship / project.effort
     : coreOutput / PROJECTS.standardDayOutput / project.effort;
   quarter.projectProgress += progressToday;
+}
+
+/** Default track by political sense, for anyone past the fork without a choice. */
+export function defaultTrack(agent, random = null) {
+  const chance = clamp(0.5 + (agent.pol - 100) / 80, 0.15, 0.85);
+  return (random ? random.next() : 0.5) < chance ? 'management' : 'expert';
+}
+
+/** How far into management's influence-weighted judging this agent is, 0..1. */
+export function managementMix(agent, industry) {
+  if (agent.track !== 'management' || !industry?.trackFromLevel) return 0;
+  // From the fork itself: a Staff engineer aiming at management is already
+  // judged partly as one.
+  return clamp((agent.level - industry.trackFromLevel + 1) / 5, 0, 1);
 }
 
 export function projectSpec(projectId, industry) {

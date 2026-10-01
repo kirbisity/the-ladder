@@ -2,19 +2,19 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createGame, startRunning, runDay, closeQuarter, chooseEventOption, setPlan, rebalanceShares,
-  finishQuarterDays, quitJob, careerScore, makeOffer, acceptOffer,
+  finishQuarterDays, quitJob, careerScore, makeOffer, acceptOffer, divorce, divorceChance,
 } from '../src/sim/game.js';
 import { playCareer } from '../src/sim/bots.js';
 import { agentsAtLevel } from '../src/sim/org.js';
-import { allEvents, eventById } from '../src/sim/events.js';
-import { TIME, INDUSTRIES, CHARACTERS, MOTIVATION, MONEY } from '../src/config.js';
+import { allEvents, eventById, lifeWeight } from '../src/sim/events.js';
+import { TIME, INDUSTRIES, CHARACTERS, MOTIVATION, MONEY, ORG, JOBLESS } from '../src/config.js';
 
 function clearEvents(game) {
   while (game.currentEvent) chooseEventOption(game, 0);
 }
 
 test('a quarter is 60 days in three phases, and ages the player a quarter-year', () => {
-  const game = createGame({ seed: 11 });
+  const game = createGame({ seed: 11, tierLock: 'aggressive' });
   clearEvents(game);
   assert.equal(game.phase, 'plan');
   assert.ok(startRunning(game));
@@ -80,16 +80,62 @@ test('health at zero ends the career on the day it happens', () => {
   assert.equal(game.phase, 'over');
 });
 
-test('out of work with the savings gone is homelessness', () => {
+test('out of work, a little debt is survivable; past the cushion it is homelessness', () => {
   const game = createGame({ seed: 14 });
   clearEvents(game);
   quitJob(game);
-  game.savings = 100;
   game.employment.benefitQuartersLeft = 0;
   setPlan(game, { openness: 0 });
+  game.savings = -MONEY.debtCushion / 4;
+  finishQuarterDays(game);
+  closeQuarter(game);
+  assert.ok(game.savings < 0, 'the scenario: the quarter closes in debt');
+  assert.equal(game.outcome, null, 'living on credit, not yet on the street');
+  game.savings = -MONEY.debtCushion - 100;
+  while (game.currentEvent) {
+    const declineOffer = game.currentEvent.event.id === 'jobOffer';
+    chooseEventOption(game, declineOffer ? game.currentEvent.choices.length - 1 : 0);
+  }
+  assert.equal(game.employment.employed, false, 'the scenario: still out of work');
   finishQuarterDays(game);
   closeQuarter(game);
   assert.equal(game.outcome?.kind, 'homeless');
+});
+
+test('a long search strains a marriage: no risk at first, rising to a cap; divorce halves the assets', () => {
+  const game = createGame({ seed: 15 });
+  clearEvents(game);
+  game.married = true;
+  quitJob(game);
+  game.employment.unemployedQuarters = JOBLESS.divorceFromQuarter - 1;
+  assert.equal(divorceChance(game), 0);
+  game.employment.unemployedQuarters = JOBLESS.divorceFromQuarter;
+  const early = divorceChance(game);
+  game.employment.unemployedQuarters = 4;
+  const atYear = divorceChance(game);
+  game.employment.unemployedQuarters = 40;
+  assert.ok(early > 0 && atYear > early && divorceChance(game) === JOBLESS.divorceCap);
+  game.married = false;
+  assert.equal(divorceChance(game), 0, 'no marriage, no divorce');
+  game.married = true;
+  game.savings = 200000;
+  game.homeEquity = 300000;
+  divorce(game);
+  assert.equal(game.married, false);
+  assert.equal(game.homeEquity, 150000);
+  assert.equal(game.savings, 100000 - JOBLESS.divorceLegalFees);
+  assert.ok(game.journal.some((entry) => entry.kind === 'divorce'));
+});
+
+test('a long search makes medical cards likelier', () => {
+  const game = createGame({ seed: 16 });
+  clearEvents(game);
+  const er = eventById('erVisit');
+  const atWork = lifeWeight(game, er);
+  quitJob(game);
+  game.employment.unemployedQuarters = 6;
+  assert.ok(lifeWeight(game, er) > atWork * 2);
+  assert.equal(lifeWeight(game, eventById('carTrouble')), eventById('carTrouble').weight ? eventById('carTrouble').weight(game) : 1, 'non-medical cards unchanged');
 });
 
 test('the career ends in retirement at the retirement age', () => {
@@ -103,14 +149,17 @@ test('the career ends in retirement at the retirement age', () => {
 });
 
 test('a leapfrog is someone junior jumping past you, and stings once', () => {
-  const game = createGame({ seed: 16 });
+  const game = createGame({ seed: 16, tierLock: 'aggressive' });
   clearEvents(game);
   const player = game.player;
   player.readiness = 120;
   player.quartersAtLevel = 10;
   player.lastRating = 'meetSome';
+  const savedSearch = ORG.externalSearchChance[1];
+  ORG.externalSearchChance[1] = 0;
   for (const peer of agentsAtLevel(game.org, 0)) {
     if (peer === player) continue;
+    peer.standing = 0.9;
     peer.readiness = 125;
     peer.quartersAtLevel = 2;
     peer.lastRating = 'greatlyExceeds';
@@ -120,6 +169,7 @@ test('a leapfrog is someone junior jumping past you, and stings once', () => {
   player.motivation = 80;
   const before = player.motivation;
   const report = closeQuarter(game);
+  ORG.externalSearchChance[1] = savedSearch;
   if (report.promoted) return;
   assert.ok(report.leapfrogged, 'a junior colleague took a chair');
   const leapNotes = report.notes.filter((note) => note.startsWith('Leapfrogged'));

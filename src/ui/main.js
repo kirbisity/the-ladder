@@ -15,7 +15,7 @@ import { peerLook } from './figures.js';
 import { createAudio } from './audio.js';
 import {
   eventPanel, reviewPanel, orgPanel, performancePanel, careerPanel, projectPanel, helpPanel, menuPanel,
-  gameOverPanel, storyPanel, timeOffPanel, settingsPanel, characterCards, industryCards, industryMeter, projectedCompletion, escapeHtml,
+  gameOverPanel, storyPanel, timeOffPanel, settingsPanel, characterCards, characterDetail, industryCards, industryMeter, projectedCompletion, escapeHtml,
 } from './panels.js';
 import { createIntro } from './intro.js';
 import { createCutscenePlayer, END_SCENES, INTERIM_SCENES, JOURNAL_SCENES, endingSceneFor, sceneData } from './cutscenes.js';
@@ -52,6 +52,7 @@ const app = {
   visualTime: 0,
   modal: null,
   orgTab: 'chart',
+  careerTab: 'profile',
   orgNode: null,
   lastHudUpdate: 0,
   lastLabelDay: -1,
@@ -619,7 +620,11 @@ function handleAction(action, target) {
     case 'new-career':
       closeModal();
       app.pick = { characterId: null, industryId: null };
+      renderCharacterPick();
       showScreen('character');
+      break;
+    case 'pick-character':
+      if (app.pick.characterId) showScreen('industry');
       break;
     case 'continue': {
       const loaded = deserializeGame(readSave());
@@ -673,7 +678,7 @@ function handleAction(action, target) {
       break;
     case 'panel-org': openModal('org', orgPanel(game, app.orgTab, app.orgNode), true); break;
     case 'panel-performance': openModal('performance', performancePanel(game)); break;
-    case 'panel-career': openModal('career', careerPanel(game), true); break;
+    case 'panel-career': openModal('career', careerPanel(game, app.careerTab), true); break;
     case 'pick-project': openModal('project', projectPanel(game)); break;
     case 'review-continue': afterQuarterOpened(); break;
     case 'sound': {
@@ -720,8 +725,13 @@ function bindInput() {
     }
     const character = event.target.closest('[data-character]');
     if (character) {
+      // First tap reads about them; a second tap on the same card commits.
+      if (app.pick.characterId === character.dataset.character) {
+        showScreen('industry');
+        return;
+      }
       app.pick.characterId = character.dataset.character;
-      showScreen('industry');
+      renderCharacterPick();
       return;
     }
     const industry = event.target.closest('[data-industry]');
@@ -752,6 +762,12 @@ function bindInput() {
     const help = event.target.closest('[data-help]');
     if (help) {
       openModal('help', helpPanel(Number(help.dataset.help)));
+      return;
+    }
+    const careerTab = event.target.closest('[data-career-tab]');
+    if (careerTab) {
+      app.careerTab = careerTab.dataset.careerTab;
+      openModal('career', careerPanel(app.game, app.careerTab), true);
       return;
     }
     const orgTab = event.target.closest('[data-org-tab]');
@@ -804,13 +820,18 @@ function selectTab(name) {
   $$('.controls > .panel').forEach((panel) => panel.classList.toggle('active', panel.dataset.tabPanel === name));
 }
 
+function renderCharacterPick() {
+  $('#character-grid').innerHTML = characterCards(app.pick?.characterId ?? null);
+  $('#character-detail').innerHTML = characterDetail(app.pick?.characterId ?? null);
+}
+
 // ── Boot ───────────────────────────────────────────────────────────────
 
 function boot() {
   office = createOffice($('#office'));
   cutscenes = createCutscenePlayer($('#cutscene'));
   intro = createIntro($('#intro-canvas'), $('#intro-line'));
-  $('#character-grid').innerHTML = characterCards();
+  renderCharacterPick();
   $('#industry-grid').innerHTML = industryCards();
   bindInput();
   selectTab('bandwidth');

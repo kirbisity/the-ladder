@@ -5,21 +5,20 @@
 
 import {
   TIME, MONEY, JOBS, HEALTH, MOTIVATION, READINESS, RELATIONSHIP, EVENTS as EVENT_DIALS,
-  INDUSTRIES, INDUSTRY_STATS, CHARACTERS, ORG, PROJECTS, FMLA, HOLIDAY, FIRE,
-} from '../config.js';
+  INDUSTRIES, INDUSTRY_STATS, CHARACTERS, ORG, PROJECTS, FMLA, HOLIDAY, FIRE, COMPANY_TIERS, TIER_SHIFT, JOBLESS } from '../config.js';
 import { createRandom } from './random.js';
 import {
-  createAgent, stepDay, clamp, clampVitals, defaultPlan, payInBand, projectFor, projectSpec, utilizationOf, RATING_LABELS,
+  createAgent, stepDay, clamp, clampVitals, defaultPlan, payInBand, projectFor, projectSpec, defaultTrack, utilizationOf, RATING_LABELS,
   CORE, CITIZENSHIP, POLITICS, RECOVERY,
 } from './agent.js';
 import {
   createOrganization, hirePeer, choosePeerPlan, resolveProject, quarterPerformance, rateLevels,
   applyReviewRules, applyTenureReviews, rollDepartures, fillVacancies, decayUnusedReadiness,
-  updateAlignment, runLayoffs, ageAgents, startQuarterFor, employedAgents, agentsAtLevel,
+  updateAlignment, runLayoffs, ageAgents, startQuarterFor, employedAgents, agentsAtLevel, performingAtLevel, reviewPay, payTarget,
+  pickTier, tieredIndustry, companyNameFor, growOrganization, retierOrganization,
 } from './org.js';
-import { drawEvent, drawLifeEvent, eventById, offerEvent, fireEvent } from './events.js';
+import { drawEvent, drawLifeEvent, eventById, offerEvent, fireEvent, trackEvent } from './events.js';
 import { record } from './story.js';
-import { COMPANY_NAMES as INDUSTRY_COMPANY_POOL } from './names.js';
 
 export const MARKET_STATES = ['boom', 'normal', 'recession'];
 const MARKET_TRANSITIONS = {
@@ -37,7 +36,7 @@ const MARKET_TRANSITIONS = {
  * Returns:
  *   the game state, in the plan phase of the first quarter
  */
-export function createGame({ seed = Date.now() % 1e9, characterId = 'simon', industryId = 'tech', playerName = null } = {}) {
+export function createGame({ seed = Date.now() % 1e9, characterId = 'simon', industryId = 'tech', playerName = null, tierLock = null } = {}) {
   const random = createRandom(seed);
   const character = CHARACTERS.find((entry) => entry.id === characterId) ?? CHARACTERS[0];
   const industry = INDUSTRIES[industryId] ?? INDUSTRIES.tech;
@@ -92,9 +91,12 @@ export function createGame({ seed = Date.now() % 1e9, characterId = 'simon', ind
     fireAskedQuarter: null,
     lifeEventDays: [],
     journal: [],
+    // When set, every employer is this tier (for the per-tier report).
+    tierLock,
+    equity: null,
   };
   player.plan.project = projectFor(industry, 'safe').id;
-  joinOrganization(game, createOrganization(random, industry), 0);
+  joinOrganization(game, createOrganization(random, industry, { tier: tierLock }), 0);
   beginQuarter(game);
   return game;
 }
@@ -109,17 +111,23 @@ export function joinOrganization(game, org, level) {
     const displaced = game.random.pick(seated);
     org.agents = org.agents.filter((agent) => agent !== displaced);
   }
+  if (player.level !== level) player.quartersInGrade = 0;
   player.level = level;
   player.quartersAtLevel = 0;
   player.departed = null;
   player.pip = { active: false, quarters: 0 };
   player.teamId = game.random.int(0, 8);
   player.tenured = Boolean(game.industry.tenureFromLevel !== null && level >= game.industry.tenureFromLevel);
-  player.salary = payInBand(game.industry, level, player.salary);
+  player.salary = payInBand(org.industry, level, player.salary);
+  player.periodSum = 0;
+  player.periodCount = 0;
+  // A startup pays partly in equity, worth something only if it sells.
+  game.equity = org.tier === 'startup' ? { company: org.companyName } : null;
+  if (game.industry.trackFromLevel && level > game.industry.trackFromLevel && !player.track) player.track = defaultTrack(player);
   for (const peer of org.agents) peer.relationship = Math.round(game.random.normal(0, 10));
   org.agents.push(player);
   game.org = org;
-  if (game.journal) record(game, 'joined', { company: org.companyName, title: game.industry.titles[level] });
+  if (game.journal) record(game, 'joined', { company: org.companyName, title: game.industry.titles[level], tier: org.tier });
   game.employment.employed = true;
   game.employment.unemployedQuarters = 0;
   game.flags.revealed = [];
@@ -180,7 +188,7 @@ export function acceptOffer(game, offer) {
   if (game.org) {
     game.org.agents = game.org.agents.filter((agent) => agent !== game.player);
   }
-  const org = createOrganization(game.random, game.industry);
+  const org = createOrganization(game.random, game.industry, { tier: offer.tier });
   org.companyName = offer.company;
   game.player.salary = offer.salary;
   game.player.readiness *= 0.3;
@@ -189,8 +197,20 @@ export function acceptOffer(game, offer) {
   log(game, `You start at ${offer.company} as ${titleOf(game, offer.level)}.`);
 }
 
-export function titleOf(game, level) {
-  return game.industry.titles[clamp(level, 0, game.industry.titles.length - 1)];
+/** A level's title, in the player's track once past the fork. */
+export function titleOf(game, level, track = game.player?.track) {
+  const industry = game.industry;
+  const index = clamp(level, 0, industry.titles.length - 1);
+  if (track === 'expert' && industry.trackFromLevel !== undefined && index > industry.trackFromLevel) {
+    return industry.expertTitles[index - industry.trackFromLevel - 1] ?? industry.titles[index];
+  }
+  return industry.titles[index];
+}
+
+/** Choose the management or the expert track. */
+export function chooseTrack(game, track) {
+  game.player.track = track;
+  record(game, 'track', { track });
 }
 
 // ── Turn structure ─────────────────────────────────────────────────────
@@ -222,6 +242,10 @@ export function beginQuarter(game) {
     game.eventQueue.push({ event: offerEvent(), data: game.pendingOffer });
     game.pendingOffer = null;
   }
+  if (game.employment.employed && !game.player.track && game.player.level === game.industry.trackFromLevel
+    && game.player.readiness >= 50 && !game.eventQueue.some((entry) => entry.event.id === 'trackChoice')) {
+    game.eventQueue.unshift({ event: trackEvent(), data: {} });
+  }
   if (fireReady(game)) {
     game.fireAskedQuarter = game.quarterIndex;
     game.eventQueue.unshift({ event: fireEvent(), data: { number: fireNumber(game) } });
@@ -248,7 +272,8 @@ export function beginQuarter(game) {
 
 /** Net worth that covers this many years of today's spending: the 4% rule. */
 export function fireNumber(game) {
-  return quarterlyExpenses(game) * 4 * FIRE.yearsOfSpending;
+  const yearsEarly = Math.max(0, FIRE.fullRuleAge - game.player.age);
+  return quarterlyExpenses(game) * 4 * (FIRE.yearsOfSpending + FIRE.extraYearsPerYearEarly * yearsEarly);
 }
 
 /** Financially independent, old enough, and not asked recently. */
@@ -453,6 +478,11 @@ export function runDay(game) {
     outputModifier: game.flags.outputModifier,
     moodModifier: game.flags.moodModifier ?? 0,
   };
+  if (!employed) {
+    const quartersOut = game.employment.unemployedQuarters;
+    context.unemployedMood = Math.min(JOBLESS.moodCap, JOBLESS.moodBase + JOBLESS.moodPerQuarter * quartersOut);
+    context.joblessStress = Math.min(JOBLESS.stressCap, JOBLESS.stressPerQuarter * quartersOut);
+  }
   context.leaveBoost = onFmla ? FMLA.recoveryBoost : HOLIDAY.recoveryBoost;
   const notes = stepDay(player, context);
   if (onFmla) {
@@ -556,7 +586,7 @@ function closeEmployedQuarter(game, report) {
   const random = game.random;
   const player = game.player;
   const org = game.org;
-  const industry = game.industry;
+  const industry = org.industry;
 
   peerSocialActions(game, report);
   for (const agent of employedAgents(org)) {
@@ -567,16 +597,39 @@ function closeEmployedQuarter(game, report) {
       applyManagementStyle(game, report);
     }
     quarterPerformance(agent, random, industry);
+    agent.periodSum = (agent.periodSum ?? 0) + agent.quarter.performance;
+    agent.periodCount = (agent.periodCount ?? 0) + 1;
   }
-  rateLevels(org, industry.seats.length);
-  report.rating = player.quarter.rating;
+  // Formal reviews come every reviewEvery quarters and judge the period's
+  // average; in between there is only a check-in.
+  org.quartersSinceReview = (org.quartersSinceReview ?? 0) + 1;
+  const review = org.quartersSinceReview >= (industry.reviewEvery ?? 1);
+  report.review = review;
+  report.nextReviewIn = review ? industry.reviewEvery : industry.reviewEvery - org.quartersSinceReview;
+  if (review) {
+    org.quartersSinceReview = 0;
+    for (const agent of employedAgents(org)) {
+      if (agent.periodCount) agent.quarter.performance = agent.periodSum / agent.periodCount;
+      agent.periodSum = 0;
+      agent.periodCount = 0;
+    }
+    rateLevels(org, industry.seats.length);
+  } else {
+    const pool = agentsAtLevel(org, player.level).map((agent) => agent.quarter.performance).sort((a, b) => b - a);
+    report.checkInRank = pool.indexOf(player.quarter.performance) + 1;
+    report.checkInPool = pool.length;
+  }
+  report.rating = review ? player.quarter.rating : null;
+  report.hours = player.plan.hours;
+  report.readinessGain = player.quarter.readinessGain;
+  report.readinessFromPolitics = player.quarter.readinessFromPolitics ?? 0;
   report.performance = player.quarter.performance;
   report.rank = player.quarter.rank;
   report.poolSize = player.quarter.poolSize;
   report.median = player.quarter.median;
 
-  applyReviewRules(org, industry);
-  const tenureResults = applyTenureReviews(org, industry, INDUSTRY_STATS.citations.tenureCitationBar);
+  if (review) applyReviewRules(org, industry);
+  const tenureResults = review ? applyTenureReviews(org, industry, INDUSTRY_STATS.citations.tenureCitationBar) : [];
   for (const entry of tenureResults) {
     if (entry.agent === player) {
       report.notes.push(entry.granted ? 'Tenure granted. Nobody can PIP you now.' : 'Tenure denied. You have a year to find somewhere else... starting now.');
@@ -594,7 +647,13 @@ function closeEmployedQuarter(game, report) {
   if (report.pipStarted) record(game, 'pip');
   if (player.quarter.pipStarted) report.notes.push('You are on a Performance Improvement Plan. One quarter to climb out of the bottom bracket.');
   if (player.quarter.pipCleared) report.notes.push('PIP cleared. Breathe.');
+  if (player.quarter.steppedBack) {
+    report.notes.push(`Management was not working out. You step back to ${titleOf(game, player.level)}, keeping your pay.`);
+    record(game, 'steppedBack', { title: titleOf(game, player.level) });
+    report.steppedBack = true;
+  }
 
+  closeStartupQuarter(game, report);
   if (game.flags.layoffAt !== null && game.flags.layoffAt <= game.quarterIndex) {
     const share = game.market === 'recession' ? 0.18 : 0.12;
     const cut = runLayoffs(org, industry, share, random);
@@ -613,6 +672,7 @@ function closeEmployedQuarter(game, report) {
       'counselled out': 'Up or out: you have been at this level too long, and you are counselled out.',
       'contract ended': 'Your postdoc contract ends with no renewal.',
       'denied tenure': 'Your terminal year is over.',
+      'company folded': `${org.companyName} has run out of runway. Everyone is let go on a Friday afternoon.`,
     };
     report.notes.push(messages[reason] ?? 'You lose your job.');
     report.lostJob = reason;
@@ -625,7 +685,7 @@ function closeEmployedQuarter(game, report) {
 
   const readinessBefore = player.readiness;
   const levelBefore = player.level;
-  const promotions = fillVacancies(org, industry, random, { playerId: game.employment.employed ? player.id : null });
+  const promotions = review ? fillVacancies(org, industry, random, { playerId: game.employment.employed ? player.id : null }) : [];
   for (const promotion of promotions) {
     if (promotion.agent === player) {
       report.promoted = true;
@@ -652,7 +712,14 @@ function closeEmployedQuarter(game, report) {
       }
     }
   }
-  decayUnusedReadiness(org);
+  if (review) decayUnusedReadiness(org);
+  if (game.quarterIndex % 4 === 3) closeCompanyYear(game, report);
+  if (game.quarterIndex % 4 === 3 && game.employment.employed) {
+    const before = player.salary;
+    reviewPay(org, industry);
+    if (player.salary > before + 500) report.notes.push(`Pay review: ${formatMoney(before)} → ${formatMoney(player.salary)}.`);
+    else if (payTarget(player, industry) < player.salary * 0.95) report.notes.push('Pay review: no raise. You are paid above what your recent work says you are worth.');
+  }
   if (game.employment.employed && (!managerOf(game) || managerBefore !== org.managerId)) {
     pickManager(game);
     if (managerOf(game) && managerBefore && managerBefore !== org.managerId && !report.promoted) {
@@ -677,6 +744,51 @@ function ageOutsideOrganization(player) {
   }
 }
 
+// ── Startups and company years ─────────────────────────────────────────
+
+/** A startup each quarter: it may fold, or be bought (the equity pays). */
+function closeStartupQuarter(game, report) {
+  const org = game.org;
+  if (org.tier !== 'startup') return;
+  const startup = COMPANY_TIERS.startup;
+  const random = game.random;
+  if (random.chance(startup.failPerQuarter)) {
+    for (const agent of employedAgents(org)) agent.quarter.terminated = 'company folded';
+    report.notes.push(`${org.companyName} folds. The equity is worth nothing.`);
+    record(game, 'startupFolded', { company: org.companyName });
+    game.equity = null;
+  } else if (random.chance(startup.exitPerQuarter)) {
+    const multiple = random.between(startup.equityMultiple[0], startup.equityMultiple[1]);
+    const payout = game.equity ? game.player.salary * multiple : 0;
+    game.savings += payout * 0.8;
+    game.lifetimeEarnings += payout;
+    report.notes.push(`${org.companyName} is acquired.${payout ? ` Your equity pays ${formatMoney(payout)}.` : ''} You stay on at the buyer.`);
+    record(game, 'startupExit', { company: org.companyName, payout });
+    retierOrganization(org, 'mid');
+    org.companyName = `${org.companyName} (acquired)`;
+    game.equity = null;
+  }
+}
+
+/** Year-end for the company: it grows, and now and then changes character. */
+function closeCompanyYear(game, report) {
+  const org = game.org;
+  if (!org) return;
+  growOrganization(org);
+  if (game.tierLock || org.tier === 'startup' || !game.random.chance(TIER_SHIFT.chancePerYear)) return;
+  const order = ['stable', 'mid', 'aggressive'];
+  const index = order.indexOf(org.tier);
+  const tilt = game.market === 'boom' ? 1 : game.market === 'recession' ? -1 : game.random.chance(0.5) ? 1 : -1;
+  const next = order[clamp(index + tilt, 0, order.length - 1)];
+  if (next === org.tier) return;
+  retierOrganization(org, next);
+  report.notes.push({
+    aggressive: `${org.companyName} is in growth mode: quarterly reviews, bigger targets, faster promotions.`,
+    mid: `${org.companyName} settles down: reviews twice a year now.`,
+    stable: `${org.companyName} turns conservative: annual reviews, fewer new roles.`,
+  }[next]);
+}
+
 function closeUnemployedQuarter(game, report) {
   const random = game.random;
   const player = game.player;
@@ -699,16 +811,76 @@ function closeUnemployedQuarter(game, report) {
   } else {
     report.notes.push(`Another quarter of applications, and nothing. (${Math.round(chance * 100)}% chance this quarter)`);
   }
+  if (game.savings < 0) report.notes.push(`Living on credit: ${formatMoney(-game.savings)} owed. Past ${formatMoney(MONEY.debtCushion)}, the lease goes.`);
+  rollDivorce(game, report);
 }
 
-export function makeOffer(game, level, payFactor, source) {
+/** Divorce odds under the strain of a long search. */
+export function divorceChance(game) {
+  const quartersOut = game.employment.employed ? 0 : game.employment.unemployedQuarters;
+  if (!game.married || quartersOut < JOBLESS.divorceFromQuarter) return 0;
+  return Math.min(JOBLESS.divorceCap, JOBLESS.divorcePerQuarter * (quartersOut - 1));
+}
+
+function rollDivorce(game, report) {
+  if (!game.random.chance(divorceChance(game))) return;
+  divorce(game, report);
+}
+
+/**
+ * The marriage ends: savings and home equity are split down the middle,
+ * the lawyers take their fees, and the mood takes a long time to recover.
+ * Children stay a cost: support replaces the household budget.
+ */
+export function divorce(game, report = null) {
+  const halfSavings = Math.max(0, game.savings) / 2;
+  const halfHome = game.homeEquity / 2;
+  game.savings -= halfSavings + JOBLESS.divorceLegalFees;
+  game.homeEquity -= halfHome;
+  game.married = false;
+  game.player.motivation -= 20;
+  game.player.health -= 4;
+  record(game, 'divorce', { lost: halfSavings + halfHome });
+  if (report) {
+    report.divorced = true;
+    report.notes.push(`Divorce. Half of everything, ${formatMoney(halfSavings + halfHome)}, and ${formatMoney(JOBLESS.divorceLegalFees)} to the lawyers.`);
+  }
+}
+
+const TIER_RANK = { startup: 1, stable: 0, mid: 1, aggressive: 2 };
+
+/**
+ * An offer from another employer. It names its tier; moving up a tier often
+ * means taking a title one level lower (down-levelling), moving down often
+ * comes with a title one level higher. Pay is in the new employer's band.
+ */
+export function makeOffer(game, level, payFactor, source, { tier: namedTier = null } = {}) {
   const random = game.random;
-  const industry = game.industry;
-  const companies = INDUSTRY_COMPANY_POOL[industry.id];
-  const current = game.org ? game.org.companyName : null;
-  const company = random.pick(companies.filter((name) => name !== current));
-  const salary = Math.round(payInBand(industry, level, game.player.salary * payFactor) / 1000) * 1000;
-  return { company, level, salary, source };
+  // Counselled out of an up-or-out firm, most people land at a steadier one:
+  // the classic exit to a corporate job.
+  const exiting = !game.employment.employed && game.employment.firedFor === 'counselled out' && random.chance(JOBS.exitToSteadyChance);
+  const tier = game.tierLock ?? namedTier ?? (exiting ? 'stable' : pickTier(random, game.industry.id));
+  const fromTier = game.org?.tier ?? game.lastOrg?.tier ?? 'mid';
+  let climb = TIER_RANK[tier] - TIER_RANK[fromTier];
+  const top = game.industry.seats.length - 2;
+  let offeredLevel = level;
+  // A named move (a founding role, a chair) states its own title.
+  if (namedTier) climb = 0;
+  if (climb > 0 && random.chance(0.4)) offeredLevel = level - 1;
+  // A smaller employer will round a title up, but only below the fork: no
+  // company hires a stranger as a director because a bigger one made them a
+  // manager.
+  if (climb < 0 && level < (game.industry.trackFromLevel ?? 3) && random.chance(0.3)) offeredLevel = level + 1;
+  offeredLevel = clamp(offeredLevel, 0, top);
+  const industry = tieredIndustry(game.industry, tier);
+  const company = companyNameFor(random, game.industry.id, tier, game.org?.companyName);
+  const salary = Math.round(payInBand(industry, offeredLevel, game.player.salary * payFactor) / 1000) * 1000;
+  return { company, level: offeredLevel, salary, source, tier };
+}
+
+/** The rules of the current (or last) employer: its tier's pay and review. */
+export function employerIndustry(game) {
+  return game.org?.industry ?? game.industry;
 }
 
 function rollHeadhunter(game, report) {
@@ -718,9 +890,10 @@ function rollHeadhunter(game, report) {
   const chance = (JOBS.headhunterBase + JOBS.headhunterOpen * player.plan.openness) * marketFactor * standing;
   if (!game.random.chance(chance)) return;
   const topLevel = game.industry.seats.length - 1;
-  // Recruiters sell a step up only to the nearly-ready, and rarely past
-  // middle management: executive searches look for executives.
-  const bump = player.readiness >= 80 && player.level <= 3 && player.level < topLevel - 1 && game.random.chance(0.35);
+  // Recruiters sell a step up only to the nearly-ready, and only up to the
+  // fork: a first management or principal role needs a record inside.
+  const bump = player.readiness >= 80 && performingAtLevel(player) && player.level < (game.industry.trackFromLevel ?? 3)
+    && player.level < topLevel - 1 && game.random.chance(0.35);
   const level = player.level + (bump ? 1 : 0);
   game.pendingOffer = makeOffer(game, level, bump ? 1.1 : game.random.between(1.12, 1.3), 'headhunter');
   report.notes.push('A recruiter has been leaving voicemails.');
@@ -887,14 +1060,13 @@ function payQuarter(game, report) {
     employment.lastTakeHome = player.salary * (1 - taxRate(player.salary));
     if (game.quarterIndex % 4 === 3) {
       const ratingFactor = { greatlyExceeds: 1.5, exceeds: 1.2, meetAll: 1, meetMost: 0.8, meetSome: 0, onLeave: 0.5 }[player.lastRating] ?? 1;
-      const bonus = player.salary * (game.industry.bonusShare[player.level] ?? 0) * ratingFactor;
+      const bonus = player.salary * (employerIndustry(game).bonusShare[player.level] ?? 0) * ratingFactor;
       if (bonus > 0) {
         income += bonus;
         takeHome += bonus * (1 - taxRate(player.salary + bonus));
         report.notes.push(`Year-end bonus: ${formatMoney(bonus)}.`);
       }
-      const raise = MONEY.meritRaise[player.lastRating] ?? 0;
-      if (raise > 0 && !report.promoted) player.salary = payInBand(game.industry, player.level, player.salary * (1 + raise));
+
     }
   } else if (employment.benefitQuartersLeft > 0) {
     takeHome = MONEY.unemploymentBenefitPerQuarter;
@@ -904,7 +1076,7 @@ function payQuarter(game, report) {
   game.paymentPlans = (game.paymentPlans ?? []).map((plan) => ({ ...plan, quartersLeft: plan.quartersLeft - 1 }))
     .filter((plan) => plan.quartersLeft > 0);
   const rate = MONEY.returns[game.market] / 4;
-  const returns = game.savings > 0 ? game.savings * rate : game.savings * 0.02;
+  const returns = game.savings > 0 ? game.savings * rate : game.savings * MONEY.debtInterestPerQuarter;
   game.homeEquity *= 1.0075;
   game.savings += takeHome - expenses + returns;
   game.lifetimeEarnings += income;
@@ -962,7 +1134,7 @@ function checkOutcome(game, report) {
   const player = game.player;
   if (game.outcome) return;
   if (player.health <= 0) endGame(game, 'death');
-  else if (!game.employment.employed && game.savings <= 0) endGame(game, 'homeless');
+  else if (!game.employment.employed && game.savings <= -MONEY.debtCushion) endGame(game, 'homeless');
   else if (player.age >= TIME.retirementAge) endGame(game, 'retired');
 }
 
@@ -1006,6 +1178,8 @@ function snapshot(game, report) {
     motivation: player.motivation,
     level: player.level,
     netWorth: netWorth(game),
+    salary: game.employment.employed ? player.salary : 0,
+    income: report.income ?? 0,
     rating: report.rating,
     employed: game.employment.employed,
     burnout: player.burnout.active,

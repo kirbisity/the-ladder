@@ -17,16 +17,23 @@ test('a new organisation fills every seat of the pyramid', () => {
 test('one empty chair at the top ripples promotions all the way down', () => {
   const random = createRandom(4);
   const org = createOrganization(random, industry);
-  for (const agent of org.agents) agent.readiness = 120;
+  for (const agent of org.agents) {
+    agent.readiness = 120;
+    agent.ratings = ['exceeds', 'exceeds', 'exceeds', 'exceeds'];
+    agent.standing = 0.9;
+  }
   const top = industry.seats.length - 1;
   agentsAtLevel(org, top)[0].departed = 'retired';
-  const savedChances = ORG.internalFillChance.slice();
-  ORG.internalFillChance.fill(1);
+  const savedChances = ORG.externalSearchChance.slice();
+  const savedOnly = ORG.externalOnlyChance.slice();
+  ORG.externalSearchChance.fill(0);
+  ORG.externalOnlyChance.fill(0);
   try {
     const promotions = fillVacancies(org, industry, random);
     assert.equal(promotions.length, top, 'one move at every level below the empty chair');
   } finally {
-    ORG.internalFillChance.splice(0, savedChances.length, ...savedChances);
+    ORG.externalSearchChance.splice(0, savedChances.length, ...savedChances);
+    ORG.externalOnlyChance.splice(0, savedOnly.length, ...savedOnly);
   }
   industry.seats.forEach((seats, level) => assert.equal(agentsAtLevel(org, level).length, seats));
 });
@@ -40,6 +47,7 @@ test('ratings follow the design brackets, and a PIP needs both bottom rank and a
   });
   const laggard = pool[pool.length - 1];
   laggard.quarter.performance = 40;
+  laggard.quartersAtLevel = 5;
   rateLevels(org, industry.seats.length);
   assert.equal(pool[0].quarter.rating, 'greatlyExceeds');
   assert.equal(laggard.quarter.rating, 'meetSome');

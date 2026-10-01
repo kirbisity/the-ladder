@@ -7,10 +7,11 @@ import { createRandom } from './random.js';
 import { reserveAgentIds } from './agent.js';
 import { eventById, offerEvent } from './events.js';
 import { prepareCurrentEvent } from './game.js';
+import { tieredIndustry } from './org.js';
 
 // Version 2 added FMLA, the career journal and mid-quarter events; 3 the
-// renamed roster, holidays and FIRE.
-export const SAVE_VERSION = 3;
+// renamed roster, holidays and FIRE; 4 company tiers and career tracks.
+export const SAVE_VERSION = 4;
 
 function eventToData(entry) {
   return entry ? { id: entry.event.id, data: entry.data } : null;
@@ -31,7 +32,8 @@ export function serializeGame(game) {
     randomState: random.getState(),
     industryId: industry.id,
     characterId: character.id,
-    org: org ? { ...org, industry: undefined, industryId: org.industry.id } : null,
+    org: org ? { ...org, industry: undefined, industryId: org.industry.id, seats: org.industry.seats } : null,
+    lastOrg: lastOrg ? { companyName: lastOrg.companyName, tier: lastOrg.tier } : null,
     eventQueue: eventQueue.map(eventToData),
     currentEvent: eventToData(currentEvent),
   };
@@ -69,8 +71,10 @@ export function deserializeGame(text) {
   delete game.industryId;
   delete game.characterId;
   if (plain.org) {
-    game.org = { ...plain.org, industry };
+    game.org = { ...plain.org, industry: tieredIndustry(industry, plain.org.tier ?? 'mid') };
+    game.org.industry.seats = plain.org.seats ?? game.org.industry.seats;
     delete game.org.industryId;
+    delete game.org.seats;
     const seated = game.org.agents.find((agent) => agent.isPlayer);
     if (seated) game.player = seated;
   }

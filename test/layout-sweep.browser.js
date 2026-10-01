@@ -60,6 +60,9 @@
     check(frame, 'character pick');
     click('[data-character="jennifer"]');
     await settle(frame);
+    check(frame, 'character pick with detail');
+    click('[data-action="pick-character"]');
+    await settle(frame);
     check(frame, 'industry pick');
     click('[data-industry="academia"]');
     await settle(frame);
@@ -72,6 +75,10 @@
       check(frame, `plan · ${tab} tab`);
     }
     const game = win.theLadder.game;
+    // Ten years of history, so the career and money charts have data.
+    const { playQuarter, POLICIES } = await import(`${location.origin}${location.pathname.replace(/[^/]*$/, '')}src/sim/bots.js`);
+    for (let quarter = 0; quarter < 40 && !game.outcome; quarter += 1) playQuarter(game, POLICIES.adaptive);
+    if (game.outcome) failures.push(`${width}×${height}: the sample career ended early`);
     game.player.level = 5;
     game.player.burnout.active = true;
     game.player.pip.active = true;
@@ -94,7 +101,17 @@
         click('[data-org-tab="peers"]');
         await settle(frame);
         check(frame, 'peer tracking');
+        click('[data-org-tab="ladder"]');
+        await settle(frame);
+        check(frame, 'career ladder');
         click('[data-org-tab="chart"]');
+      }
+      if (action === 'panel-career') {
+        for (const tab of ['career', 'money', 'profile']) {
+          click(`[data-career-tab="${tab}"]`);
+          await settle(frame);
+          check(frame, `skills · ${tab}`);
+        }
       }
       click('#modal-card [data-action="close-modal"]');
       await settle(frame);
@@ -112,7 +129,7 @@
       win.theLadder.cutscenes.skip();
     }
     click('#modal-card [data-action="close-modal"]');
-    for (let page = 0; page < 5; page += 1) {
+    for (let page = 0; page < 6; page += 1) {
       win.theLadder.app.modal = null;
       click('[data-action="menu"]');
       click('#modal-card [data-action="help"]');

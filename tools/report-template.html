@@ -1,0 +1,232 @@
+<title>Ladder Career Odds</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap">
+<style>
+:root {
+  --bg: #f4f2ec; --surface: #fffdf8; --ink: #1d2230; --ink-soft: #4a5163; --ink-faint: #7d8494; --line: #ddd8cc;
+  --accent: #2f6ad8; --gold: #b8860b; --good: #2f8f4e; --bad: #c2413f;
+  --heat-0: #f3efe6; --heat-1: #dfe9f7; --heat-2: #b9d0f0; --heat-3: #86afe6; --heat-4: #4f86d6; --heat-ink-strong: #ffffff;
+  --bad-0: #f3efe6; --bad-1: #f7e3dc; --bad-2: #f0c2b4; --bad-3: #e5937e; --bad-4: #c95b47;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f131c; --surface: #171d29; --ink: #eef1f7; --ink-soft: #b7bfcf; --ink-faint: #8089a0; --line: #2a3242;
+  --accent: #6b9dff; --gold: #f4c542; --good: #5fd081; --bad: #ff7a73;
+  --heat-0: #1b2230; --heat-1: #1d3150; --heat-2: #24477a; --heat-3: #2f62aa; --heat-4: #4a86e0; --heat-ink-strong: #ffffff;
+  --bad-0: #1b2230; --bad-1: #3a2226; --bad-2: #5a2b2c; --bad-3: #8a3934; --bad-4: #c4524a;
+  color-scheme: dark;
+} }
+:root[data-theme="dark"] {
+  --bg: #0f131c; --surface: #171d29; --ink: #eef1f7; --ink-soft: #b7bfcf; --ink-faint: #8089a0; --line: #2a3242;
+  --accent: #6b9dff; --gold: #f4c542; --good: #5fd081; --bad: #ff7a73;
+  --heat-0: #1b2230; --heat-1: #1d3150; --heat-2: #24477a; --heat-3: #2f62aa; --heat-4: #4a86e0; --heat-ink-strong: #ffffff;
+  --bad-0: #1b2230; --bad-1: #3a2226; --bad-2: #5a2b2c; --bad-3: #8a3934; --bad-4: #c4524a;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: 'Barlow', system-ui, sans-serif; font-size: 16px; line-height: 1.5; margin: 0; padding-inline: 16px; }
+main { max-width: 1080px; margin: 0 auto; padding-block: 40px 64px; display: grid; gap: 40px; }
+h1, h2, h3, .kicker, th, .tab, .metric { font-family: 'Barlow Condensed', 'Arial Narrow', system-ui, sans-serif; }
+h1 { font-size: clamp(36px, 6vw, 56px); line-height: 1; margin: 0; text-transform: uppercase; letter-spacing: 0.01em; text-wrap: balance; }
+h2 { font-size: 28px; margin: 0; text-transform: uppercase; letter-spacing: 0.02em; text-wrap: balance; }
+h3 { font-size: 20px; margin: 0; text-transform: uppercase; letter-spacing: 0.03em; }
+p { margin: 0; max-width: 68ch; }
+.kicker { text-transform: uppercase; letter-spacing: 0.12em; color: var(--ink-faint); font-weight: 600; font-size: 14px; }
+.lede { font-size: 18px; color: var(--ink-soft); }
+section { display: grid; gap: 16px; min-width: 0; }
+.findings { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.finding { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; display: grid; gap: 4px; }
+.finding strong { font-family: 'Barlow Condensed', sans-serif; font-size: 18px; text-transform: uppercase; letter-spacing: 0.02em; }
+.finding p { color: var(--ink-soft); font-size: 15px; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.tab { border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 999px; padding: 6px 14px; font-size: 16px; font-weight: 600; cursor: pointer; text-transform: uppercase; letter-spacing: 0.03em; }
+.tab[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+.table-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+th { text-align: left; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-faint); font-size: 14px; padding: 10px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th small { display: block; font-family: 'Barlow', sans-serif; text-transform: none; letter-spacing: 0; font-weight: 400; font-size: 12px; white-space: normal; min-width: 130px; max-width: 200px; line-height: 1.3; margin-top: 2px; }
+td { padding: 8px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+td.cell { text-align: center; font-weight: 600; min-width: 84px; }
+td.cell small { display: block; font-weight: 400; font-size: 12px; opacity: 0.8; }
+td.who strong { display: block; }
+td.who span { color: var(--ink-faint); font-size: 13px; }
+.note { color: var(--ink-faint); font-size: 14px; }
+.spiral { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+.chart-card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; display: grid; gap: 8px; min-width: 0; }
+.chart-card svg { width: 100%; height: auto; display: block; }
+.legend { display: flex; gap: 14px; font-size: 14px; color: var(--ink-soft); }
+.legend i { display: inline-block; width: 12px; height: 3px; vertical-align: middle; margin-right: 6px; }
+ul.method { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 72ch; color: var(--ink-soft); }
+</style>
+
+<main>
+  <header style="display:grid;gap:12px">
+    <div class="kicker">The Ladder · simulation report</div>
+    <h1>Career odds by character and employer</h1>
+    <p class="lede" id="lede"></p>
+  </header>
+
+  <section>
+    <h2>What the runs say</h2>
+    <div class="findings" id="findings"></div>
+  </section>
+
+  <section>
+    <h2>Employer tiers, on average</h2>
+    <p>Every character's careers averaged together, one employer kind at a time. Higher tiers fire more people and pay more; the money arrives sooner.</p>
+    <div class="controls" id="tier-industry"></div>
+    <div class="table-wrap"><table id="tier-table"></table></div>
+  </section>
+
+  <section>
+    <h2>Each character, each tier</h2>
+    <p>Pick an industry and a measure. Each cell is the share (or average) across the careers played at that kind of employer; "real mix" lets employers vary and job hops cross tiers.</p>
+    <div class="controls" id="grid-industry"></div>
+    <div class="controls" id="grid-metric"></div>
+    <div class="table-wrap"><table id="grid-table"></table></div>
+    <p class="note" id="metric-note"></p>
+  </section>
+
+  <section>
+    <h2>Twelve-hour weeks</h2>
+    <p>The same careers in tech, played at twelve hours a day every quarter, resting only when burnout forces it. This is where the characters' hidden tolerances show.</p>
+    <div class="table-wrap"><table id="long-table"></table></div>
+  </section>
+
+  <section>
+    <h2>The unemployment spiral</h2>
+    <p>Married players lose their job and decline every offer, so the search runs as long as it can. Divorce takes half of everything; past the debt cushion, the apartment goes.</p>
+    <div class="spiral" id="spiral"></div>
+  </section>
+
+  <section>
+    <h2>How this was measured</h2>
+    <ul class="method" id="method"></ul>
+  </section>
+</main>
+
+<script>
+const DATA = /*DATA*/null;
+const pct = (value) => `${Math.round(value * 100)}%`;
+const money = (value) => (Math.abs(value) >= 1e6 ? `$${(value / 1e6).toFixed(1)}M` : `$${Math.round(value / 1e3)}k`);
+const tiersOf = (industryId) => Object.keys(DATA.industries[industryId][DATA.characters[0].id]);
+const industries = Object.keys(DATA.industries);
+
+const METRICS = {
+  director: { label: 'Director+', kind: 'good', value: (r) => r.director, show: (r) => pct(r.director), sub: (r) => `VP+ ${pct(r.vp)}`, note: 'Reached the sixth rung or higher (Director, Principal Engineer, Principal, Department Chair), on either track. Small line: VP or above.' },
+  management: { label: 'Management', kind: 'good', value: (r) => r.management, show: (r) => pct(r.management), sub: (r) => (r.expert > 0.5 ? 'expert track' : ''), note: 'Reached the first management rung (Engineering Manager, Senior Manager, Principal, Endowed Chair) on the management track. Experts are counted under Director+ instead.' },
+  lostJobs: { label: 'Jobs lost', kind: 'bad', value: (r) => r.lostJobs / 4, show: (r) => r.lostJobs.toFixed(1), sub: (r) => `${pct(r.everJobless)} ever`, note: 'Average jobs lost per career: layoffs, PIPs, up-or-out, startups folding. Small line: share of careers that lost at least one.' },
+  fire: { label: 'Early retirement', kind: 'good', value: (r) => r.fire, show: (r) => pct(r.fire), sub: (r) => (r.fireAge ? `median ${Math.round(r.fireAge)}` : '—'), note: 'Took financial independence and left before 62. The bot accepts at 50+, or from 40 when worn down, stalled or out of work. Small line: median age at that exit.' },
+  fireBy50: { label: 'FI before 50', kind: 'good', value: (r) => r.fireBy50, show: (r) => pct(r.fireBy50), sub: () => '', note: 'Financially independent and retired before turning 50.' },
+  worth: { label: 'Net worth', kind: 'good', value: (r) => Math.min(1, r.worth / 30e6), show: (r) => money(r.worth), sub: (r) => `${money(r.worthLow)}–${money(r.worthHigh)}`, note: 'Median net worth at the end of the career (retirement, early retirement, or the end). Small line: 10th to 90th percentile.' },
+  drama: { label: 'Dark endings', kind: 'bad', value: (r) => (r.death + r.breakdown + r.homeless) * 3, show: (r) => pct(r.death + r.breakdown + r.homeless), sub: (r) => `${pct(r.death)} · ${pct(r.breakdown)} · ${pct(r.homeless)}`, note: 'Careers ending in death, breakdown or homelessness (small line, in that order).' },
+};
+
+function heat(value, kind) {
+  const step = Math.max(0, Math.min(4, Math.round(value * 4)));
+  const prefix = kind === 'bad' ? '--bad-' : '--heat-';
+  return `background:var(${prefix}${step});${step >= 3 ? 'color:var(--heat-ink-strong);' : ''}`;
+}
+
+function buttons(container, items, current, onPick) {
+  container.innerHTML = items.map(([id, label]) => `<button class="${container.dataset.kind || 'tab'}" data-id="${id}" aria-pressed="${id === current}">${label}</button>`).join('');
+  container.onclick = (event) => {
+    const button = event.target.closest('button');
+    if (button) onPick(button.dataset.id);
+  };
+}
+
+const state = { tierIndustry: 'tech', gridIndustry: 'tech', metric: 'director' };
+try { Object.assign(state, JSON.parse(localStorage.getItem('ladder-report') || '{}')); } catch (error) { /* storage unavailable */ }
+const save = () => { try { localStorage.setItem('ladder-report', JSON.stringify(state)); } catch (error) { /* storage unavailable */ } };
+
+function renderTierTable() {
+  buttons(document.getElementById('tier-industry'), industries.map((id) => [id, DATA.industryNames[id]]), state.tierIndustry, (id) => { state.tierIndustry = id; save(); renderTierTable(); });
+  const tiers = tiersOf(state.tierIndustry);
+  const average = (tier, pick) => DATA.characters.reduce((sum, character) => sum + pick(DATA.industries[state.tierIndustry][character.id][tier]), 0) / DATA.characters.length;
+  const rows = [
+    ['Jobs lost per career', (tier) => average(tier, (r) => r.lostJobs).toFixed(1)],
+    ['Lost at least one job', (tier) => pct(average(tier, (r) => r.everJobless))],
+    ['Retired early', (tier) => pct(average(tier, (r) => r.fire))],
+    ['Financially independent before 50', (tier) => pct(average(tier, (r) => r.fireBy50))],
+    ['Median net worth (average of characters)', (tier) => money(average(tier, (r) => r.worth))],
+    ['Director+', (tier) => pct(average(tier, (r) => r.director))],
+    ['Dark endings', (tier) => pct(average(tier, (r) => r.death + r.breakdown + r.homeless))],
+  ];
+  document.getElementById('tier-table').innerHTML = `<thead><tr><th></th>${tiers.map((tier) => `<th>${DATA.tiers[tier].name}<small>${DATA.tiers[tier].blurb}</small></th>`).join('')}</tr></thead>
+    <tbody>${rows.map(([label, value]) => `<tr><td>${label}</td>${tiers.map((tier) => `<td class="cell">${value(tier)}</td>`).join('')}</tr>`).join('')}</tbody>`;
+}
+
+function renderGrid() {
+  buttons(document.getElementById('grid-industry'), industries.map((id) => [id, DATA.industryNames[id]]), state.gridIndustry, (id) => { state.gridIndustry = id; save(); renderGrid(); });
+  buttons(document.getElementById('grid-metric'), Object.entries(METRICS).map(([id, metric]) => [id, metric.label]), state.metric, (id) => { state.metric = id; save(); renderGrid(); });
+  const metric = METRICS[state.metric];
+  const tiers = tiersOf(state.gridIndustry);
+  const grid = DATA.industries[state.gridIndustry];
+  document.getElementById('grid-table').innerHTML = `<thead><tr><th>Character</th>${tiers.map((tier) => `<th>${DATA.tiers[tier].name}</th>`).join('')}</tr></thead>
+    <tbody>${DATA.characters.map((character) => `<tr><td class="who"><strong>${character.name}</strong><span>${character.archetype} · IQ ${character.iq} · Pol ${character.pol}</span></td>
+      ${tiers.map((tier) => { const r = grid[character.id][tier]; return `<td class="cell" style="${heat(metric.value(r), metric.kind)}">${metric.show(r)}<small>${metric.sub(r)}</small></td>`; }).join('')}</tr>`).join('')}</tbody>`;
+  document.getElementById('metric-note').textContent = metric.note;
+}
+
+function renderLongHours() {
+  const rows = DATA.characters.map((character) => {
+    const r = DATA.longHours[character.id];
+    return `<tr><td class="who"><strong>${character.name}</strong><span>${character.archetype}</span></td>
+      <td class="cell" style="${heat(r.retired, 'good')}">${pct(r.retired)}</td>
+      <td class="cell" style="${heat(r.death * 1.2, 'bad')}">${pct(r.death)}</td>
+      <td class="cell">${r.lowHealth.toFixed(0)}</td>
+      <td class="cell">${r.burnouts.toFixed(1)}</td>
+      <td class="cell">${pct(r.director)}</td></tr>`;
+  }).join('');
+  document.getElementById('long-table').innerHTML = `<thead><tr><th>Character</th><th>Retired</th><th>Died</th><th>Quarters below 50% health</th><th>Burnouts</th><th>Director+</th></tr></thead><tbody>${rows}</tbody>`;
+}
+
+function spiralChart(rows, title) {
+  const width = 420, height = 200, left = 34, right = 10, top = 10, bottom = 28;
+  const x = (quarter) => left + (quarter - 1) / (rows.length - 1) * (width - left - right);
+  const y = (share) => top + (1 - share) * (height - top - bottom);
+  const line = (key) => rows.map((row, index) => `${index ? 'L' : 'M'}${x(row.quarter).toFixed(1)},${y(row[key]).toFixed(1)}`).join(' ');
+  const grid = [0, 0.25, 0.5].map((share) => `<line x1="${left}" x2="${width - right}" y1="${y(share)}" y2="${y(share)}" stroke="var(--line)"/><text x="${left - 6}" y="${y(share) + 4}" text-anchor="end" font-size="11" fill="var(--ink-faint)">${share * 100}%</text>`).join('');
+  const ticks = [4, 8, 12].filter((quarter) => quarter <= rows.length).map((quarter) => `<text x="${x(quarter)}" y="${height - 8}" text-anchor="middle" font-size="11" fill="var(--ink-faint)">${quarter / 4} yr</text>`).join('');
+  const atYear = rows[3], atTwo = rows[7];
+  return `<div class="chart-card"><h3>${title}</h3>
+    <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${title}: share divorced and homeless by quarters out of work">
+      <rect x="0" y="0" width="${width}" height="${height}" fill="none"/>${grid}${ticks}
+      <path d="${line('divorced')}" fill="none" stroke="var(--accent)" stroke-width="2.5"/>
+      <path d="${line('homeless')}" fill="none" stroke="var(--bad)" stroke-width="2.5"/>
+    </svg>
+    <div class="legend"><span><i style="background:var(--accent)"></i>Divorced</span><span><i style="background:var(--bad)"></i>Homeless</span></div>
+    <p class="note">After one year: ${pct(atYear.divorced)} divorced, ${pct(atYear.homeless)} homeless. After two: ${pct(atTwo.divorced)} and ${pct(atTwo.homeless)}.</p></div>`;
+}
+
+function findings() {
+  const tech = DATA.industries.tech;
+  const mixed = (id, industry = 'tech') => DATA.industries[industry][id].mixed;
+  const avgTier = (industry, tier, pick) => DATA.characters.reduce((sum, character) => sum + pick(DATA.industries[industry][character.id][tier]), 0) / DATA.characters.length;
+  const long = DATA.longHours;
+  const items = [
+    ['Joseph lands senior, not higher', `In tech's real mix he reaches Senior in ${pct(mixed('joseph').senior)} of careers, management in ${pct(mixed('joseph').management)} and Director in ${pct(mixed('joseph').director)}, losing ${mixed('joseph').lostJobs.toFixed(1)} jobs on average.`],
+    ['Adam is the leader', `Director or higher in ${pct(mixed('adam').director)} of tech careers and VP in ${pct(mixed('adam').vp)}: the best odds on the roster, everywhere.`],
+    ['Simon and Richard climb alike', `Director+ in tech: Simon ${pct(mixed('simon').director)} on the expert track, Richard ${pct(mixed('richard').director)} through management, with ${pct(mixed('richard').politicsShare)} of his readiness from networking against Simon's ${pct(mixed('simon').politicsShare)}.`],
+    ['Chris can take the hours', `At twelve-hour days he retires in ${pct(long.chris.retired)} of careers with ${long.chris.burnouts.toFixed(1)} burnouts; Chloe in ${pct(long.chloe.retired)}, Eve in ${pct(long.eve.retired)}. He still chooses the expert track: management in ${pct(mixed('chris').management)}.`],
+    ['Chloe belongs in a university', `Director+ in academia ${pct(mixed('chloe', 'academia').director)}, against ${pct(mixed('chloe').director)} in tech.`],
+    ['Higher tier: riskier, richer', `Tech, all characters: ${avgTier('tech', 'aggressive', (r) => r.lostJobs).toFixed(1)} jobs lost at high-growth employers against ${avgTier('tech', 'stable', (r) => r.lostJobs).toFixed(1)} at steady ones, and early retirement in ${pct(avgTier('tech', 'aggressive', (r) => r.fire))} against ${pct(avgTier('tech', 'stable', (r) => r.fire))}.`],
+  ];
+  document.getElementById('findings').innerHTML = items.map(([title, text]) => `<div class="finding"><strong>${title}</strong><p>${text}</p></div>`).join('');
+}
+
+document.getElementById('lede').textContent = `${DATA.careers} simulated 40-year careers for each of ${DATA.characters.length} characters at each kind of employer, in ${industries.length} industries: ${(DATA.careers * DATA.characters.length * industries.reduce((sum, id) => sum + tiersOf(id).length, 0)).toLocaleString()} careers, every one played by the same thoughtful policy and the same rules. Only the characters' numbers differ.`;
+document.getElementById('spiral').innerHTML = spiralChart(DATA.spiral.young, 'Out of work at 27') + spiralChart(DATA.spiral.established, 'Out of work at 35');
+document.getElementById('method').innerHTML = [
+  'Every character and every colleague runs the same formulas: bandwidth from hours, IQ, health and motivation; percentile ratings among everyone at the level; promotions need readiness, a strong standing and an empty chair, and compete with outside hires.',
+  'The player is a bot that reads only what the screen shows: it adds hours while health and motivation hold, backs off when they slide, networks in line with the character\'s political skill, and picks the management track when political skill is 100 or more.',
+  'A tier column pins every employer, including after job hops, to that tier. "Real mix" draws employers from the industry\'s mix (tech: 20% startups, 25% high-growth, 35% established, 20% steady), and a company can change tier over the years.',
+  'Seeds are fixed, so the report is reproducible: node tools/report.js, then node tools/report-page.js. With 30 careers a cell, a share is good to about ±9 points.',
+].map((text) => `<li>${text}</li>`).join('');
+findings();
+renderTierTable();
+renderGrid();
+renderLongHours();
+</script>

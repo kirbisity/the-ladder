@@ -6,8 +6,48 @@ import { employed, insured, spend, paymentPlan, scaleQuarter, schedule, formatMo
 
 export const LIFE_DECK = [
   {
+    id: 'stressIllness',
+    category: 'lifestyle',
+    medical: true,
+    title: 'What the stress does',
+    weight: (game) => (!employed(game) && game.employment.unemployedQuarters >= 2 ? 0.6 : 0),
+    text: (game) => (insured(game)
+      ? 'Months of rejections have settled in your body: blood pressure at 150 over 95, and a rash the doctor calls shingles. Your COBRA plan covers most of it.'
+      : 'Months of rejections have settled in your body: blood pressure at 150 over 95, and a rash the doctor calls shingles. Without insurance, the clinic visits and prescriptions are $2,800, and the specialist wants more.'),
+    choices: [
+      { label: 'Treat it properly', tag: 'safe', apply: (game) => {
+        game.player.health += 3;
+        return `${spend(game, insured(game) ? 600 : 2800)} for the visits and the pills. The numbers come down slowly.`;
+      } },
+      { label: 'Ride it out', tag: 'bold', apply: (game) => {
+        game.player.health -= 8;
+        game.player.motivation -= 4;
+        return 'You skip the follow-up. The headaches come most mornings now.';
+      } },
+    ],
+  },
+  {
+    id: 'therapy',
+    category: 'lifestyle',
+    medical: true,
+    title: 'The low months',
+    weight: (game) => (!employed(game) && game.player.motivation < 40 ? 0.7 : 0),
+    text: (game) => `You sleep till noon and stop answering friends. A therapist has an opening: ${insured(game) ? '$40 a session with your plan' : '$180 a session'}.`,
+    choices: [
+      { label: 'Start weekly sessions', tag: 'rest', apply: (game) => {
+        game.player.motivation += 12;
+        return `${spend(game, insured(game) ? 480 : 2160)} for the quarter. It is the first thing that helps.`;
+      } },
+      { label: 'Push through alone', tag: 'safe', apply: (game) => {
+        game.player.motivation -= 5;
+        return 'You keep it to yourself. The days blur together.';
+      } },
+    ],
+  },
+  {
     id: 'erVisit',
     category: 'lifestyle',
+    medical: true,
     title: 'An ambulance ride',
     weight: (game) => 0.5 + (game.player.health < 60 ? 0.8 : 0),
     text: (game) => (insured(game)
@@ -27,6 +67,7 @@ export const LIFE_DECK = [
   {
     id: 'dental',
     category: 'lifestyle',
+    medical: true,
     title: 'The crown',
     weight: () => 0.6,
     text: (game) => `A cracked molar. The dentist says crown, ${insured(game) ? '$1,100 after dental insurance' : '$2,400 out of pocket'}, or pull it.`,
@@ -41,6 +82,7 @@ export const LIFE_DECK = [
   {
     id: 'flu',
     category: 'lifestyle',
+    medical: true,
     title: 'Flu season',
     weight: () => 0.8,
     text: '102°F, chills, and a cough that rattles. It is going round the whole floor.',
@@ -60,6 +102,7 @@ export const LIFE_DECK = [
   {
     id: 'backPain',
     category: 'lifestyle',
+    medical: true,
     title: 'Your lower back',
     weight: (game) => 0.3 + Math.max(0, game.player.plan.hours - 8) * 0.12 + (game.player.age > 35 ? 0.3 : 0),
     text: 'You bend down to tie a shoe and something in your lower back goes. Sitting is agony.',

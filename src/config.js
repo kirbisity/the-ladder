@@ -23,9 +23,11 @@ export const BANDWIDTH = {
 };
 
 export const HEALTH = {
-  // Health drifts toward a target, a tenth of the gap each quarter: a body
-  // takes years, not weeks, to wear down or come back.
+  // Health drifts toward a target. Wear is slow, a tenth of the gap each
+  // quarter, so years of long hours add up; recovery is three times faster,
+  // so a flu or a brutal weekend is gone in a few quarters, not a decade.
   driftPerQuarter: 0.1,
+  recoveryDriftPerQuarter: 0.3,
   // A healthy 22-year-old on standard hours.
   baseTarget: 95,
   // Strain is the share of the way from 8 to 16 hours, squared. 150 puts
@@ -35,9 +37,10 @@ export const HEALTH = {
   // Rest share of bandwidth lifts the target: half the week protected is
   // worth 15 points.
   restBonus: 30,
-  // Wear from age past 35, per year: 22 points by 60 on standard hours.
+  // Wear from age past 35, per year: 12 points by 60 on standard hours.
+  // Knowledge work ages well: experience covers much of what the body loses.
   ageWearFrom: 35,
-  ageWearPerYear: 0.9,
+  ageWearPerYear: 0.5,
   // Below this, a heart scare can strike in any quarter.
   dangerLine: 25,
   scareChancePerQuarter: 0.25,
@@ -53,9 +56,10 @@ export const MOTIVATION = {
   exhaustionDrain: 90,
   restBonus: 25,
   // Years at one level past the expected pace, each costing this much from
-  // the target, up to the cap.
+  // the target, up to the cap. Most people make peace with a plateau, so
+  // the cap is a dent, not a slide.
   stagnationPerYear: 3,
-  stagnationCap: 15,
+  stagnationCap: 10,
   promotionLift: 25,
   highImpactLift: 10,
   projectFailureHit: 8,
@@ -63,6 +67,8 @@ export const MOTIVATION = {
   pipHit: 12,
   firedHit: 18,
   laidOffHit: 15,
+  // Stepping back from management after a failed PIP.
+  stepBackHit: 12,
   // Below this the player is burned out: a grey screen, bandwidth halved,
   // and productivity falling from 0.4 at the line to nothing at zero.
   // Motivation at zero never ends a career; it leaves you unable to work,
@@ -77,6 +83,8 @@ export const MOTIVATION = {
   burnoutDrag: 30,
   fullRecoveryShare: 0.4,
   restSpeedup: 2,
+  // Motivation points per unit of (autonomy − 0.5) × autonomyNeed.
+  autonomyWeight: 30,
   // Burned out with at least this much on Recovery counts as sick leave:
   // the quarter is not rated, so no PIP, and nothing is earned toward a
   // promotion either.
@@ -120,6 +128,11 @@ export const SKILL = {
   learnFromWork: 4,
   learnFromRest: 7,
   startMean: 20,
+  // A hire's skill comes from their years of experience, on the curve a
+  // typical plan learns at: the gap to the ceiling shrinks this share a year
+  // (about 4 a quarter at a normal core and rest split, times what is left).
+  experienceRate: 0.13,
+  hireDeviation: 7,
 };
 
 export const READINESS = {
@@ -133,6 +146,8 @@ export const READINESS = {
   levelDifficulty: 0.7,
   // Politics counts for more the higher the chair: +15% a level.
   politicsPerLevel: 0.15,
+  // From this level up, a character's leadership multiplies readiness.
+  leadershipFromLevel: 3,
   ratingBonus: { greatlyExceeds: 14, exceeds: 10, meetAll: 6, meetMost: 3, meetSome: -15 },
   // With no chair open, readiness past the line fades back toward it, and
   // it never banks beyond the cap: being over-ready does not stack.
@@ -152,10 +167,26 @@ export const RELATIONSHIP = {
 };
 
 export const ORG = {
-  // Chance an internal candidate fills a chair when one is ready; the rest
-  // go to outside hires. The top two chairs are contested across the
-  // company: other divisions' leaders want them too.
-  internalFillChance: [0.75, 0.75, 0.75, 0.7, 0.6, 0.45, 0.3, 0.12],
+  // Chance an open chair also gets an outside candidate, by level: the
+  // more senior the chair, the more likely a search. The outsider's standing
+  // is drawn from externalStanding (proven people), so an average insider
+  // usually loses to one, and a strong insider usually wins.
+  externalSearchChance: [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.85, 0.95],
+  externalStanding: [0.45, 0.9],
+  // How many outsiders compete when there is a search: the top chairs draw
+  // a field (other divisions' leaders, sitting executives elsewhere).
+  outsideCandidates: [1, 1, 1, 1, 1, 2, 3, 4],
+  // Some senior searches are external from the start: new blood wanted.
+  externalOnlyChance: [0, 0, 0, 0, 0.1, 0.2, 0.35, 0.6],
+  // Points an outsider adds per level of the chair: what a seasoned
+  // candidate's politics and leadership are worth to a committee.
+  outsiderSeniorityPerLevel: 4,
+  // Promotion-score cost per year past plateauAfterYears at one level, and
+  // per year of age past latePromotionAge.
+  plateauAfterYears: 4,
+  plateauPerYear: 10,
+  latePromotionAge: 50,
+  latePerYear: 6,
   // How much political skill weighs when choosing between ready
   // candidates, per level of the chair: nothing at the bottom, a lot at
   // the top.
@@ -166,6 +197,24 @@ export const ORG = {
   // Expected years at each level before stagnation starts to bite.
   expectedYearsAtLevel: [2, 2.5, 3, 3.5, 4, 5, 6, 8],
   managementFromLevel: 4,
+  // Growth stops once the division has grown this much.
+  maxSeatGrowth: 2,
+  // Levels from here up (VP, the top chair) do not grow with the company.
+  growthStopsAtLevel: 6,
+  // A promotion needs a track record: standing (the smoothed stack rank, 1
+  // at the top of the level) at or above this, and a top-half latest rating.
+  // 0.6 is the top 40% over about a year; an average performer's standing
+  // hovers near 0.5 and only now and then clears it.
+  promotionStanding: 0.5,
+  // Above the expert fork (principal, distinguished): the top quarter.
+  expertPromotionStanding: 0.7,
+  // Promotion-score points per unit of standing: the best record wins.
+  standingPromotionWeight: 150,
+  // Quarters at a new level or job before a PIP can start.
+  rampUpQuarters: 2,
+  // Promotion-score points per unit of leadership above average, for
+  // manager chairs.
+  leadershipPromotionWeight: 40,
 };
 
 export const MONEY = {
@@ -186,14 +235,51 @@ export const MONEY = {
   severanceQuarters: 1,
   // Real return on savings a year, by market mood.
   returns: { boom: 0.09, normal: 0.05, recession: -0.06 },
-  meritRaise: { greatlyExceeds: 0.08, exceeds: 0.05, meetAll: 0.03, meetMost: 0.02, meetSome: 0 },
+  // Pay follows standing. Each quarter's stack rank (1 at the top of the
+  // level, 0 at the bottom) feeds a smoothed standing; the standing sets a
+  // target salary across the level's band (base to bandTop × base), and at
+  // each year-end review pay closes payCatchUpPerYear of the gap to it, so a
+  // run of top ratings takes about three years to show fully in pay. Pay is
+  // never cut: a slump leaves someone paid above their current value.
+  standingSmoothing: 0.25,
+  payCatchUpPerYear: 0.35,
   // Pay at a level runs from its base to this multiple of it. Raises,
   // counter-offers and job hops stop at the top of the band: past it, the
   // only way up is a bigger title.
   bandTop: 1.5,
+  // Out of work and out of savings, people borrow before they lose the
+  // apartment: credit cards, family, a friend's couch. Debt costs interest
+  // each quarter; past the cushion, the lease goes.
+  debtCushion: 25000,
+  debtInterestPerQuarter: 0.05,
+};
+
+// The unemployment spiral. The longer the search, the more it costs beyond
+// money: mood sinks, stress wears the body down and makes illness likelier,
+// and a marriage under strain can break.
+export const JOBLESS = {
+  // Mood: the base hit, plus more each quarter of searching, to a cap.
+  moodBase: 15,
+  moodPerQuarter: 4,
+  moodCap: 35,
+  // Health target lost to stress each quarter out of work, to a cap.
+  stressPerQuarter: 2,
+  stressCap: 12,
+  // Divorce, while married: no risk in the first quarter out, then this much
+  // per quarter for each quarter past the first, to a cap. About a quarter of
+  // marriages break by a year out of work and half by two years.
+  divorceFromQuarter: 2,
+  divorcePerQuarter: 0.04,
+  divorceCap: 0.15,
+  divorceLegalFees: 18000,
+  // Illness and medical cards weigh this much more per quarter out of work.
+  illnessWeightPerQuarter: 0.25,
+  illnessWeightCap: 2.5,
 };
 
 export const JOBS = {
+  // Counselled out, the chance the next offer is from a steady employer.
+  exitToSteadyChance: 0.6,
   headhunterBase: 0.02,
   headhunterOpen: 0.22,
   // Distraction from keeping every door open.
@@ -317,19 +403,28 @@ const DEFAULT_INDUSTRY = {
   name: 'Technology',
   titles: ['Junior Engineer', 'Software Engineer', 'Senior Engineer', 'Staff Engineer', 'Engineering Manager', 'Director', 'VP Engineering', 'CTO'],
   salaries: [115000, 150000, 200000, 270000, 350000, 450000, 650000, 1200000],
-  seats: [16, 14, 11, 8, 5, 3, 2, 1],
+  // Seats in the division by level. Senior is the biggest rung: the level
+  // most engineers make and many stay at for good.
+  seats: [10, 15, 16, 7, 5, 3, 2, 1],
   // How hard the typical peer works here, in hours a day.
   peerHours: 9,
   // Face time: the review credit for being seen working late, per hour
   // past 8, as a share of the score. Some cultures reward it more than the
   // work it produces.
   faceTimePerHour: 0.01,
+  // How much say people have over their own work, 0..1. Characters who need
+  // autonomy gain or lose motivation by it (see autonomyNeed).
+  autonomy: 0.55,
   upOrOutQuarters: null,
   upOrOutBelowLevel: null,
   tenureFromLevel: null,
   contractQuarters: null,
   subStat: 'techDebt',
   projects: TECH_PROJECTS,
+  // The dual ladder: at trackFromLevel you choose management or the expert
+  // track; levels above it carry the track's titles. Same pay, same seats.
+  trackFromLevel: 3,
+  expertTitles: ['Senior Staff Engineer', 'Principal Engineer', 'Distinguished Engineer', 'Fellow'],
   bonusShare: [0, 0, 0.05, 0.1, 0.15, 0.2, 0.3, 0.5],
 };
 
@@ -344,12 +439,14 @@ export const INDUSTRIES = {
     seats: [18, 14, 10, 7, 5, 3, 2, 1],
     peerHours: 10.5,
     faceTimePerHour: 0.03,
+    autonomy: 0.25,
     // Up or out: 16 quarters at a level below Principal and you are
     // counselled out.
     upOrOutQuarters: 16,
     upOrOutBelowLevel: 5,
     subStat: 'utilization',
     projects: CONSULTING_PROJECTS,
+    expertTitles: ['Senior Expert', 'Distinguished Expert', 'Expert Partner', 'Senior Expert Partner'],
     bonusShare: [0.05, 0.1, 0.15, 0.2, 0.25, 0.35, 0.6, 1],
   },
   privateEquity: {
@@ -361,10 +458,12 @@ export const INDUSTRIES = {
     seats: [10, 8, 6, 4, 3, 2, 2, 1],
     peerHours: 12,
     faceTimePerHour: 0.045,
+    autonomy: 0.15,
     upOrOutQuarters: 16,
     upOrOutBelowLevel: 4,
     subStat: 'dealFlow',
     projects: PE_PROJECTS,
+    expertTitles: ['Operating Principal', 'Operating Director', 'Operating Partner', 'Senior Operating Partner'],
     bonusShare: [0.1, 0.2, 0.3, 0.5, 0.7, 1, 1.5, 2.5],
   },
   academia: {
@@ -376,6 +475,7 @@ export const INDUSTRIES = {
     seats: [12, 10, 8, 7, 3, 2, 1, 1],
     peerHours: 9.5,
     faceTimePerHour: 0,
+    autonomy: 0.9,
     upOrOutQuarters: null,
     // The tenure clock: an assistant professor gets 24 quarters, then
     // either tenure (no PIPs, no layoffs) or the door.
@@ -385,6 +485,8 @@ export const INDUSTRIES = {
     contractQuarters: 12,
     subStat: 'citations',
     projects: ACADEMIA_PROJECTS,
+    // Academia: administration (chair, dean, provost) or research chairs.
+    expertTitles: ['Endowed Chair', 'Distinguished Professor', 'University Professor', 'Institute Professor'],
     bonusShare: [0, 0, 0, 0, 0, 0, 0, 0],
   },
 };
@@ -409,6 +511,8 @@ export const INDUSTRY_STATS = {
     travelHealthPerUtilization: 14,
     sweetSpotLow: 0.75,
     sweetSpotHigh: 1.05,
+    // Where a sensible consultant aims: safely inside the sweet spot.
+    target: 0.9,
     failedClientPenalty: 0.15,
   },
   dealFlow: {
@@ -430,11 +534,19 @@ export const INDUSTRY_STATS = {
   },
 };
 
-// The four characters. Everyone in the game goes by first name and last
-// initial. Stats as in the design; traits: Simon and Jennifer take long
-// hours well, Chloe badly, Joseph is an average Joe.
-// look: colours plus the features the portrait, office and cut scenes draw
-// (face shape, hair style, eyes, brows, nose, mouth, glasses, cheeks, stubble).
+// The characters. Everyone in the game goes by first name and last
+// initial. They differ only in these numbers; every mechanic is shared.
+//   iq, pol              — the design's two stats
+//   strainResistance     — share of long-hours health damage taken (1 = average)
+//   exhaustionResistance — share of long-hours motivation drain taken
+//   steadiness           — share of every motivation blow shrugged off
+//   leadership           — readiness and promotion pull at manager levels (1 = average)
+//   eventSavvy           — odds multiplier on political gambles in events
+//   autonomyNeed         — how much motivation tracks the industry's autonomy
+//   noveltyLift          — multiplier on the lift from landing a high-impact project
+//   coreBonus, politicsBonus, relationshipBonus, networkingDrain,
+//   networkingHealthDrain, deskWorkDrain/Limit, moonshot*, rigidManagerClash
+// look: colours plus the features the portrait, office and cut scenes draw.
 export const CHARACTERS = [
   {
     id: 'simon',
@@ -443,7 +555,7 @@ export const CHARACTERS = [
     iq: 140,
     pol: 60,
     archetype: 'Systems Thinker',
-    blurb: 'Bonus to solitary technical work, and long hours wear him down slowly. Unstructured networking drains him badly.',
+    blurb: 'Brilliant at solitary technical work and takes long hours well, but every hour of networking costs him health and mood. Climbs on output, if he can stand the politics up top.',
     traits: { coreBonus: 1.15, networkingDrain: 45, networkingHealthDrain: 10, strainResistance: 0.6, exhaustionResistance: 0.65 },
     look: {
       skin: '#f1d2b0', hair: '#121212', suit: '#2f3a4a', shirt: '#ffffff',
@@ -457,7 +569,7 @@ export const CHARACTERS = [
     iq: 140,
     pol: 110,
     archetype: 'Charismatic Catalyst',
-    blurb: 'Builds relationships and alliances fast, and keeps going on long days. Long stretches of isolated desk work sap her motivation.',
+    blurb: 'Builds alliances fast and keeps going on long days, but long stretches of solo desk work sap her motivation. Climbs through people, if she keeps her spark.',
     traits: { relationshipBonus: 1.5, politicsBonus: 1.2, deskWorkDrain: 50, deskWorkLimit: 0.45, strainResistance: 0.6, exhaustionResistance: 0.65 },
     look: {
       skin: '#f4d6b8', hair: '#0e0e0e', suit: '#4a3260', shirt: '#f3e8ee',
@@ -471,8 +583,11 @@ export const CHARACTERS = [
     iq: 150,
     pol: 95,
     archetype: 'Disruptive Innovator',
-    blurb: 'Moonshots open from day one and land more often. Long hours burn her out fast, and she clashes with rigid leadership.',
-    traits: { moonshotUnlocked: true, moonshotLanding: 1.25, rigidManagerClash: 0.25, strainResistance: 1.35, exhaustionResistance: 1.35 },
+    blurb: 'Huge capability, but she needs freedom and fun: long hours and rigid cultures drain her fast. Thrives in academia; corporate works if she guards her happiness.',
+    traits: {
+      moonshotUnlocked: true, moonshotLanding: 1.25, rigidManagerClash: 0.25, strainResistance: 1.35, exhaustionResistance: 1.4,
+      autonomyNeed: 1, noveltyLift: 1.6,
+    },
     look: {
       skin: '#f0cdaa', hair: '#1b1512', suit: '#25505a', shirt: '#fff6e8',
       face: 'round', hairStyle: 'bob', brows: 'soft', eyes: 'large', nose: 'soft', mouth: 'animated', glasses: 'thickBlack', cheeks: 'flushed',
@@ -485,14 +600,151 @@ export const CHARACTERS = [
     iq: 130,
     pol: 105,
     archetype: 'The Average Joe',
-    blurb: 'No special strengths, no special weaknesses. Steady, composed, and exactly as tired after a long day as anyone.',
-    traits: {},
+    blurb: 'No special talents and no special weaknesses, but an even temper: setbacks sting him less than most. A steady, drama-free career is his to lose.',
+    traits: { steadiness: 0.35 },
     look: {
       skin: '#e2b893', hair: '#3a2a1e', suit: '#3b3b3b', shirt: '#dfe7f0',
       face: 'structured', hairStyle: 'cleanShort', brows: 'straight', eyes: 'focused', nose: 'bridge', mouth: 'composed', glasses: 'aviator', stubble: true,
     },
   },
+  {
+    id: 'richard',
+    name: 'Richard K',
+    mbti: 'ESTJ',
+    iq: 130,
+    pol: 125,
+    archetype: 'The Operator',
+    blurb: 'Not the sharpest in the room, but he works the room: networking pays him back more than anyone, he plays office politics well, and he takes long hours like Simon.',
+    traits: { strainResistance: 0.6, exhaustionResistance: 0.65, politicsBonus: 1.15, eventSavvy: 1.35 },
+    look: {
+      skin: '#e8c4a0', hair: '#6b4a2e', suit: '#1f3550', shirt: '#ffffff',
+      face: 'structured', hairStyle: 'sideSwept', brows: 'straight', eyes: 'focused', nose: 'bridge', mouth: 'smileTeeth',
+    },
+  },
+  {
+    id: 'chris',
+    name: 'Chris W',
+    mbti: 'INTP',
+    iq: 150,
+    pol: 70,
+    archetype: 'The Machine',
+    blurb: 'Can work brutal hours for years without burning out, and out-produces everyone. But output is not leadership: management doors open for him no faster than for anyone.',
+    traits: { strainResistance: 0.3, exhaustionResistance: 0.3, coreBonus: 1.1, leadership: 0.6 },
+    look: {
+      skin: '#d9a77c', hair: '#2a1d14', suit: '#2e3a2e', shirt: '#e6eef8',
+      face: 'soft', hairStyle: 'cleanShort', brows: 'thickCurved', eyes: 'focused', nose: 'soft', mouth: 'composed', glasses: 'thickBlack', stubble: true,
+    },
+  },
+  {
+    id: 'adam',
+    name: 'Adam R',
+    mbti: 'ENTJ',
+    iq: 140,
+    pol: 140,
+    archetype: 'The Natural Leader',
+    blurb: 'Sharp, political, and made for leadership: people follow him and promotion committees like him. The best shot at the top chair, if he keeps his health.',
+    traits: { leadership: 1.25, politicsBonus: 1.1, relationshipBonus: 1.2, eventSavvy: 1.15 },
+    look: {
+      skin: '#c99a76', hair: '#151515', suit: '#202a44', shirt: '#ffffff',
+      face: 'structured', hairStyle: 'cleanShort', brows: 'thickCurved', eyes: 'large', nose: 'bridge', mouth: 'gentle',
+    },
+  },
+  {
+    id: 'eve',
+    name: 'Eve M',
+    mbti: 'ISFJ',
+    iq: 125,
+    pol: 100,
+    archetype: 'The Steady Hand',
+    blurb: 'Much like an average Joe, calm when things go wrong, but long hours wear her down quickly. A good career at a sane pace.',
+    traits: { steadiness: 0.3, strainResistance: 1.35, exhaustionResistance: 1.35 },
+    look: {
+      skin: '#f2d1b3', hair: '#7a4a2a', suit: '#5a3f4e', shirt: '#fbf3f6',
+      face: 'soft', hairStyle: 'long', brows: 'soft', eyes: 'innerDouble', nose: 'delicate', mouth: 'gentle',
+    },
+  },
 ];
+
+// Company tiers. Every employer has one; it sets how the shared rules run
+// there. Values are multipliers on the industry's own numbers unless noted.
+//   reviewEvery      — quarters between formal reviews (ratings, PIPs,
+//                      promotions, decisions use the period's average)
+//   pipBelowMedian   — how far behind the median a bottom rating must be to
+//                      become a PIP (higher means more PIPs)
+//   growthPerYear    — seats added a year (more chairs, more promotions)
+//   quitMultiplier   — how often people leave (more chairs open above)
+//   politicsWeight   — how much politics counts in output, readiness and
+//                      promotion
+//   pay, bonus       — multipliers on salary bands and bonuses
+//   payCatchUp       — multiplier on how fast pay closes on its target
+//   layoffMultiplier — how often layoffs come
+//   peerHoursOffset  — the culture's hours relative to the industry's
+//   seatScale        — the division's size relative to the industry's
+//   upOrOut          — multiplier on the industry's up-or-out clock, or 0
+//                      for none: elite firms enforce it, steady ones do not
+export const COMPANY_TIERS = {
+  aggressive: {
+    name: 'High-growth', reviewEvery: 1, pipBelowMedian: 0.9, growthPerYear: 0.04, quitMultiplier: 1.4,
+    politicsWeight: 0.8, pay: 1.3, bonus: 1.5, payCatchUp: 1.4, layoffMultiplier: 1.3, peerHoursOffset: 0.75, seatScale: 1, upOrOut: 1,
+    blurb: 'Quarterly reviews, the most PIPs, fast promotions as it grows, and the best pay.',
+  },
+  mid: {
+    name: 'Established', reviewEvery: 2, pipBelowMedian: 0.85, growthPerYear: 0.015, quitMultiplier: 1,
+    politicsWeight: 1, pay: 1, bonus: 1, payCatchUp: 1, layoffMultiplier: 1, peerHoursOffset: 0, seatScale: 1, upOrOut: 1.5,
+    blurb: 'Reviews twice a year, some growth, some politics.',
+  },
+  stable: {
+    name: 'Steady', reviewEvery: 4, pipBelowMedian: 0.78, growthPerYear: 0, quitMultiplier: 0.6,
+    politicsWeight: 1.4, pay: 0.88, bonus: 0.6, payCatchUp: 0.7, layoffMultiplier: 0.7, peerHoursOffset: -0.5, seatScale: 1, upOrOut: 0,
+    blurb: 'Annual reviews, few PIPs, slow promotions, and politics that count.',
+  },
+  startup: {
+    name: 'Startup', reviewEvery: 2, pipBelowMedian: 0.85, growthPerYear: 0.1, quitMultiplier: 1.3,
+    politicsWeight: 0.4, pay: 0.8, bonus: 0, payCatchUp: 1, layoffMultiplier: 1.6, peerHoursOffset: 1, seatScale: 0.35, upOrOut: 0,
+    blurb: 'Below-market pay plus equity, little politics, and a real chance it folds.',
+    // Each quarter: chance the startup folds (about half within five years),
+    // or is acquired (the equity pays out salary × equityMultiple).
+    failPerQuarter: 0.03,
+    exitPerQuarter: 0.012,
+    equityMultiple: [1, 10],
+  },
+};
+
+// Which tiers each industry's employers come in, by weight.
+export const TIER_MIX = {
+  tech: { startup: 20, aggressive: 25, mid: 35, stable: 20 },
+  consulting: { aggressive: 30, mid: 50, stable: 20 },
+  privateEquity: { aggressive: 30, mid: 50, stable: 20 },
+  academia: { aggressive: 30, mid: 40, stable: 30 },
+};
+
+// Each year a company may move one tier: high-growth firms mature, steady
+// ones get shaken up; the market tilts it.
+export const TIER_SHIFT = {
+  chancePerYear: 0.06,
+};
+
+// How the two tracks are judged above the fork. Management's weight moves
+// from individual output to influence and people as the chair rises
+// (mix 0 at the fork, 1 four levels above it); experts are judged on output.
+export const TRACKS = {
+  management: {
+    name: 'Management',
+    coreWeightDrop: 0.4,
+    politicalWeightGain: 2,
+    peopleWeight: 0.6,
+    readinessPolitics: 1.3,
+    promotionPolitics: 1.5,
+  },
+  expert: {
+    name: 'Expert',
+    coreWeightDrop: 0,
+    politicalWeightGain: -0.5,
+    peopleWeight: 0,
+    readinessPolitics: 0.6,
+    promotionPolitics: 0.3,
+  },
+};
 
 // Holidays: paid time off covers the first fifteen days a year; anything
 // longer is unpaid. A day away recovers half again as fast as resting at
@@ -508,19 +760,27 @@ export const HOLIDAY = {
 // FIRE: financially independent once net worth covers 25 years of spending
 // (the 4% rule). The game asks, at most once every two years.
 export const FIRE = {
+  // The 4% rule (25 years of spending) holds for a retirement starting near
+  // fullRuleAge; a longer one needs a safer withdrawal rate, so each year
+  // earlier adds to the multiple: about 33 years of spending at 40.
   yearsOfSpending: 25,
+  fullRuleAge: 60,
+  extraYearsPerYearEarly: 0.4,
   askEveryQuarters: 8,
   minimumAge: 30,
 };
 
 // What a peer's personality looks like, drawn per agent.
 export const PEERS = {
-  // Selective employers hire people about as sharp as the roster; each
-  // level up is a further filter.
-  iqMean: 134,
-  iqPerLevel: 2,
+  // The average colleague is Joseph: IQ 130, political sense about 100.
+  // Each level up is a further filter.
+  iqMean: 130,
+  iqPerLevel: 1,
   iqDeviation: 10,
-  polMean: 95,
+  polMean: 100,
   polDeviation: 20,
   rigidManagerChance: 0.35,
+  // Ambition, 0..1. Colleagues competing for promotions are career-minded:
+  // few coast, so a focused player is average among them, not a star.
+  ambitionRange: [0.45, 0.95],
 };

@@ -28,7 +28,7 @@ function faceCount(root) {
 }
 
 test('the props are detailed models: a car is a smooth, glazed body with wheels, not a few boxes', () => {
-  for (const kind of ['hatchback', 'sedan', 'suv', 'sports']) assert.ok(faceCount(buildCar(kind)) > 700, `${kind}: ${faceCount(buildCar(kind))} faces`);
+  for (const kind of ['hatchback', 'sedan', 'suv', 'sports']) assert.ok(faceCount(buildCar(kind)) > 3000, `${kind}: ${faceCount(buildCar(kind))} faces`);
   for (const kind of ['modest', 'family', 'villa']) assert.ok(faceCount(buildHouse(kind)) > 120, `house ${kind}`);
   for (const kind of ['worn', 'nice', 'tower']) assert.ok(faceCount(buildApartment(kind)) > 120, `apartment ${kind}`);
   assert.ok(faceCount(buildUmbrella('#111111')) > 60, 'an umbrella has panels and ribs');

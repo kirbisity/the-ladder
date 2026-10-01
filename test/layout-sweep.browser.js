@@ -80,6 +80,10 @@
     win.theLadder.advanceDays(10);
     await settle(frame);
     check(frame, 'running, burnout and PIP banners, manager slider');
+    game.fmla.daysLeft = 30;
+    win.theLadder.advanceDays(1);
+    check(frame, 'FMLA leave banner');
+    game.fmla.daysLeft = 0;
     game.player.burnout.active = false;
     game.player.pip.active = false;
     for (const [action, label] of [['panel-org', 'org chart'], ['panel-performance', 'performance'], ['panel-career', 'skills'], ['menu', 'menu']]) {
@@ -119,7 +123,7 @@
     click('[data-action="pick-project"]');
     await settle(frame);
     check(frame, 'project picker');
-    click('[data-project="demo"]');
+    click('[data-project]');
     game.history = Array.from({ length: 120 }, (_, index) => ({ health: 80, motivation: 60, level: Math.min(7, index >> 4), netWorth: 1e6 }));
     win.theLadder.app.modal = null;
     game.player.health = 0;
@@ -127,6 +131,13 @@
     win.theLadder.advanceDays(1);
     await settle(frame);
     check(frame, 'game over');
+    for (let page = 0; page < 6; page += 1) {
+      const next = page === 0 ? doc.querySelector('[data-story="0"]') : doc.querySelector(`[data-story="${page}"]`);
+      if (!next) break;
+      next.click();
+      await settle(frame);
+      check(frame, `story page ${page + 1}`);
+    }
     frame.remove();
   }
   return failures;

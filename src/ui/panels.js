@@ -2,9 +2,10 @@
 // its fog of war, performance, skills and life, help, and the end. Each
 // returns HTML for the modal card; main.js wires the buttons.
 
-import { RATING_LABELS, RATINGS, dailyCoreOutput, stagnationYears, projectSpec, CORE, POLITICS } from '../sim/agent.js';
+import { RATING_LABELS, RATINGS, dailyCoreOutput, stagnationYears, projectSpec, projectsOpenTo, CORE, POLITICS } from '../sim/agent.js';
 import { employedAgents, agentsAtLevel, TEAM_COUNT } from '../sim/org.js';
-import { titleOf, formatMoney, netWorth, managerOf, teamHappiness, quarterlyExpenses, dryPowder } from '../sim/game.js';
+import { titleOf, formatMoney, netWorth, managerOf, teamHappiness, quarterlyExpenses, dryPowder, fmlaStatus } from '../sim/game.js';
+import { careerSummary } from '../sim/story.js';
 import { PROJECTS, READINESS, INDUSTRY_STATS, ORG, TIME, MOTIVATION, RELATIONSHIP, CHARACTERS, INDUSTRIES } from '../config.js';
 
 export function escapeHtml(text) {
@@ -302,6 +303,8 @@ export function careerPanel(game) {
     <div class="figures">${figure('IQ', player.iq)}${figure('Political skill', player.pol)}${figure('Skill', Math.round(player.skill))}${figure('Informants', Math.floor(player.informants))}</div>
     <div class="figures">${figure('Salary', formatMoney(player.salary))}${figure('Savings', formatMoney(game.savings))}${figure('Home equity', formatMoney(game.homeEquity))}${figure('Earned so far', formatMoney(game.lifetimeEarnings))}</div>
     <div class="figures">${figure('Allies', allies)}${figure('Enemies', enemies)}${figure('Manager', manager ? escapeHtml(manager.name.split(' ')[0]) : '—')}${team !== null ? figure('Team mood', `${Math.round(team)}%`) : figure('Spending / qtr', formatMoney(quarterlyExpenses(game)))}</div>
+    <div class="leave-row"><p>${escapeHtml(fmlaStatus(game).reason)}</p>
+      ${fmlaStatus(game).eligible ? '<button class="button small" data-action="fmla">Take FMLA leave</button>' : ''}</div>
     <p>${game.married ? 'Married' : 'Single'}${game.dependents ? `, ${game.dependents} child${game.dependents > 1 ? 'ren' : ''}` : ''}${game.homeEquity > 0 ? ', homeowner' : ', renting'}. Market: ${game.market}.</p>
     ${historyChart(game)}`;
 }
@@ -329,11 +332,7 @@ export function historyChart(game) {
 // ── Project picker ─────────────────────────────────────────────────────
 
 export function availableProjects(game) {
-  const player = game.player;
-  const list = ['maintenance', 'demo', 'workshop'];
-  if (player.level >= PROJECTS.catalog.moonshot.unlockLevel || player.traits.moonshotUnlocked) list.splice(2, 0, 'moonshot');
-  list.push(game.industry.project.id);
-  return list;
+  return projectsOpenTo(game.player, game.industry).map((project) => project.id);
 }
 
 /** Share of a project this plan would finish in a quarter, at today's state. */
@@ -356,32 +355,24 @@ function totalBandwidthShare(player, index) {
 
 export function projectPanel(game) {
   const current = game.player.plan.project;
-  const rows = availableProjects(game).map((id) => {
-    const project = projectSpec(id, game.industry);
-    const odds = Math.min(1, projectedCompletion(game, id));
-    const risk = project.risky ? `<span class="tag hot">Lands ${Math.round(PROJECTS.moonshotLanding * (game.player.traits.moonshotLanding ?? 1) * 100)}% if done</span>` : '';
-    return `<button class="choice" data-project="${id}" ${id === current ? 'style="border-color:#5f9bff"' : ''}>
-      <span style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><span>${escapeHtml(project.name)}</span>
-      <span class="tag-row"><span class="tag ${project.impact === 'high' ? 'hot' : project.impact === 'medium' ? 'warn' : 'blue'}">Impact: ${project.impact}</span>${risk}
-      <span class="tag ${odds >= 1 ? 'good' : 'bad'}">On pace: ${Math.round(odds * 100)}%</span></span></span>
-      <span class="choice-blurb">${projectBlurb(id)}</span></button>`;
+  const open = new Set(availableProjects(game));
+  const landing = Math.round(Math.min(1, PROJECTS.riskyLanding * (game.player.traits.moonshotLanding ?? 1)) * 100);
+  const locked = game.industry.projects.filter((project) => !open.has(project.id))
+    .map((project) => `${escapeHtml(project.name)} (at ${escapeHtml(titleOf(game, project.unlockLevel))})`);
+  const rows = game.industry.projects.filter((project) => open.has(project.id)).map((project) => {
+    const odds = Math.min(1, projectedCompletion(game, project.id));
+    const risk = project.risky ? `<span class="tag hot">Lands ${landing}% if done</span>` : '';
+    const runsOn = project.usesCitizenship ? '<span class="tag blue">Mentoring</span>' : '';
+    return `<button class="choice" data-project="${project.id}" ${project.id === current ? 'style="border-color:#5f9bff"' : ''}>
+      <span class="choice-line"><span>${escapeHtml(project.name)}</span>
+      <span class="tag-row"><span class="tag ${project.impact === 'high' ? 'hot' : project.impact === 'medium' ? 'warn' : 'blue'}">Impact: ${project.impact}</span>${risk}${runsOn}
+      <span class="tag pace ${odds >= 1 ? 'good' : 'bad'}">On pace: ${Math.round(odds * 100)}%</span></span></span>
+      <span class="choice-blurb">${escapeHtml(project.blurb ?? '')}</span></button>`;
   }).join('');
-  return `${head('Choose this quarter\'s project', 'Project selection')}
+  return `${head(`${escapeHtml(game.industry.name)} · this quarter's project`, 'Project selection')}
     <p class="explain">Finishing it by the deadline lifts your review; missing it costs you. "On pace" is how much your current plan would get done this quarter.</p>
-    <div class="choices">${rows}</div>`;
-}
-
-function projectBlurb(id) {
-  return {
-    maintenance: 'Low effort, low risk, small credit. Hard to fail.',
-    demo: 'A visible deliverable. Success lifts motivation and readiness.',
-    moonshot: 'Huge credit and readiness if it lands. Often it does not.',
-    workshop: 'Runs on Mentoring bandwidth. Builds readiness and goodwill.',
-    refactor: 'Pays down tech debt: fewer 2 AM pages.',
-    pitch: 'Win new client work. Readiness if it lands.',
-    deck: 'Feeds deal flow: more deals close.',
-    grant: 'A proposal; if it is done, a chance of funding that boosts research output for two years.',
-  }[id] ?? '';
+    <div class="choices project-choices">${rows}</div>
+    ${locked.length ? `<p class="locked-line">Later: ${locked.join(' · ')}</p>` : ''}`;
 }
 
 // ── Help ───────────────────────────────────────────────────────────────
@@ -402,10 +393,15 @@ export const HELP_PAGES = [
     'Readiness without a chair fades. Peers want the same chairs; someone junior jumping past you hurts.',
     'The Dedicated–Open slider trades focus and layoff protection for recruiter calls and a faster job search.',
   ] },
+  { title: 'Burnout and leave', items: [
+    'Motivation under 20% is burnout: the screen greys, bandwidth halves, and productivity drains toward nothing as motivation falls.',
+    'Put Recovery at 35% or more and it counts as sick leave (no rating, no PIP), and the more you rest the faster you climb back.',
+    'After a year with an employer you can take FMLA: twelve weeks off, unpaid, job-protected, recovering three times as fast. Once a year.',
+  ] },
   { title: 'How it ends', items: [
-    'Retire at 62 with the highest title and the most wealth you can.',
-    'Health at zero is death. Motivation at zero is a breakdown. Out of work with no savings left is homelessness.',
-    'Burnout greys the screen. Rest it out (35%+ Recovery, 9 hours or fewer) and it counts as leave; work through it and you will break down.',
+    'Retire at 62 with the highest title and the most wealth you can, and read the story of your career.',
+    'Health at zero is death. Out of work with no savings left is homelessness.',
+    'Motivation at zero is a breakdown, but the last 10% resists: only a long stretch of burnout with no rest gets you there.',
   ] },
 ];
 
@@ -434,13 +430,35 @@ export function menuPanel(hasGame) {
 const OUTCOMES = {
   retired: { title: 'Retirement', line: (game, outcome) => `At ${Math.floor(outcome.age)} you hand in your badge. The highest chair you held: ${outcome.title}.` },
   death: { title: 'Death', line: (game, outcome) => `Your heart gave out at ${Math.floor(outcome.age)}. The ${game.industry.name.toLowerCase()} world sent flowers and posted the role the next week.` },
-  breakdown: { title: 'Breakdown', line: (game, outcome) => `At ${Math.floor(outcome.age)} you could not go on. You worked on through burnout until nothing was left.` },
+  breakdown: { title: 'Breakdown', line: (game, outcome) => `At ${Math.floor(outcome.age)} you could not go on. Burnout ran on with no rest until nothing was left.` },
   homeless: { title: 'Homeless', line: (game, outcome) => `At ${Math.floor(outcome.age)} the savings ran out before the job search did. You lost the apartment.` },
 };
+
+// Three paragraphs a page keeps the story readable without scrolling, even
+// on a phone.
+const STORY_PARAGRAPHS_PER_PAGE = 3;
+
+export function storyPageCount(game) {
+  return Math.ceil(careerSummary(game).paragraphs.length / STORY_PARAGRAPHS_PER_PAGE);
+}
+
+/** The career story, a page at a time. */
+export function storyPanel(game, page) {
+  const story = careerSummary(game);
+  const pages = Math.ceil(story.paragraphs.length / STORY_PARAGRAPHS_PER_PAGE);
+  const shown = story.paragraphs.slice(page * STORY_PARAGRAPHS_PER_PAGE, (page + 1) * STORY_PARAGRAPHS_PER_PAGE);
+  const dots = Array.from({ length: pages }, (_, index) => `<span class="${index === page ? 'on' : ''}"></span>`).join('');
+  return `${head(`Your story · ${page + 1} / ${pages}`, escapeHtml(story.verdict), false)}
+    <div class="story">${shown.map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`).join('')}</div>
+    <div class="pager"><button class="button small" data-story="${page - 1}">${page === 0 ? 'Summary' : 'Back'}</button>
+      <div class="pager-dots">${dots}</div>
+      ${page < pages - 1 ? `<button class="button small primary" data-story="${page + 1}">Next</button>` : '<button class="button small primary" data-story="-1">Finish</button>'}</div>`;
+}
 
 export function gameOverPanel(game) {
   const outcome = game.outcome;
   const entry = OUTCOMES[outcome.kind];
+  const verdict = careerSummary(game).verdict;
   const support = outcome.kind === 'breakdown'
     ? '<p class="support">This is a game. If work is wearing you down in real life, please talk to someone: in the US call or text 988; elsewhere, findahelpline.com lists free, confidential lines.</p>'
     : '';
@@ -449,7 +467,8 @@ export function gameOverPanel(game) {
     <div class="figures">${figure('Highest title', escapeHtml(outcome.title))}${figure('Net worth', formatMoney(outcome.netWorth))}${figure('Earned', formatMoney(outcome.lifetimeEarnings))}${figure('Score', outcome.score.toLocaleString())}</div>
     ${historyChart(game)}
     ${support}
-    <div class="actions"><button class="button" data-action="same-again">Same person, new career</button><button class="button primary" data-action="new-career">New career</button></div>`;
+    <div class="actions"><button class="button primary" data-story="0">Read your story: ${escapeHtml(verdict)}</button>
+      <button class="button" data-action="same-again">Same person again</button><button class="button" data-action="new-career">New career</button></div>`;
 }
 
 export function characterCards() {

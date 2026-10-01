@@ -2,8 +2,8 @@
 // than guessed. Each policy reads only what the HUD shows a human: health,
 // motivation, readiness, rating, PIP, burnout, the industry meter.
 
-import { createGame, setPlan, chooseEventOption, startRunning, runDay, closeQuarter, netWorth } from './game.js';
-import { clamp } from './agent.js';
+import { createGame, setPlan, chooseEventOption, startRunning, runDay, closeQuarter, netWorth, takeFmla, fmlaStatus } from './game.js';
+import { clamp, projectFor, projectsOpenTo } from './agent.js';
 import { READINESS } from '../config.js';
 
 function preferTags(order) {
@@ -33,9 +33,9 @@ function fixed(plan, tagOrder, { heedsBurnout = true } = {}) {
 
 function industryProject(game, fallback) {
   const player = game.player;
-  if (game.industry.subStat === 'techDebt' && player.industry.techDebt > 65) return 'refactor';
-  if (game.industry.subStat === 'citations' && game.quarterIndex % 3 === 0) return 'grant';
-  if (game.industry.subStat === 'dealFlow' && player.industry.dealFlow < 30) return 'deck';
+  if (game.industry.subStat === 'techDebt' && player.industry.techDebt > 65) return 'repair';
+  if (game.industry.subStat === 'citations' && game.quarterIndex % 3 === 0) return 'special';
+  if (game.industry.subStat === 'dealFlow' && player.industry.dealFlow < 30) return 'repair';
   return fallback;
 }
 
@@ -44,17 +44,17 @@ function adaptivePlan(game) {
   const player = game.player;
   const base = { citizenshipFocus: 'help', politicsFocus: 'upward', managementStyle: 0.4 };
   if (!game.employment.employed) {
-    return { ...base, hours: 8, shares: [0.4, 0.1, 0.1, 0.4], openness: 1, project: 'maintenance' };
+    return { ...base, hours: 8, shares: [0.4, 0.1, 0.1, 0.4], openness: 1, project: 'safe' };
   }
   const openness = game.flags.layoffAt !== null ? 0.8 : 0.25;
   if (player.burnout.active) {
-    return { ...base, hours: 8, shares: [0.3, 0.1, 0.05, 0.55], openness, project: 'maintenance' };
+    return { ...base, hours: 8, shares: [0.3, 0.1, 0.05, 0.55], openness, project: 'safe' };
   }
   if (player.health < 50 || player.motivation < 35) {
-    return { ...base, hours: 8, shares: [0.45, 0.1, 0.1, 0.35], openness, project: 'maintenance' };
+    return { ...base, hours: 8, shares: [0.45, 0.1, 0.1, 0.35], openness, project: 'safe' };
   }
   if (player.pip.active) {
-    return { ...base, hours: 10.5, shares: [0.75, 0.05, 0.1, 0.1], openness: 0.6, project: 'maintenance' };
+    return { ...base, hours: 10.5, shares: [0.75, 0.05, 0.1, 0.1], openness: 0.6, project: 'safe' };
   }
   const strong = player.health > 75 && player.motivation > 55;
   const hours = strong ? 10 : 9;
@@ -66,7 +66,7 @@ function adaptivePlan(game) {
   }
   const canMoonshot = player.level >= 3 || player.traits.moonshotUnlocked;
   const ahead = ['greatlyExceeds', 'exceeds'].includes(player.lastRating);
-  const project = industryProject(game, canMoonshot && strong && ahead ? 'moonshot' : 'demo');
+  const project = industryProject(game, canMoonshot && strong && ahead ? 'risky' : 'visible');
   return { ...base, hours, shares, openness, project };
 }
 
@@ -85,12 +85,13 @@ function adaptiveChoose(game, choices) {
 }
 
 export const POLICIES = {
-  grinder: fixed({ hours: 14, shares: [0.75, 0.05, 0.15, 0.05], openness: 0.2, project: 'demo', politicsFocus: 'upward' }, ['ambitious', 'bold', 'safe'], { heedsBurnout: false }),
-  coaster: fixed({ hours: 7, shares: [0.45, 0.1, 0.05, 0.4], openness: 0.3, project: 'maintenance' }, ['rest', 'safe']),
-  minimal: fixed({ hours: 8, shares: [0.6, 0.1, 0.1, 0.2], openness: 0.3, project: 'maintenance' }, ['safe', 'rest']),
-  balanced: fixed({ hours: 9, shares: [0.55, 0.15, 0.15, 0.15], openness: 0.3, project: 'demo' }, ['safe', 'kind']),
-  politician: fixed({ hours: 9.5, shares: [0.35, 0.15, 0.45, 0.05], openness: 0.3, project: 'demo', politicsFocus: 'upward' }, ['ambitious', 'selfish', 'safe']),
-  adaptive: { plan: adaptivePlan, choose: adaptiveChoose },
+  grinder: fixed({ hours: 14, shares: [0.75, 0.05, 0.15, 0.05], openness: 0.2, project: 'visible', politicsFocus: 'upward' }, ['ambitious', 'bold', 'safe'], { heedsBurnout: false }),
+  coaster: fixed({ hours: 7, shares: [0.45, 0.1, 0.05, 0.4], openness: 0.3, project: 'safe' }, ['rest', 'safe']),
+  minimal: fixed({ hours: 8, shares: [0.6, 0.1, 0.1, 0.2], openness: 0.3, project: 'safe' }, ['safe', 'rest']),
+  balanced: fixed({ hours: 9, shares: [0.55, 0.15, 0.15, 0.15], openness: 0.3, project: 'visible' }, ['safe', 'kind']),
+  politician: fixed({ hours: 9.5, shares: [0.35, 0.15, 0.45, 0.05], openness: 0.3, project: 'visible', politicsFocus: 'upward' }, ['ambitious', 'selfish', 'safe']),
+  // The thoughtful player also takes FMLA when burned out, if eligible.
+  adaptive: { plan: adaptivePlan, choose: adaptiveChoose, useFmla: (game) => game.player.burnout.active && fmlaStatus(game).eligible },
   random: {
     plan: (game) => {
       const random = game.botRandom;
@@ -98,12 +99,21 @@ export const POLICIES = {
         hours: random.between(6, 15),
         shares: [random.next(), random.next(), random.next(), random.next()],
         openness: random.next(),
-        project: random.pick(['maintenance', 'demo', 'workshop']),
+        project: random.pick(['safe', 'visible', 'citizenship']),
       };
     },
     choose: (game, choices) => game.botRandom.int(0, choices.length - 1),
   },
 };
+
+// Plans name a project by role; the industry decides which project that is.
+function applyPlan(game, policy) {
+  const plan = { ...policy.plan(game) };
+  const open = projectsOpenTo(game.player, game.industry);
+  const wanted = projectFor(game.industry, plan.project ?? 'safe');
+  plan.project = open.includes(wanted) ? wanted.id : projectFor(game.industry, 'safe').id;
+  setPlan(game, plan);
+}
 
 /**
  * Play one quarter with a policy: answer events, set the plan, run the days.
@@ -115,13 +125,21 @@ export function playQuarter(game, policy) {
     guard += 1;
   }
   if (game.outcome) return null;
-  setPlan(game, policy.plan(game));
+  applyPlan(game, policy);
   game.player.quarter.projectId = game.player.plan.project;
+  if (policy.useFmla && policy.useFmla(game)) takeFmla(game);
   startRunning(game);
   while (game.phase === 'running') {
+    if (game.currentEvent) {
+      chooseEventOption(game, policy.choose(game, game.currentEvent.choices));
+      continue;
+    }
     const { notes } = runDay(game);
     // The screen greys and the game pauses on burnout; a player re-plans there.
-    if (notes.some((note) => note.kind === 'burnout')) setPlan(game, policy.plan(game));
+    if (notes.some((note) => note.kind === 'burnout')) {
+      applyPlan(game, policy);
+      if (policy.useFmla && policy.useFmla(game)) takeFmla(game);
+    }
   }
   return closeQuarter(game);
 }

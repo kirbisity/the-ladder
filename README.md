@@ -13,8 +13,11 @@ Play: <https://kirbisity.github.io/the-ladder/>
 
 - **Bandwidth** = hours × IQ × √health × motivation^0.3, split four ways.
 - **Health** and **motivation** drift toward targets set by your hours, rest,
-  age, personality and stagnation. One-off blows tip you into burnout, never
-  straight through it; only working on through burnout ends in a breakdown.
+  age, personality and stagnation. Under 20% motivation is burnout: the screen
+  greys and productivity drains toward nothing. Rest (35%+ Recovery) counts
+  as sick leave and speeds recovery; after a year with an employer, **FMLA**
+  gives twelve unpaid, job-protected weeks off. Motivation at zero is a
+  breakdown, but the last 10% resists every fall.
 - **Performance** is ranked against everyone at your level each quarter, in
   the design's brackets (top 5%, top 20%, middle, bottom 15% → PIP).
 - **Promotion** needs readiness of 100 *and* an empty chair. Chairs open when
@@ -22,11 +25,18 @@ Play: <https://kirbisity.github.io/the-ladder/>
 - **Peers** pick their plans by utility (ambition × gain − self-preservation
   × risk) and keep a ledger with you: allies warn and sponsor, enemies
   undercut you in calibration.
-- **Industries** are patches over one default: tech (tech debt and 2 AM
-  pages), consulting (up or out, utilization), private equity (face time,
-  deal flow, carry), academia (tenure clock, citations, grants).
+- **Industries** are patches over one default, each with its own seven
+  projects and its own event deck: tech (on-call, migrations, RTO mandates,
+  CVEs), consulting (up or out, utilization, death-march cases, sales
+  targets), private equity (face time, IC memos, covenants, carry), academia
+  (tenure clock, papers, grants, sabbaticals).
+- **Events** open each quarter at work (or, out of work, from the job-hunt
+  deck: COBRA, contract gigs, final rounds), and life lands on random days
+  mid-quarter: medical bills priced by whether you are insured, rent hikes,
+  car trouble, family.
 - **Defeat**: health at zero (death), motivation at zero (breakdown), or out
-  of work with no savings (homelessness). **Victory**: retire at 62.
+  of work with no savings (homelessness). **Victory**: retire at 62. Every
+  ending closes with the story of the career, written from its journal.
 
 ## Balance
 

@@ -4,17 +4,17 @@
 
 import {
   createGame, startRunning, runDay, closeQuarter, chooseEventOption, setPlan, rebalanceShares,
-  titleOf, formatMoney, netWorth, quarterlyExpenses,
+  titleOf, formatMoney, netWorth, quarterlyExpenses, takeFmla, fmlaStatus,
 } from '../sim/game.js';
 import { serializeGame, deserializeGame } from '../sim/save.js';
 import { RATING_LABELS, totalBandwidth, effectiveHours, projectSpec, dailyCoreOutput, onBurnoutLeave } from '../sim/agent.js';
 import { agentsAtLevel, employedAgents } from '../sim/org.js';
-import { CHARACTERS, INDUSTRIES, TIME, BANDWIDTH, MOTIVATION, ORG, PROJECTS } from '../config.js';
+import { CHARACTERS, INDUSTRIES, TIME, BANDWIDTH, MOTIVATION, ORG } from '../config.js';
 import { createOffice, officeTier } from './office.js';
 import { createAudio } from './audio.js';
 import {
   eventPanel, reviewPanel, orgPanel, performancePanel, careerPanel, projectPanel, helpPanel, menuPanel,
-  gameOverPanel, characterCards, industryCards, industryMeter, projectedCompletion, escapeHtml,
+  gameOverPanel, storyPanel, characterCards, industryCards, industryMeter, projectedCompletion, escapeHtml,
 } from './panels.js';
 import { createIntro } from './intro.js';
 
@@ -63,6 +63,11 @@ let intro = null;
 
 function showScreen(name) {
   app.screen = name;
+  // Burnout greys the game, never the menus or a fresh career.
+  if (name !== 'game') {
+    $('#app').classList.remove('burnout');
+    audio.setState({ burnout: false, running: false });
+  }
   for (const screen of $$('.screen')) screen.hidden = screen.dataset.screen !== name;
   if (name === 'title') $('[data-action="continue"]').hidden = !readSave();
   if (name === 'game') {
@@ -188,8 +193,14 @@ function handleNote(note) {
   if (note.kind === 'burnout') {
     app.paused = true;
     audio.setState({ burnout: true, running: false });
-    toast('Burnout. The quarter is paused: move Recovery to 35% or more and hours to 9 or fewer, then resume.');
+    toast(fmlaStatus(app.game).eligible
+      ? 'Burnout. The quarter is paused: move Recovery to 35% or more, or take FMLA leave, then resume.'
+      : 'Burnout. The quarter is paused: move Recovery to 35% or more, then resume.');
     updateHud(true);
+  } else if (note.kind === 'event') {
+    openModal('event', eventPanel(app.game));
+  } else if (note.kind === 'leaveOver') {
+    toast(note.text);
   } else if (note.kind === 'incident') {
     floatChip('Pager: 2 AM incident', 'red', 2.6, 3.6, 70);
   } else if (note.kind === 'paper') {
@@ -381,7 +392,12 @@ function updateHud(full) {
 
   const burned = player.burnout.active;
   $('#app').classList.toggle('burnout', burned);
-  $('#burnout-banner').hidden = !burned || onBurnoutLeave(player);
+  const leave = fmlaStatus(game);
+  const onLeave = game.fmla.daysLeft > 0;
+  $('#burnout-banner').hidden = !burned || onLeave;
+  $('#banner-fmla').hidden = !leave.eligible;
+  $('#leave-banner').hidden = !onLeave;
+  if (onLeave) $('#leave-banner').textContent = `On FMLA leave: ${game.fmla.daysLeft} workdays left. Unpaid, job-protected, recovering fast.`;
   $('#pip-banner').hidden = !player.pip.active;
   audio.setState({ burnout: burned, hours: player.plan.hours });
 
@@ -547,7 +563,7 @@ function updateProject() {
   const onPace = Math.min(1, projectedCompletion(game, projectId));
   const impactTone = project.impact === 'high' ? 'hot' : project.impact === 'medium' ? 'warn' : 'blue';
   tile.innerHTML = `<span class="doc-icon"></span>
-    <div class="project-name">Current project: ${escapeHtml(project.name)}</div>
+    <div class="project-name">${escapeHtml(project.name)}</div>
     <div class="project-tags"><span class="tag warn">Deadline: ${daysLeft} days</span><span class="tag ${impactTone}">Impact: ${project.impact}</span>
       <span class="tag ${onPace >= 1 ? 'good' : 'bad'}">On pace: ${Math.round(onPace * 100)}%</span></div>
     <div class="project-progress"><div style="width:${progress * 100}%"></div></div>
@@ -588,6 +604,12 @@ function handleAction(action, target) {
       if (game) afterQuarterOpened();
       break;
     case 'run': beginRunning(); break;
+    case 'fmla': {
+      toast(takeFmla(game));
+      if (app.modal === 'career') openModal('career', careerPanel(game), true);
+      updateHud(true);
+      break;
+    }
     case 'speed':
       app.speedIndex = (app.speedIndex + 1) % SPEEDS.length;
       updateHud(true);
@@ -654,6 +676,12 @@ function bindInput() {
       setPlan(app.game, { project: project.dataset.project });
       closeModal();
       updateHud(true);
+      return;
+    }
+    const story = event.target.closest('[data-story]');
+    if (story) {
+      const page = Number(story.dataset.story);
+      openModal('over', page < 0 ? gameOverPanel(app.game) : storyPanel(app.game, page), true);
       return;
     }
     const help = event.target.closest('[data-help]');
@@ -745,4 +773,4 @@ window.theLadder = {
 
 boot();
 
-export { quarterlyExpenses, dailyCoreOutput, MOTIVATION, PROJECTS, CHARACTERS, INDUSTRIES };
+export { quarterlyExpenses, dailyCoreOutput, MOTIVATION, CHARACTERS, INDUSTRIES, onBurnoutLeave };

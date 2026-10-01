@@ -302,7 +302,22 @@ h2, h3 { margin: 0; text-wrap: balance; }
   line-height: 1.35;
   z-index: 2;
 }
-.burnout-banner { background: rgba(20, 20, 20, 0.92); border: 1px solid #777; }
+.burnout-banner { background: rgba(20, 20, 20, 0.92); border: 1px solid #777; display: flex; gap: 10px; align-items: center; justify-content: space-between; }
+.burnout-banner .button { flex: none; }
+.leave-banner { background: rgba(30, 80, 60, 0.92); border: 1px solid #46b96b; }
+.choice-line { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.choice.locked { opacity: 0.45; cursor: default; }
+.story { display: grid; gap: 10px; }
+.story p { color: var(--ink); font-size: 16px; line-height: 1.55; }
+.locked-line { font-size: 13px; }
+/* Small screens: each project is its name and its pace; the rest is in Help. */
+@media (max-width: 640px), (max-height: 640px) {
+  .project-choices .tag:not(.pace), .project-choices .choice-blurb { display: none; }
+  .project-choices .choice { min-height: 40px; padding: 6px 10px; font-size: 14px; }
+  .project-choices .choice-line { flex-wrap: nowrap; align-items: center; }
+}
+.leave-row p { font-size: 14px; }
+.leave-row { display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
 .pip-banner { background: rgba(140, 30, 34, 0.92); border: 1px solid #e5484d; top: auto; bottom: 12px; }
 
 .side-buttons {
@@ -675,6 +690,10 @@ input[type='range']::-moz-range-thumb { width: 16px; height: 20px; border-radius
   .node-detail .figures { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .node-detail .figure { padding: 4px 6px; }
   .node-detail .figure strong { font-size: 17px; }
+  .modal-card .chart { height: 70px; }
+  .leave-row p { font-size: 12px; }
+  .figure { padding: 6px 10px; }
+  .figure strong { font-size: 20px; }
   .pick-card p.blurb { display: none; }
   .modal { padding: 8px; }
   .modal-card { padding: 16px; gap: 10px; }
@@ -692,7 +711,7 @@ input[type='range']::-moz-range-thumb { width: 16px; height: 20px; border-radius
 }
 
 /* ── Short screens (phone on its side, small laptop windows) ── */
-@media (max-height: 560px) and (min-width: 560px) {
+@media (max-height: 640px) and (min-width: 560px) {
   .game {
     grid-template-columns: minmax(0, 1fr) minmax(280px, 0.8fr);
     grid-template-rows: auto minmax(0, 1fr);
@@ -763,6 +782,8 @@ input[type='range']::-moz-range-thumb { width: 16px; height: 20px; border-radius
   .org-node strong { font-size: 12px; }
   .org-tree { gap: 6px; }
   .org-connector { height: 6px; margin: -4px auto; }
+  .project-choices { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .project-choices .choice { min-height: 36px; padding: 6px 10px; font-size: 14px; }
   .modal-card .button.small { min-height: 30px; padding: 3px 10px; }
   .modal-close { min-height: 36px; padding: 0 8px; }
 }

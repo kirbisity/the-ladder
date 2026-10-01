@@ -88,32 +88,48 @@ test('motivation falling through the line starts a burnout', () => {
   assert.ok(notes.some((note) => note.kind === 'burnout'));
 });
 
-test('a one-off blow tips into burnout but never straight through it', () => {
+test('a one-off blow tips into burnout, and the last 10% resists it', () => {
   const agent = worker({ motivation: 25 });
   agent.motivation -= 40;
   clampVitals(agent);
-  assert.ok(agent.motivation > 0);
   assert.ok(agent.burnout.active);
+  assert.ok(agent.motivation > 0, 'a single blow does not reach zero from 25');
+  assert.ok(agent.motivation < MOTIVATION.breakdownBuffer);
+  const deep = agent.motivation;
+  agent.motivation -= 2;
+  clampVitals(agent);
+  assert.ok(Math.abs((deep - agent.motivation) - 2 * MOTIVATION.bufferResistance) < 1e-9, 'inside the buffer a blow counts at a fraction');
 });
 
-test('working on through burnout is the road to a breakdown; resting is the way out', () => {
+test('rest lifts burnout; only a long unrested grind slides into a breakdown', () => {
   const resting = worker({ motivation: 15 });
   resting.burnout.active = true;
-  resting.plan.hours = 8;
+  resting.plan.hours = 9;
   resting.plan.shares = [0.35, 0.1, 0.05, 0.5];
   assert.ok(onBurnoutLeave(resting));
-  const working = worker({ motivation: 15 });
-  working.burnout.active = true;
-  working.plan.hours = 11;
-  assert.ok(!onBurnoutLeave(working));
+  const fullRest = worker({ motivation: 15 });
+  fullRest.burnout.active = true;
+  fullRest.plan.hours = 8;
+  fullRest.plan.shares = [0.1, 0, 0, 0.9];
+  const grinding = worker({ motivation: 15 });
+  grinding.burnout.active = true;
+  grinding.plan.hours = 14;
+  grinding.plan.shares = [0.8, 0.05, 0.1, 0.05];
+  assert.ok(!onBurnoutLeave(grinding));
   for (let day = 0; day < 60; day += 1) {
     stepDay(resting, context);
-    stepDay(working, context);
+    stepDay(fullRest, context);
+    stepDay(grinding, context);
   }
   assert.ok(resting.motivation > 15);
-  assert.ok(working.motivation < 15);
-  working.motivation -= 20;
-  clampVitals(working);
-  assert.ok(working.motivation <= 0, 'no floor for someone ignoring burnout');
+  assert.ok(fullRest.motivation > resting.motivation, 'more rest, faster recovery');
+  assert.ok(grinding.motivation < 15);
+  let days = 60;
+  while (grinding.motivation > 0 && days < 60 * 20) {
+    stepDay(grinding, context);
+    days += 1;
+  }
+  assert.ok(grinding.motivation <= 0, 'a breakdown is reachable');
+  assert.ok(days > 60 * 3, `but it takes a long time: ${days} days`);
   assert.equal(resting.plan.shares[RECOVERY], 0.5);
 });

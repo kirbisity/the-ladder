@@ -121,5 +121,5 @@ test('peers choose their hours around their industry, and rest when burned out',
   burned.burnout.active = true;
   burned.personality.selfPreservation = 0.6;
   choosePeerPlan(burned, industry, random);
-  assert.ok(burned.plan.shares[3] >= MOTIVATION.burnoutRestShare && burned.plan.hours <= MOTIVATION.burnoutMaxHours);
+  assert.ok(burned.plan.shares[3] >= MOTIVATION.burnoutRestShare);
 });

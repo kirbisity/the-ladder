@@ -593,6 +593,7 @@ export const INDUSTRY_STATS = {
 //   difficulty           — 1 to 3: how hard the climb is on average, set from the
 //                           outcome report's Director-or-higher rates across all
 //                           industries (1 above ~55%, 2 around 35-45%, 3 under 10%)
+//   gender               — 'female' or 'male': a few event cards speak to one or the other
 // faceStyle: which toy face the character has (a key of FACE_STYLES below).
 //   faceTweaks may override any field of the style for this one character.
 // look: colours plus the features the portrait, office and cut scenes draw.
@@ -613,6 +614,7 @@ export const FACE_STYLES = {
 export const CHARACTERS = [
   {
     id: 'simon',
+    gender: 'male',
     difficulty: 2,
     name: 'Simon C',
     mbti: 'INTJ',
@@ -629,6 +631,7 @@ export const CHARACTERS = [
   },
   {
     id: 'jennifer',
+    gender: 'female',
     difficulty: 2,
     name: 'Jennifer B',
     mbti: 'ENFP',
@@ -645,6 +648,7 @@ export const CHARACTERS = [
   },
   {
     id: 'chloe',
+    gender: 'female',
     difficulty: 2,
     name: 'Chloe C',
     mbti: 'ENTP',
@@ -664,6 +668,7 @@ export const CHARACTERS = [
   },
   {
     id: 'joseph',
+    gender: 'male',
     difficulty: 3,
     name: 'Joseph J',
     mbti: 'ISTJ',
@@ -680,6 +685,7 @@ export const CHARACTERS = [
   },
   {
     id: 'richard',
+    gender: 'male',
     difficulty: 2,
     name: 'Richard K',
     mbti: 'ENFJ',
@@ -696,6 +702,7 @@ export const CHARACTERS = [
   },
   {
     id: 'christian',
+    gender: 'male',
     difficulty: 1,
     name: 'Christian W',
     mbti: 'INTP',
@@ -712,6 +719,7 @@ export const CHARACTERS = [
   },
   {
     id: 'adam',
+    gender: 'male',
     difficulty: 1,
     name: 'Adam R',
     mbti: 'ENTJ',
@@ -728,6 +736,7 @@ export const CHARACTERS = [
   },
   {
     id: 'eve',
+    gender: 'female',
     difficulty: 3,
     name: 'Eve M',
     mbti: 'ISFJ',

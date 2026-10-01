@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createGame, chooseEventOption, finishQuarterDays, closeQuarter, quitJob, startRunning, runDay, takeFmla, fmlaStatus,
-  takeHoliday, holidayStatus, fireNumber, fireReady,
+  takeHoliday, holidayStatus, fireNumber, fireReady, prepareCurrentEvent,
 } from '../src/sim/game.js';
 import { drawEvent, drawLifeEvent, allEvents, eventById } from '../src/sim/events.js';
 import { projectSpec, projectFor, projectsOpenTo } from '../src/sim/agent.js';
@@ -271,4 +271,61 @@ test('some cards only come with age, and the losses of life are in the deck', ()
   }
   for (const id of ['friendDies', 'grandparentDies', 'parentDies', 'highwayCrash', 'petDies', 'burglary']) assert.ok(eventById(id), id);
   assert.ok(eventById('crashAftermath'), 'the crash has a follow-up');
+});
+
+/** Put a card in front of the player. */
+function openCard(game, id) {
+  clearEvents(game);
+  game.currentEvent = { event: eventById(id), data: {} };
+  prepareCurrentEvent(game);
+}
+
+test('the car question: a purchase is remembered, costs a payment plan and lifts mood; going without saves money', () => {
+  const game = createGame({ seed: 71, characterId: 'simon' });
+  clearEvents(game);
+  game.player.age = 30;
+  assert.ok(eventById('carDecision').weight(game) > 0);
+  const mood = game.player.motivation = 60;
+  openCard(game, 'carDecision');
+  const first = game.currentEvent.choices.findIndex((choice) => choice.label.startsWith('Buy a new sedan'));
+  chooseEventOption(game, first);
+  assert.equal(game.flags.car, 'new');
+  assert.ok(game.paymentPlans.length > 0, 'a loan to pay');
+  assert.ok(game.player.motivation > mood);
+  const carFree = createGame({ seed: 72, characterId: 'simon' });
+  clearEvents(carFree);
+  carFree.player.age = 30;
+  const before = carFree.savings;
+  openCard(carFree, 'carDecision');
+  chooseEventOption(carFree, carFree.currentEvent.choices.findIndex((choice) => choice.label.startsWith('Go without')));
+  assert.equal(carFree.flags.car, 'none');
+  assert.ok(carFree.savings > before);
+});
+
+test('a nicer apartment raises the rent and the mood, and the penthouse needs a penthouse salary', () => {
+  const game = createGame({ seed: 73, characterId: 'joseph' });
+  clearEvents(game);
+  game.player.age = 28;
+  game.player.salary = 90000;
+  openCard(game, 'betterApartment');
+  const labels = game.currentEvent.choices.map((choice) => choice.label);
+  assert.ok(labels.some((label) => label.startsWith('Move to the nicer')));
+  assert.ok(!labels.some((label) => label.startsWith('Take the penthouse')), 'not affordable on this salary');
+  const rent = game.rentPremium ?? 0;
+  chooseEventOption(game, labels.findIndex((label) => label.startsWith('Move to the nicer')));
+  assert.ok(game.rentPremium > rent);
+  assert.equal(game.flags.apartment, 'nice');
+  assert.equal(eventById('betterApartment').weight({ ...game, homeEquity: 250000, player: game.player }), 0, 'owners do not rent');
+});
+
+test('the women-focused work cards come only to the women in the cast', () => {
+  const ids = ['womenNetwork', 'mentorWoman', 'payGap', 'nerves', 'flexHours'];
+  for (const [characterId, shows] of [['chloe', true], ['jennifer', true], ['eve', true], ['joseph', false], ['adam', false]]) {
+    const game = createGame({ seed: 74, characterId });
+    clearEvents(game);
+    game.player.level = 2;
+    game.player.quartersAtLevel = 10;
+    game.player.plan.hours = 11;
+    for (const id of ids) assert.equal(eventById(id).weight(game) > 0, shows, `${id} for ${characterId}`);
+  }
 });

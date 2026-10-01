@@ -1,0 +1,15 @@
+<!doctype html><meta charset="utf-8"><body style="margin:0;background:#111">
+<script type="module">
+import { funeralDetailed } from './scene-funeral.js';
+import { snapshotScene } from '../src/ui/cutscenes.js';
+import { CHARACTERS } from '../src/config.js';
+const look = CHARACTERS.find((c) => c.id === 'chloe').look;
+const data = { look, name: 'Chloe C', firstName: 'Chloe', age: 60, born: 1970, died: 2030, title: 'Director', company: 'X', seed: 3, netWorth: 3e6 };
+const c = document.createElement('canvas'); c.width = 960; c.height = 600; document.body.append(c);
+funeralDetailed(c.getContext('2d'), 960, 600, 6, data);
+window.after = c.toDataURL('image/png');
+const base = document.createElement('canvas'); base.width = 960; base.height = 600;
+// The shipped scene, drawn through its snapshot at the same moment.
+window.before = snapshotScene('death', data, 960, 600, 6 / 13);
+window.done = true;
+</script>

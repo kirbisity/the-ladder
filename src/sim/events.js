@@ -14,6 +14,7 @@ import { LIFE_DECK, LIFE_IDS_FROM_CORE } from './events/life.js';
 import { JOBLESS_DECK } from './events/jobless.js';
 import { INDUSTRY_DECK } from './events/industry.js';
 import { MORE_LIFE, MORE_WORK } from './events/more.js';
+import { HOME_LIFE, WOMENS_WORK } from './events/home.js';
 import { MORE_INDUSTRY_ARCS } from './events/moreIndustry.js';
 
 // Cards that need no job: the market moves for everyone.
@@ -34,7 +35,7 @@ function normalise(event) {
   return { ...event, category, scope, timing: life ? 'life' : 'start' };
 }
 
-const DECK = [...CORE_DECK, ...LIFE_DECK, ...MORE_LIFE, ...MORE_WORK, ...JOBLESS_DECK, ...INDUSTRY_DECK, ...MORE_INDUSTRY_ARCS].map(normalise);
+const DECK = [...CORE_DECK, ...LIFE_DECK, ...MORE_LIFE, ...MORE_WORK, ...HOME_LIFE, ...WOMENS_WORK, ...JOBLESS_DECK, ...INDUSTRY_DECK, ...MORE_INDUSTRY_ARCS].map(normalise);
 const DECK_BY_ID = new Map(DECK.map((event) => [event.id, event]));
 
 export function eventById(id) {

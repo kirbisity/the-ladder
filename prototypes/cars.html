@@ -1,0 +1,12 @@
+<!doctype html><meta charset="utf-8"><body style="margin:0;background:#6f9a5a">
+<script type="module">
+import { drawCar } from '../src/ui/props3d.js';
+const c = document.createElement('canvas'); c.width = 1300; c.height = 700; document.body.append(c);
+const ctx = c.getContext('2d');
+ctx.fillStyle = '#6f9a5a'; ctx.fillRect(0, 0, 1300, 700);
+ctx.fillStyle = '#6d7178'; ctx.fillRect(0, 140, 1300, 280); ctx.fillRect(0, 470, 1300, 200);
+const unit = 110;
+const k = (ox, oy) => ({ unit, iso: (x, y, z = 0) => ({ x: ox + (x - y) * unit, y: oy + (x + y) * unit * 0.5 - z * unit }) });
+['hatchback', 'sedan', 'suv', 'sports'].forEach((kind, i) => drawCar(ctx, k(330 + (i % 2) * 560, 130 + Math.floor(i / 2) * 330), 0, 0, kind));
+window.shot = c.toDataURL('image/png'); window.done = true;
+</script>

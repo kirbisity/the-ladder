@@ -4,6 +4,7 @@
 // skipped, and all of them can be replayed from the developer menu.
 
 import { drawPerson, drawHead, peerLook } from './figures.js';
+import { drawCar, drawHouse, drawApartment, drawUmbrella } from './props3d.js';
 import { mixColor } from './office.js';
 
 export const END_SCENES = {
@@ -149,41 +150,186 @@ function tree(k, context, x, y, { height = 3, crown = '#3f7a46', trunk = '#5b403
   context.fill();
 }
 
-function car(k, context, x, y, kind, time = 0) {
-  const styles = {
-    hatchback: { body: '#c9b48a', length: 1.6, height: 0.55, cabin: 0.45, rust: true },
-    sedan: { body: '#9aa5b1', length: 2.0, height: 0.5, cabin: 0.42 },
-    suv: { body: '#1e2228', length: 2.2, height: 0.75, cabin: 0.5 },
-    sports: { body: '#c8102e', length: 2.2, height: 0.38, cabin: 0.3 },
-  };
-  const style = styles[kind];
-  k.box(x, y, 0.15, style.length, 0.9, style.height, style.body);
-  k.box(x + style.length * 0.25, y + 0.08, 0.15 + style.height, style.length * 0.5, 0.74, style.cabin, mixColor(style.body, '#9fc4e0', 0.55));
-  for (const [wx, wy] of [[0.3, 0.9], [style.length - 0.35, 0.9]]) {
-    const wheel = k.iso(x + wx, y + wy, 0.15);
-    context.fillStyle = '#111111';
-    context.beginPath();
-    context.ellipse(wheel.x, wheel.y, k.unit * 0.18, k.unit * 0.18, 0, 0, Math.PI * 2);
-    context.fill();
-  }
-  if (style.rust) {
-    context.fillStyle = 'rgba(120, 60, 30, 0.6)';
-    const spot = k.iso(x + 0.4, y + 0.9, 0.35);
-    context.beginPath();
-    context.ellipse(spot.x, spot.y, k.unit * 0.12, k.unit * 0.08, 0, 0, Math.PI * 2);
-    context.fill();
-  }
-  if (kind === 'sports' || kind === 'suv') {
-    const light = k.iso(x + style.length, y + 0.7, 0.4);
-    context.fillStyle = `rgba(255, 245, 200, ${0.6 + 0.3 * Math.sin(time * 3)})`;
-    context.fillRect(light.x - 2, light.y - 2, 5, 4);
-  }
+/** A car, as a 3D model standing at a ground point. */
+function car(k, context, x, y, kind) {
+  drawCar(context, k, x, y, kind);
 }
 
 // ── Scenes ─────────────────────────────────────────────────────────────
 
 function mourners(seed) {
   return [0, 1, 2, 3, 4].map((index) => peerLook(seed * 7 + index * 13 + 3));
+}
+
+/** The funeral: a rainy churchyard with a chapel, fence, varied stones, an open grave, wreaths, a hearse and umbrellas. */
+function drawFuneral(context, width, height, time, data) {
+  sky(context, width, height, '#4d5660', '#8f99a2');
+  // Distant tree line and chapel, in haze.
+  for (let i = 0; i < 18; i += 1) {
+    const x = (i / 17) * width;
+    const h = height * (0.1 + ((i * 37) % 7) / 60);
+    context.fillStyle = mixColor('#3a4a44', '#8f99a2', 0.55);
+    context.beginPath();
+    context.ellipse(x, height * 0.3, width / 30, h, 0, 0, Math.PI * 2);
+    context.fill();
+  }
+  const pan = Math.min(1, time / 10) * width * 0.04;
+  const k = kit(context, width, height, Math.min(width, height * 1.7) / 17, width / 2 - pan, height * 0.34);
+  const u = k.unit;
+  k.ground(-16, -16, 18, 18, '#4a6445');
+  // Mown stripes and a gravel path with puddles.
+  for (let i = -16; i < 18; i += 2) k.ground(i, -16, i + 1, 18, 'rgba(255,255,255,0.025)');
+  k.ground(-1, -16, 0.2, 18, '#77736a');
+  for (const [px, py] of [[-0.6, -2], [-0.4, 1.2], [-0.5, 3.4]]) {
+    const p = k.iso(px, py);
+    context.fillStyle = 'rgba(150,170,190,0.55)';
+    context.beginPath();
+    context.ellipse(p.x, p.y, u * 0.5, u * 0.16, 0, 0, Math.PI * 2);
+    context.fill();
+    context.strokeStyle = 'rgba(255,255,255,0.35)';
+    context.beginPath();
+    context.ellipse(p.x, p.y, u * (0.12 + (((time * 0.5 + px) % 0.4) + 0.4) % 0.4), u * 0.04, 0, 0, Math.PI * 2);
+    context.stroke();
+  }
+  // The chapel at the back: stone, a slate roof, a door and a stained window.
+  k.box(-7.5, -3.5, 0, 4.2, 3, 2.4, '#b8b2a6');
+  k.roof(-7.7, -3.7, 2.4, 4.6, 3.4, 1.6, '#4a4f58');
+  k.box(-5.6, -0.5, 0, 0.9, 0.08, 1.6, '#4b3a2a');
+  const rose = k.iso(-5.6, -0.45, 2.1);
+  context.fillStyle = '#8f3a4f';
+  context.beginPath();
+  context.arc(rose.x, rose.y, u * 0.22, 0, Math.PI * 2);
+  context.fill();
+  context.fillStyle = '#e9b949';
+  context.beginPath();
+  context.arc(rose.x, rose.y, u * 0.08, 0, Math.PI * 2);
+  context.fill();
+  k.box(-4.2, -3.4, 2.4, 0.5, 0.5, 2.0, '#9a948a');
+  // Trees in layers.
+  tree(k, context, -4.5, -3.5, { height: 4, bare: true, trunk: '#3b3330' });
+  tree(k, context, 6.5, -2, { height: 4.4, crown: '#35603d' });
+  tree(k, context, -8, 2, { height: 5, bare: true, trunk: '#33302c' });
+  // Iron fence along the left edge.
+  for (let y = -3; y <= 9; y += 0.7) {
+    k.box(-8.5, y, 0, 0.06, 0.06, 1.3, '#23262b');
+    const tip = k.iso(-8.5, y, 1.3);
+    context.fillStyle = '#23262b';
+    context.beginPath();
+    context.moveTo(tip.x, tip.y - u * 0.18);
+    context.lineTo(tip.x - 2, tip.y);
+    context.lineTo(tip.x + 2, tip.y);
+    context.fill();
+  }
+  k.box(-8.5, -3, 1.0, 0.04, 12, 0.06, '#23262b');
+  // Headstones: arches, crosses, obelisks, an angel, some leaning, with moss.
+  const kinds = ['arch', 'cross', 'slab', 'obelisk', 'arch', 'slab', 'cross', 'angel'];
+  let n = 0;
+  for (let row = -4; row <= 5; row += 3) {
+    for (let column = -6; column <= 7; column += 2.4) {
+      if (Math.abs(column - 2.2) < 1.6 && Math.abs(row - 2) < 2.1) continue;
+      const kind = kinds[(n += 1) % kinds.length];
+      const lean = ((n * 7) % 5 - 2) * 0.02;
+      const color = mixColor('#8f9396', '#6f7a6a', ((n * 13) % 4) / 8);
+      if (kind === 'cross') { k.box(column + 0.28, row, 0, 0.14, 0.14, 1.1, color); k.box(column + 0.1, row, 0.7, 0.5, 0.14, 0.14, color); }
+      else if (kind === 'obelisk') { k.box(column + 0.1, row, 0, 0.5, 0.5, 0.25, color); k.box(column + 0.2, row + 0.1, 0.25, 0.3, 0.3, 1.5, color); }
+      else if (kind === 'angel') { k.box(column, row, 0, 0.6, 0.4, 0.35, color); k.box(column + 0.2, row + 0.1, 0.35, 0.2, 0.2, 0.7, mixColor(color, '#ffffff', 0.2)); const head = k.iso(column + 0.3, row + 0.2, 1.15); context.fillStyle = mixColor(color, '#ffffff', 0.25); context.beginPath(); context.arc(head.x, head.y, u * 0.1, 0, Math.PI * 2); context.fill(); for (const s of [-1, 1]) { context.beginPath(); context.ellipse(head.x + s * u * 0.2, head.y + u * 0.2, u * 0.16, u * 0.08, s * 0.7, 0, Math.PI * 2); context.fill(); } }
+      else { k.box(column + lean * 4, row, 0, 0.7, 0.18, 0.9 + (n % 3) * 0.2, color); if (kind === 'arch') { const top = k.iso(column + 0.35 + lean * 4, row, 1.0 + (n % 3) * 0.2); context.fillStyle = mixColor(color, '#ffffff', 0.08); context.beginPath(); context.arc(top.x, top.y, u * 0.35, Math.PI, 0); context.fill(); } }
+      const moss = k.iso(column + 0.2, row + 0.2, 0.05);
+      context.fillStyle = 'rgba(70,110,60,0.45)';
+      context.beginPath();
+      context.ellipse(moss.x, moss.y, u * 0.3, u * 0.1, 0, 0, Math.PI * 2);
+      context.fill();
+    }
+  }
+  // Fallen leaves and grass tufts.
+  for (let i = 0; i < 70; i += 1) {
+    const p = k.iso(-8 + (i * 2.7) % 17, -5 + (i * 1.9) % 12);
+    context.fillStyle = i % 3 ? '#8a6a3a' : '#a85a2a';
+    context.fillRect(p.x, p.y, 3, 2);
+  }
+  // The open grave: dug earth, coffin on straps, spade, a heap of soil.
+  k.box(1.6, 2.1, 0, 1.5, 2.3, 0.04, '#2b2118');
+  k.box(1.75, 2.3, 0, 1.2, 1.9, 0.02, '#14100c');
+  k.box(1.9, 2.5, 0.0, 0.9, 1.5, 0.35, '#6b4a2e');
+  k.box(1.95, 2.55, 0.35, 0.8, 1.4, 0.04, '#7a5636');
+  k.box(3.2, 2.2, 0, 0.9, 1.1, 0.5, '#4e3a28');
+  k.box(3.6, 3.5, 0, 0.06, 0.06, 0.9, '#6b5a40');
+  k.box(1.6, 1.7, 0, 1.4, 0.3, 1.5, '#a7aaad');
+  const stone = k.iso(2.3, 1.85, 1.15);
+  context.fillStyle = '#3b3e42';
+  context.font = `600 ${Math.max(9, u * 0.22)}px Barlow Condensed, sans-serif`;
+  context.textAlign = 'center';
+  context.fillText(data.name.toUpperCase(), stone.x - u * 0.3, stone.y);
+  context.fillText(`${data.born}–${data.died}`, stone.x - u * 0.3, stone.y + u * 0.3);
+  // Wreaths on stands, with ribbons.
+  for (const [x, y, c] of [[0.3, 2.0, '#d9534f'], [4.2, 2.6, '#f2f2f2'], [0.5, 3.4, '#f2c5d0']]) {
+    k.box(x, y, 0, 0.06, 0.06, 1.0, '#6b5a40');
+    const p = k.iso(x + 0.03, y + 0.03, 1.15);
+    context.strokeStyle = '#3f6f45';
+    context.lineWidth = u * 0.14;
+    context.beginPath();
+    context.arc(p.x, p.y, u * 0.34, 0, Math.PI * 2);
+    context.stroke();
+    context.fillStyle = c;
+    for (let f = 0; f < 8; f += 1) { context.beginPath(); context.arc(p.x + Math.cos(f) * u * 0.34, p.y + Math.sin(f) * u * 0.34, u * 0.07, 0, Math.PI * 2); context.fill(); }
+    context.fillStyle = '#1a1a1a';
+    context.fillRect(p.x - 2, p.y + u * 0.34, 4, u * 0.3);
+  }
+  // The portrait on its easel.
+  k.box(3.5, 1.1, 0, 0.08, 0.08, 1.3, '#4a3828');
+  const frame = k.iso(3.55, 1.15, 1.6);
+  context.fillStyle = '#2b2018';
+  context.fillRect(frame.x - u * 0.42, frame.y - u * 0.5, u * 0.84, u * 0.95);
+  context.fillStyle = '#d9cdb8';
+  context.fillRect(frame.x - u * 0.36, frame.y - u * 0.44, u * 0.72, u * 0.83);
+  drawHead(context, frame.x, frame.y, u * 0.24, data.look, { time });
+  // A hearse at the path's far end.
+  k.box(-2.4, -5.2, 0.18, 1.0, 3.2, 0.9, '#15171a');
+  k.box(-2.35, -5.1, 1.08, 0.9, 2.2, 0.55, '#9fb4c4');
+  k.box(-2.4, -5.2, 0.18, 1.0, 0.8, 0.05, '#c9a24a');
+  // Crows on the stones.
+  for (const [x, y] of [[-3.2, -1.2], [5.0, 2.2]]) {
+    const p = k.iso(x, y, 1.1);
+    const hop = Math.max(0, Math.sin(time * 1.3 + x)) * u * 0.12;
+    context.fillStyle = '#0c0c0e';
+    context.beginPath();
+    context.ellipse(p.x, p.y - hop, u * 0.15, u * 0.09, 0, 0, Math.PI * 2);
+    context.fill();
+    context.fillRect(p.x + u * 0.1, p.y - hop - u * 0.06, u * 0.1, u * 0.03);
+  }
+  // The priest at the head of the grave and the mourners, some under umbrellas.
+  drawPerson(context, k.iso(2.4, 1.2).x, k.iso(2.4, 1.2).y, u * 0.22, { skin: '#e2b893', hair: '#bdbdbd', suit: '#2a2a2f', shirt: '#ffffff', face: 'soft', hairStyle: 'cleanShort', brows: 'soft', eyes: 'innerDouble', nose: 'soft', mouth: 'composed', faceStyle: 'anime' }, { pose: 'standing', outfit: { top: '#1c1c20', bottom: '#1c1c20', shirt: '#ffffff' }, expression: 'blank', time });
+  const black = { top: '#1a1b1e', bottom: '#111214', shirt: '#2b2c30' };
+  mourners(data.seed).forEach((look, index) => {
+    const spots = [[0.3, 4.6], [1.2, 5.2], [2.4, 5.4], [3.6, 5.1], [4.6, 4.4]];
+    const [x, y] = spots[index];
+    k.person(x, y, look, { pose: 'mourning', expression: 'crying', outfit: black, time: time + index });
+    if (index === 0 || index === 4) drawUmbrella(context, k, x + 0.55, y - 0.3, 0, ['#111111', '#1d2a44', '#7a1d1d'][index % 3], index === 4 ? '#2f4268' : null);
+  });
+  // Fog in front, rain, splashes, and a dim wash.
+  const fog = context.createLinearGradient(0, height * 0.2, 0, height * 0.65);
+  fog.addColorStop(0, 'rgba(190,200,210,0.0)');
+  fog.addColorStop(0.5, 'rgba(190,200,210,0.16)');
+  fog.addColorStop(1, 'rgba(190,200,210,0.0)');
+  context.fillStyle = fog;
+  context.fillRect(0, height * 0.2, width, height * 0.45);
+  rain(context, width, height, time, { count: 170, speed: 700, color: 'rgba(200, 210, 225, 0.38)', slant: 0.1 });
+  context.strokeStyle = 'rgba(210,220,235,0.4)';
+  for (let i = 0; i < 28; i += 1) {
+    const x = (i * 131) % width;
+    const y = height * 0.45 + ((i * 71) % (height * 0.45));
+    const r = ((time * 3 + i * 0.37) % 1) * 7;
+    context.beginPath();
+    context.ellipse(x, y, r, r * 0.35, 0, 0, Math.PI * 2);
+    context.stroke();
+  }
+  context.fillStyle = 'rgba(30, 35, 45, 0.14)';
+  context.fillRect(0, 0, width, height);
+  const vignette = context.createRadialGradient(width / 2, height / 2, height * 0.4, width / 2, height / 2, height * 0.95);
+  vignette.addColorStop(0, 'rgba(0,0,0,0)');
+  vignette.addColorStop(1, 'rgba(0,0,0,0.35)');
+  context.fillStyle = vignette;
+  context.fillRect(0, 0, width, height);
 }
 
 const SCENES = {
@@ -195,58 +341,7 @@ const SCENES = {
       'They came in black, in the rain, and said kind things about the hours.',
     ],
     draw(context, width, height, time, data) {
-      sky(context, width, height, '#5d6670', '#9aa3ab');
-      const pan = Math.min(1, time / 10) * width * 0.04;
-      const k = kit(context, width, height, Math.min(width, height * 1.7) / 17, width / 2 - pan, height * 0.34);
-      k.ground(-16, -16, 18, 18, '#4f6a4a');
-      k.ground(-1, -16, 0, 18, '#77736a');
-      tree(k, context, -4.5, -3.5, { height: 4, bare: true, trunk: '#3b3330' });
-      for (let row = -4; row <= 5; row += 3) {
-        for (let column = -5; column <= 6; column += 2.4) {
-          if (Math.abs(column - 2.2) < 1.5 && Math.abs(row - 2) < 2) continue;
-          k.box(column, row, 0, 0.7, 0.18, 0.9 + ((row * 3 + column) % 2 + 2) % 2 * 0.25, '#8f9396');
-        }
-      }
-      // The grave: mound, headstone, flowers, a portrait on an easel.
-      k.box(1.6, 2.1, 0, 1.4, 2.2, 0.18, '#5b4634');
-      k.box(1.6, 1.7, 0, 1.4, 0.3, 1.5, '#a7aaad');
-      const stone = k.iso(2.3, 1.85, 1.15);
-      context.fillStyle = '#3b3e42';
-      context.font = `600 ${Math.max(9, k.unit * 0.22)}px Barlow Condensed, sans-serif`;
-      context.textAlign = 'center';
-      context.fillText(data.name.toUpperCase(), stone.x - k.unit * 0.3, stone.y);
-      context.fillText(`${data.born}–${data.died}`, stone.x - k.unit * 0.3, stone.y + k.unit * 0.3);
-      for (let flower = 0; flower < 9; flower += 1) {
-        const point = k.iso(1.8 + (flower % 3) * 0.45, 2.4 + Math.floor(flower / 3) * 0.6, 0.22);
-        context.fillStyle = ['#e7e2f0', '#f2c5d0', '#ffffff'][flower % 3];
-        context.beginPath();
-        context.arc(point.x, point.y, k.unit * 0.09, 0, Math.PI * 2);
-        context.fill();
-      }
-      k.box(3.5, 1.1, 0, 0.08, 0.08, 1.3, '#4a3828');
-      const frame = k.iso(3.55, 1.15, 1.6);
-      context.fillStyle = '#2b2018';
-      context.fillRect(frame.x - k.unit * 0.42, frame.y - k.unit * 0.5, k.unit * 0.84, k.unit * 0.95);
-      context.fillStyle = '#d9cdb8';
-      context.fillRect(frame.x - k.unit * 0.36, frame.y - k.unit * 0.44, k.unit * 0.72, k.unit * 0.83);
-      drawHead(context, frame.x, frame.y, k.unit * 0.24, data.look, { time });
-      const black = { top: '#1a1b1e', bottom: '#111214', shirt: '#2b2c30' };
-      mourners(data.seed).forEach((look, index) => {
-        const spots = [[0.3, 4.6], [1.2, 5.2], [2.4, 5.4], [3.6, 5.1], [4.6, 4.4]];
-        const [x, y] = spots[index];
-        k.person(x, y, look, { pose: 'mourning', expression: 'crying', outfit: black, time: time + index });
-        if (index === 2) {
-          const top = k.iso(x, y, 3.4);
-          context.fillStyle = '#111';
-          context.beginPath();
-          context.arc(top.x, top.y, k.unit * 0.95, Math.PI, 0);
-          context.fill();
-          context.fillRect(top.x - 1, top.y, 2, k.unit * 1.2);
-        }
-      });
-      rain(context, width, height, time, { count: 140, speed: 700, color: 'rgba(200, 210, 225, 0.35)', slant: 0.1 });
-      context.fillStyle = 'rgba(30, 35, 45, 0.12)';
-      context.fillRect(0, 0, width, height);
+      drawFuneral(context, width, height, time, data);
     },
   },
 
@@ -569,8 +664,7 @@ const SCENES = {
   house: interim(3.8, () => ['The keys are yours.'], (context, width, height, time, data, k) => {
     sky(context, width, height, '#8ec5ec', '#e2f1fb');
     k.ground(-4, -3, 6, 6, '#7fb06a');
-    k.box(-2, -2, 0, 3, 2.4, 2, '#e8dcc6');
-    k.roof(-2.2, -2.2, 2, 3.4, 2.8, 1.3, '#9a4a3a');
+    drawHouse(context, k, -2.5, -3, 'modest');
     k.box(2.2, 1.2, 0, 0.08, 0.08, 1.4, '#6b5038');
     const sign = k.iso(2.25, 1.2, 1.45);
     context.fillStyle = '#ffffff';
@@ -664,30 +758,23 @@ function retirementScene(tier) {
     draw(context, width, height, time, data) {
       const evening = Math.min(1, time / 12);
       sky(context, width, height, mixColor('#7fb7ea', '#e98a5a', evening * 0.8), mixColor('#cfe6f8', '#f8c58e', evening * 0.8));
-      const k = kit(context, width, height, Math.min(width, height * 1.6) / 22, width / 2, height * 0.6);
+      const k = kit(context, width, height, Math.min(width, height * 1.6) / 30, width / 2 + width * 0.05, height * 0.58);
       const lawn = ['#9aa092', '#7fb06a', '#6aa85a', '#76b35f'][tier];
-      k.ground(-16, -14, 18, 18, lawn);
-      k.ground(4.5, -14, 6, 18, '#6d7178');
+      k.ground(-40, -40, 40, 40, lawn);
+      k.ground(4.5, -40, 6, 40, '#6d7178');
       const arrive = Math.min(1, time / 3.5);
       if (tier === 0) {
         // A worn apartment block with a balcony.
-        k.box(-4, -3, 0, 5, 3, 6, '#b9ad9a');
-        for (let floor = 0.8; floor < 6; floor += 1.4) for (let column = -3.6; column < 0.8; column += 1.1) k.box(column, -0.02, floor, 0.6, 0.02, 0.7, '#5f7a8c');
-        k.box(-1.2, 0, 2.8, 1.8, 0.8, 0.12, '#8d8577');
-        k.person(-0.4, 0.5, data.look, { pose: 'sitting', expression: null, outfit: { top: '#7b7568', bottom: '#4b4740', shirt: '#7b7568' }, time, z: 2.92 });
-        car(k, context, 4.7, 4.5 - (1 - arrive) * 4, 'hatchback', time);
+        drawApartment(context, k, -4, -3, data.home === 'nice' || data.home === 'luxury' ? 'nice' : 'worn');
+        k.person(-1.85, 0.3, data.look, { pose: 'sitting', expression: null, outfit: { top: '#7b7568', bottom: '#4b4740', shirt: '#7b7568' }, time, z: 2.1, size: 0.17 });
+        car(k, context, 4.7, 4.5 - (1 - arrive) * 4, data.car ?? 'hatchback');
       } else if (tier === 1) {
-        k.box(-3.5, -2.5, 0, 4, 3, 2.2, '#e8dcc6');
-        k.roof(-3.7, -2.7, 2.2, 4.4, 3.4, 1.4, '#7a4a3a');
-        k.box(-1.2, 0.5, 0, 1.5, 0.05, 1.5, '#7a5a3a');
-        for (let plant = 0; plant < 5; plant += 1) k.box(-3 + plant * 0.6, 1.5, 0, 0.3, 0.3, 0.5 + (plant % 2) * 0.2, '#4f8a45');
+        drawHouse(context, k, -3.5, -2.5, 'modest');
         tree(k, context, 2.5, -2, { height: 3 });
         k.person(-0.6, 2.2, data.look, { pose: 'standing', expression: 'happy', outfit: { top: '#5b7f9a', bottom: '#c9b48a', shirt: '#ffffff' }, time });
-        car(k, context, 4.6, 4 - (1 - arrive) * 4, 'sedan', time);
+        car(k, context, 4.6, 4 - (1 - arrive) * 4, data.car ?? 'sedan');
       } else if (tier === 2) {
-        k.box(-4.5, -3.5, 0, 6, 4, 2.8, '#f2ebe0');
-        k.roof(-4.7, -3.7, 2.8, 6.4, 4.4, 1.6, '#3f4a5a');
-        k.box(-1, 0.5, 0, 2, 0.05, 2, '#d9e6f2');
+        drawHouse(context, k, -6.4, -3.5, 'family');
         for (let index = 0; index < 4; index += 1) tree(k, context, -5 + index * 3.3, 5.5, { height: 3.2, crown: '#3f8f4f' });
         tree(k, context, 3, -2.5, { height: 3.5 });
         k.person(-0.2, 2.6, data.look, { pose: 'waving', expression: 'happy', outfit: { top: '#9a4a5a', bottom: '#2f3a4a', shirt: '#ffffff' }, time });
@@ -700,10 +787,10 @@ function retirementScene(tier) {
         context.beginPath();
         context.arc(dog.x + k.unit * 0.35, dog.y - k.unit * 0.42 + Math.sin(time * 8) * 2, k.unit * 0.14, 0, Math.PI * 2);
         context.fill();
-        car(k, context, 4.6, 3.8 - (1 - arrive) * 4, 'suv', time);
+        car(k, context, 4.6, 3.8 - (1 - arrive) * 4, data.car ?? 'suv');
       } else {
         // A villa: white cubes, a pool, palms, the sea and a boat.
-        k.ground(-16, -14, 18, -5, '#2a8fc7');
+        k.ground(-40, -40, 40, -5, '#2a8fc7');
         const boat = k.iso(-3 + Math.sin(time * 0.2) * 2, -9);
         context.fillStyle = '#ffffff';
         context.beginPath();
@@ -712,17 +799,14 @@ function retirementScene(tier) {
         context.lineTo(boat.x + 20, boat.y + 8);
         context.lineTo(boat.x - 22, boat.y + 8);
         context.fill();
-        k.box(-5, -3.5, 0, 6.5, 3.5, 2.4, '#fbfbf8');
-        k.box(-3.5, -3, 2.4, 4, 2.5, 1.8, '#f6f6f2');
-        k.box(-4.9, -0.02, 0.4, 6.2, 0.02, 1.6, '#9fc8e6');
-        k.ground(-3.5, 1.2, 1.5, 3.4, '#4cc3e8');
+        drawHouse(context, k, -5, -3.5, 'villa');
         const shimmer = k.iso(-1 + Math.sin(time) * 1.5, 2.3, 0);
         context.fillStyle = 'rgba(255, 255, 255, 0.35)';
         context.fillRect(shimmer.x - 20, shimmer.y - 2, 40, 3);
         for (const [x, y] of [[2.5, -3], [3, 3.5], [-5.5, 2.5]]) tree(k, context, x, y, { palm: true, crown: '#2f7d3b', trunk: '#8a6a42', height: 4 });
         k.box(-0.4, 3.7, 0, 1.6, 0.6, 0.25, '#ffffff');
         k.person(0.3, 4.0, data.look, { pose: 'sitting', expression: 'happy', outfit: { top: '#ffffff', bottom: '#d9c7a8', shirt: '#ffffff' }, time, z: 0.25 });
-        car(k, context, 4.6, 3.6 - (1 - arrive) * 4, 'sports', time);
+        car(k, context, 4.6, 3.6 - (1 - arrive) * 4, data.car ?? 'sports');
       }
       // Birds in the evening sky.
       context.strokeStyle = 'rgba(40, 40, 50, 0.6)';
@@ -820,6 +904,9 @@ export function createCutscenePlayer(overlay) {
 }
 
 /** What a scene needs to know about the player. */
+// What the player drove, by the car they chose in life (see the car event).
+const CAR_KINDS = { old: 'hatchback', new: 'sedan', family: 'suv', luxury: 'sports' };
+
 export function sceneData(game) {
   const player = game.player;
   const born = new Date().getFullYear() - 22;
@@ -835,6 +922,8 @@ export function sceneData(game) {
     company: game.org?.companyName ?? game.lastOrg?.companyName ?? 'the company',
     seed: game.seed ?? 1,
     netWorth: game.outcome?.netWorth ?? 0,
+    car: CAR_KINDS[game.flags.car] ?? null,
+    home: game.flags.apartment ?? null,
   };
 }
 
@@ -853,4 +942,4 @@ export function snapshotScene(id, data, width = 640, height = 360, atShare = 0.7
   return canvas.toDataURL('image/png');
 }
 
-export { drawHead };
+export { drawHead, kit, sky, rain, tree, mourners };

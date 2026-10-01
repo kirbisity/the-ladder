@@ -607,7 +607,7 @@ export const CHARACTERS = [
     traits: { coreBonus: 1.15, networkingDrain: 45, networkingHealthDrain: 10, strainResistance: 0.6, exhaustionResistance: 0.65 },
     look: {
       skin: '#f1d2b0', hair: '#121212', suit: '#2f3a4a', shirt: '#ffffff',
-      face: 'round', hairStyle: 'sideSwept', brows: 'thickCurved', eyes: 'monolid', nose: 'soft', mouth: 'gentle',
+      face: 'narrow', hairStyle: 'sideSwept', brows: 'thickCurved', eyes: 'monolid', nose: 'soft', mouth: 'gentle',
     },
   },
   {
@@ -655,7 +655,7 @@ export const CHARACTERS = [
     traits: { steadiness: 0.35 },
     look: {
       skin: '#e2b893', hair: '#3a2a1e', suit: '#3b3b3b', shirt: '#dfe7f0',
-      face: 'structured', hairStyle: 'cleanShort', brows: 'straight', eyes: 'focused', nose: 'bridge', mouth: 'composed', glasses: 'aviator', stubble: true,
+      face: 'square', hairStyle: 'cleanShort', brows: 'straight', eyes: 'focused', nose: 'bridge', mouth: 'composed', glasses: 'aviator', stubble: true,
     },
   },
   {
@@ -670,13 +670,13 @@ export const CHARACTERS = [
     traits: { strainResistance: 0.6, exhaustionResistance: 0.65, politicsBonus: 1.15, eventSavvy: 1.35, steadiness: 0.25 },
     look: {
       skin: '#e8c4a0', hair: '#6b4a2e', suit: '#1f3550', shirt: '#ffffff',
-      face: 'structured', hairStyle: 'sideSwept', brows: 'straight', eyes: 'focused', nose: 'bridge', mouth: 'smileTeeth',
+      face: 'square', hairStyle: 'sideSwept', brows: 'straight', eyes: 'focused', nose: 'bridge', mouth: 'smileTeeth',
     },
   },
   {
-    id: 'chris',
+    id: 'christian',
     difficulty: 1,
-    name: 'Chris W',
+    name: 'Christian W',
     mbti: 'INTP',
     iq: 150,
     pol: 70,

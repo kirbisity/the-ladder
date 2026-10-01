@@ -48,7 +48,7 @@ test('the look card shows in the model: a thin build is narrower, hair and faces
   };
   const base = { ...CHARACTERS.find((character) => character.id === 'simon').look, hairStyle: 'cleanShort' };
   assert.ok(widthOf({ ...base, build: 'thin' }) < widthOf(base) * 0.93, 'a slight build is narrower');
-  assert.ok(widthOf({ ...base, hairStyle: 'long' }) !== widthOf(base) || figure('chris').polygons !== figure('adam').polygons, 'hair changes the model');
+  assert.ok(widthOf({ ...base, hairStyle: 'long' }) !== widthOf(base) || figure('christian').polygons !== figure('adam').polygons, 'hair changes the model');
   const chloe = figure('chloe');
   const jennifer = figure('jennifer');
   assert.notEqual([...chloe.colours].join(), [...jennifer.colours].join(), 'different people, different shades');

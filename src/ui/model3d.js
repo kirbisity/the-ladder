@@ -199,13 +199,16 @@ const FACES = {
   soft: { w: 0.93, h: 1.06, d: 0.97, taper: 0.2 },
   structured: { w: 0.94, h: 1.04, d: 0.98, taper: 0.3 },
   narrow: { w: 0.8, h: 1.12, d: 0.94, taper: 0.4 },
+  // A squarish face: a wide jaw and a flat chin.
+  square: { w: 0.95, h: 1.06, d: 0.98, taper: 0.05, flatChin: 0.92 },
 };
 
 function faceDeform(shape) {
   return (x, y, z) => {
     if (y < 0.15) {
       const drop = 0.15 - y;
-      return [x * (1 - shape.taper * drop * drop * 1.3), y, z * (1 - shape.taper * 0.4 * drop * drop)];
+      const lowest = shape.flatChin ? Math.max(y, -shape.flatChin) : y;
+      return [x * (1 - shape.taper * drop * drop * 1.3), lowest, z * (1 - shape.taper * 0.4 * drop * drop)];
     }
     return [x, y, z];
   };

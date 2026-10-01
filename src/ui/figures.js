@@ -1,6 +1,6 @@
 // People. Every figure in the game (portraits, the office, the cut scenes)
 // is the 3D model in model3d.js, built from a look card:
-//   face: round | soft | structured | narrow
+//   face: round | soft | structured | narrow (pointy) | square
 //   hairStyle: sideSwept | shoulderStraight | bob | ponytail | cleanShort | long | bald
 //   brows: thickCurved | soft | straight
 //   eyes: monolid | innerDouble | large | focused

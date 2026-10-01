@@ -7,7 +7,7 @@
 //   Simon, Jennifer — more Director+ than Joseph; more health/motivation trouble
 //   Chloe   — best in academia; corporate only with rest
 //   Richard — climbs like Simon; more readiness from networking
-//   Chris   — no burnout at long hours; management no higher than Simon/Richard
+//   Christian   — no burnout at long hours; management no higher than Simon/Richard
 //   Adam    — the highest leadership rate
 //   Eve     — like Joseph at sane hours; worse when pushed
 // Usage: node tools/characters.js [careers] [industry|all] [policy]

@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Ladder</title>
+<meta name="description" content="A career simulator where every colleague runs the same equations you do.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="ladder.css">
+</head>
+<body>
+<div id="app" class="app">
+
+  <!-- Title -->
+  <section id="screen-title" class="screen screen-title" data-screen="title">
+    <div class="title-card">
+      <p class="eyebrow">A career simulator</p>
+      <h1 class="logo">The Ladder</h1>
+      <p class="tagline">Forty years. Sixty workdays a quarter. Every colleague runs the same equations you do.</p>
+      <div class="title-actions">
+        <button class="button primary" data-action="new-career">New career</button>
+        <button class="button" data-action="continue" hidden>Continue</button>
+        <button class="button ghost" data-action="help">How to play</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Character -->
+  <section id="screen-character" class="screen screen-pick" data-screen="character" hidden>
+    <header class="pick-header">
+      <button class="button ghost small" data-action="back-title">Back</button>
+      <h2>Choose who you are</h2>
+      <span class="step">1 / 2</span>
+    </header>
+    <div class="pick-grid" id="character-grid"></div>
+  </section>
+
+  <!-- Industry -->
+  <section id="screen-industry" class="screen screen-pick" data-screen="industry" hidden>
+    <header class="pick-header">
+      <button class="button ghost small" data-action="back-character">Back</button>
+      <h2>Choose your industry</h2>
+      <span class="step">2 / 2</span>
+    </header>
+    <div class="pick-grid" id="industry-grid"></div>
+  </section>
+
+  <!-- Onboarding -->
+  <section id="screen-intro" class="screen screen-intro" data-screen="intro" hidden>
+    <canvas id="intro-canvas" class="intro-canvas"></canvas>
+    <div class="intro-text">
+      <p id="intro-line" class="intro-line"></p>
+      <div class="intro-actions">
+        <button class="button primary" data-action="intro-next">Continue</button>
+        <button class="button ghost small" data-action="intro-skip">Skip</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- The game -->
+  <section id="screen-game" class="screen game" data-screen="game" hidden>
+    <header class="hud">
+      <div class="panel vitals">
+        <div class="vital" id="vital-health">
+          <span class="vital-icon heart" aria-hidden="true"></span>
+          <div class="vital-body">
+            <div class="bar health-bar"><div class="bar-fill"></div><span class="bar-label">Health: 0%</span></div>
+            <span class="vital-delta"></span>
+          </div>
+        </div>
+        <div class="vital" id="vital-motivation">
+          <span class="vital-icon battery" aria-hidden="true"><span class="battery-level"></span></span>
+          <div class="vital-body">
+            <div class="bar motivation-bar"><div class="bar-fill"></div><span class="bar-label">Motivation: 0%</span></div>
+            <span class="vital-delta"></span>
+          </div>
+        </div>
+      </div>
+      <div class="panel clock">
+        <div class="clock-top">
+          <span class="clock-quarter" id="clock-quarter">Q1 · Year 1</span>
+          <span class="clock-title" id="clock-title"></span>
+        </div>
+        <div class="day-track"><div class="day-fill" id="day-fill"></div></div>
+        <div class="clock-controls">
+          <button class="button primary run" id="run-button" data-action="run">Start quarter</button>
+          <button class="button small" id="speed-button" data-action="speed" title="Speed">1×</button>
+          <label class="auto"><input type="checkbox" id="auto-advance"> Auto</label>
+        </div>
+      </div>
+      <div class="panel stat age">
+        <span class="stat-icon cake" aria-hidden="true"></span>
+        <span class="stat-value" id="age-value">Age: 22</span>
+      </div>
+      <div class="panel stat wealth">
+        <span class="stat-icon coin" aria-hidden="true">$</span>
+        <div class="wealth-body">
+          <span class="stat-value" id="wealth-value">$0</span>
+          <span class="stat-sub" id="income-value"></span>
+        </div>
+      </div>
+    </header>
+
+    <main class="stage" id="stage">
+      <canvas id="office" class="office" aria-label="Your workplace"></canvas>
+      <div class="labels" id="labels" aria-hidden="true"></div>
+      <div class="banner burnout-banner" id="burnout-banner" hidden>
+        <strong>Burnout.</strong> Put at least 35% into Recovery and work 9 hours or fewer until it lifts, or you will break down.
+      </div>
+      <div class="banner pip-banner" id="pip-banner" hidden>
+        <strong>On a PIP.</strong> One quarter to get out of the bottom bracket.
+      </div>
+      <nav class="side-buttons" aria-label="Panels">
+        <button class="side-button" data-action="panel-org"><span class="side-icon org" aria-hidden="true"></span>Org tree</button>
+        <button class="side-button" data-action="panel-performance"><span class="side-icon star" aria-hidden="true"></span>Performance</button>
+        <button class="side-button" data-action="panel-career"><span class="side-icon book" aria-hidden="true"></span>Skills</button>
+        <div class="side-row">
+          <button class="side-mini" data-action="sound" id="sound-button" title="Sound">Sound off</button>
+          <button class="side-mini" data-action="menu" title="Menu">Menu</button>
+        </div>
+      </nav>
+    </main>
+
+    <footer class="controls" id="controls">
+      <div class="control-tabs" role="tablist">
+        <button class="control-tab active" data-tab="bandwidth">Bandwidth</button>
+        <button class="control-tab" data-tab="project">Project</button>
+        <button class="control-tab" data-tab="hours">Hours</button>
+      </div>
+      <section class="panel bandwidth" data-tab-panel="bandwidth">
+        <div class="panel-heading">
+          <h3>Bandwidth allocation</h3>
+          <span class="panel-figure" id="bandwidth-figure">Daily BW: 100%</span>
+        </div>
+        <div class="sliders" id="sliders"></div>
+        <div class="management" id="management" hidden>
+          <span>Supportive</span>
+          <input type="range" min="0" max="100" step="5" id="management-slider" aria-label="Management style">
+          <span>Demanding</span>
+        </div>
+      </section>
+      <section class="panel project" data-tab-panel="project">
+        <div class="panel-heading"><h3>Project selection</h3><span class="panel-figure" id="project-lock"></span></div>
+        <div class="project-tile" id="project-tile"></div>
+        <div class="industry-meter" id="industry-meter"></div>
+      </section>
+      <section class="panel worklife" data-tab-panel="hours">
+        <div class="panel-heading"><h3>Work-life balance</h3><span class="panel-figure" id="hours-figure">Daily hrs: 9</span></div>
+        <div class="worklife-body">
+          <div class="arc-wrap">
+            <svg class="arc" id="arc" viewBox="0 0 300 120" role="slider" aria-label="Daily hours" tabindex="0">
+              <defs>
+                <linearGradient id="arc-gradient" x1="0" x2="1" y1="0" y2="0">
+                  <stop offset="0" stop-color="#e5484d"/>
+                  <stop offset="0.5" stop-color="#f5c542"/>
+                  <stop offset="1" stop-color="#46b96b"/>
+                </linearGradient>
+              </defs>
+              <path d="M 30 110 A 120 95 0 0 1 270 110" class="arc-track"/>
+              <circle id="arc-knob" class="arc-knob" cx="150" cy="15" r="14"/>
+              <text id="arc-label" class="arc-label" x="150" y="112" text-anchor="middle">BALANCED</text>
+            </svg>
+          </div>
+          <div class="open-slider">
+            <div class="open-labels"><span>Dedicated</span><span>Open</span></div>
+            <input type="range" min="0" max="100" step="5" id="openness-slider" aria-label="Dedicated or open">
+            <p class="open-note" id="open-note"></p>
+          </div>
+        </div>
+      </section>
+    </footer>
+  </section>
+
+  <div class="modal" id="modal" hidden>
+    <div class="modal-card" id="modal-card" role="dialog" aria-modal="true"></div>
+  </div>
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+</div>
+<script type="module" src="src/ui/main.js"></script>
+</body>
+</html>

@@ -853,4 +853,4 @@ export function snapshotScene(id, data, width = 640, height = 360, atShare = 0.7
   return canvas.toDataURL('image/png');
 }
 
-export { drawHead };
+export { drawHead, kit, sky, rain, tree, mourners };

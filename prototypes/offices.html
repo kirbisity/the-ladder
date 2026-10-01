@@ -1,0 +1,8 @@
+<!doctype html><meta charset="utf-8"><body style="margin:0;background:#1b2230">
+<script type="module">
+import { THEMES, drawOfficeTheme } from './office-themes.js';
+const ids = Object.keys(THEMES);
+const out = {};
+for (const id of ids) { const c = document.createElement('canvas'); c.width = 760; c.height = 520; document.body.append(c); drawOfficeTheme(c, id, { hour: 11, time: 1 }); out[id] = c.toDataURL('image/png'); }
+window.shots = out; window.done = true;
+</script>

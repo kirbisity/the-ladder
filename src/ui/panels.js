@@ -37,7 +37,8 @@ export function portrait(look, size = 64) {
     context.beginPath();
     context.roundRect(0, 0, size, size, size * 0.22);
     context.clip();
-    drawPerson(context, size * 0.5, size * 1.95, size * 0.17, look, { pose: 'standing' });
+    // Head and shoulders: the figure scaled so the head fills the frame.
+    drawPerson(context, size * 0.5, size * 3.38, size * 0.36, look, { pose: 'standing' });
     context.restore();
     portraitCache.set(key, canvas.toDataURL());
   }

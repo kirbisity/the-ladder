@@ -2,9 +2,10 @@
 // compete, quit, get promoted, PIP'd and laid off by the same rules as the
 // player. The rest of the company is summarised, not simulated.
 
-import { TIME, PERFORMANCE, READINESS, ORG, PEERS, SKILL, RELATIONSHIP, PROJECTS, MOTIVATION } from '../config.js';
+import { TIME, PERFORMANCE, READINESS, ORG, PEERS, SKILL, RELATIONSHIP, PROJECTS, MOTIVATION, MONEY, TRACKS, COMPANY_TIERS, TIER_MIX, INDUSTRY_STATS, BANDWIDTH } from '../config.js';
 import {
   createAgent, freshQuarter, clamp, clampVitals, onBurnoutLeave, payInBand, effectiveHours, strainOf, projectSpec, projectsOpenTo, stagnationYears,
+  defaultTrack, managementMix,
   CORE, CITIZENSHIP, POLITICS, RECOVERY, RATINGS,
 } from './agent.js';
 import { FIRST_NAMES, LAST_NAMES, COMPANY_NAMES, DIVISION_NAMES, TEAM_NAMES } from './names.js';
@@ -32,11 +33,53 @@ export const PEER_PLANS = [
  * Returns:
  *   the organisation, with every seat filled except the player's
  */
-export function createOrganization(random, industry, ageOffset = 0) {
-  const companyNames = COMPANY_NAMES[industry.id];
+/** Pick a tier for a new employer in an industry, by its mix. */
+export function pickTier(random, industryId) {
+  const mix = TIER_MIX[industryId] ?? { mid: 1 };
+  return random.weighted(Object.keys(mix), (tier) => mix[tier]);
+}
+
+/**
+ * The industry's rules as this employer runs them: pay, bonuses, seats,
+ * culture hours and review rules scaled by its tier.
+ */
+export function tieredIndustry(industry, tierId) {
+  const tier = COMPANY_TIERS[tierId] ?? COMPANY_TIERS.mid;
+  const base = industry.base ?? industry;
+  return {
+    ...industry,
+    base: industry.base ?? industry,
+    tier: tierId,
+    salaries: (industry.base ?? industry).salaries.map((salary) => Math.round(salary * tier.pay / 1000) * 1000),
+    bonusShare: (industry.base ?? industry).bonusShare.map((share) => share * tier.bonus),
+    seats: (industry.base ?? industry).seats.map((seats) => Math.max(1, Math.round(seats * tier.seatScale))),
+    peerHours: (industry.base ?? industry).peerHours + tier.peerHoursOffset,
+    reviewEvery: tier.reviewEvery,
+    pipBelowMedian: tier.pipBelowMedian,
+    quitMultiplier: tier.quitMultiplier,
+    politicsWeight: tier.politicsWeight,
+    payCatchUp: tier.payCatchUp,
+    layoffMultiplier: tier.layoffMultiplier,
+    growthPerYear: tier.growthPerYear,
+    upOrOutQuarters: base.upOrOutQuarters && tier.upOrOut ? Math.round(base.upOrOutQuarters * tier.upOrOut) : null,
+  };
+}
+
+/** A company name of the right kind, avoiding one to skip. */
+export function companyNameFor(random, industryId, tierId, avoid = null) {
+  const names = (COMPANY_NAMES[industryId]?.[tierId] ?? COMPANY_NAMES[industryId].mid).filter((name) => name !== avoid);
+  return random.pick(names);
+}
+
+export function createOrganization(random, baseIndustry, { ageOffset = 0, tier = null } = {}) {
+  const tierId = tier ?? pickTier(random, baseIndustry.id);
+  const industry = tieredIndustry(baseIndustry.base ?? baseIndustry, tierId);
   const divisionNames = DIVISION_NAMES[industry.id];
   const org = {
-    companyName: random.pick(companyNames),
+    companyName: companyNameFor(random, industry.id, tierId),
+    tier: tierId,
+    seatGrowth: 1,
+    quartersSinceReview: 0,
     divisionIndex: random.int(0, divisionNames.length - 1),
     divisionNames,
     teamNames: TEAM_NAMES[industry.id],
@@ -71,9 +114,16 @@ export function randomName(random) {
 }
 
 /** A new simulated worker, sized for the level they are hired into. */
+/** The skill a typical career has built by this age. */
+export function experiencedSkill(age) {
+  const years = Math.max(0, age - TIME.startAge);
+  return 100 - (100 - SKILL.startMean) * Math.exp(-SKILL.experienceRate * years);
+}
+
 export function hirePeer(random, industry, level, { initial = false, ageOffset = 0 } = {}) {
+  const initialQuarters = initial ? random.int(0, 10) : 0;
   const age = TIME.startAge + level * 3.5 + random.between(0, 4) + ageOffset;
-  const ambition = random.between(0.2, 0.95);
+  const ambition = random.between(PEERS.ambitionRange[0], PEERS.ambitionRange[1]);
   const agent = createAgent({
     name: randomName(random),
     mbti: random.pick(['INTJ', 'ENFP', 'ENTP', 'ISTJ', 'ESTJ', 'INFJ', 'ISFP', 'ENTJ']),
@@ -81,9 +131,10 @@ export function hirePeer(random, industry, level, { initial = false, ageOffset =
     pol: clamp(random.normal(PEERS.polMean + level * 3, PEERS.polDeviation), 40, 150),
     age,
     level,
-    quartersAtLevel: initial ? random.int(0, 10) : 0,
+    quartersAtLevel: initialQuarters,
+    quartersInGrade: initialQuarters,
     readiness: initial ? random.between(0, 70) : random.between(0, 25),
-    skill: clamp(SKILL.startMean + 8 * level + random.normal(0, 6), 5, 95),
+    skill: clamp(experiencedSkill(age) + random.normal(0, SKILL.hireDeviation), 5, 95),
     health: clamp(random.normal(88 - Math.max(0, age - 35) * 0.8, 5), 45, 100),
     motivation: clamp(random.normal(68, 8), 35, 95),
     personality: {
@@ -99,6 +150,7 @@ export function hirePeer(random, industry, level, { initial = false, ageOffset =
   });
   agent.plan.openness = agent.personality.loyaltyRisk;
   agent.plan.hours = industry.peerHours;
+  if (industry.trackFromLevel && level > industry.trackFromLevel) agent.track = defaultTrack(agent, random);
   return agent;
 }
 
@@ -147,8 +199,19 @@ export function choosePeerPlan(peer, industry, random, pressure = 0) {
   }
   peer.plan.hours = best.hours;
   peer.plan.shares = best.shares.slice();
+  // Consultants know the job is billable hours: whatever the plan, they keep
+  // enough of the week on client work to stay in the utilization sweet spot.
+  if (industry.subStat === 'utilization') keepUtilized(peer.plan);
   const open = projectsOpenTo(peer, industry).filter((project) => !project.risky || peer.personality.ambition > 0.7);
   peer.plan.project = random.weighted(open, (project) => (project.role === 'visible' ? 2 : 1)).id;
+}
+
+function keepUtilized(plan) {
+  const dials = INDUSTRY_STATS.utilization;
+  const wanted = dials.target * BANDWIDTH.standardHours / plan.hours;
+  const core = clamp(wanted, plan.shares[CORE], 0.85);
+  const others = 1 - plan.shares[CORE];
+  plan.shares = plan.shares.map((share, index) => (index === CORE ? core : others > 0 ? share / others * (1 - core) : (1 - core) / 3));
 }
 
 // ── Quarter close ──────────────────────────────────────────────────────
@@ -168,7 +231,7 @@ export function resolveProject(agent, industry, random) {
     quarter.performanceBonus = (quarter.performanceBonus ?? 0) + project.successBonus;
     agent.readiness += project.readiness ?? 0;
     applyProjectEffects(agent, project);
-    if (project.impact === 'high') agent.motivation += MOTIVATION.highImpactLift;
+    if (project.impact === 'high') agent.motivation += MOTIVATION.highImpactLift * (agent.traits.noveltyLift ?? 1);
   } else {
     quarter.performanceBonus = (quarter.performanceBonus ?? 0) - project.failurePenalty;
     if (project.impact !== 'low') agent.motivation -= MOTIVATION.projectFailureHit;
@@ -191,10 +254,27 @@ export function onLeaveThisQuarter(agent) {
   return onBurnoutLeave(agent) || (agent.quarter.leaveDays ?? 0) >= 30;
 }
 
+/**
+ * The quarter's output as the agent's track judges it: past the fork,
+ * managers are judged more on influence and people the higher they go
+ * (scaled by their leadership), experts on their own work.
+ */
+export function trackWeightedOutput(agent, industry) {
+  const quarter = agent.quarter;
+  if (!agent.track || !industry?.trackFromLevel || agent.level < industry.trackFromLevel) return quarter.core + quarter.political;
+  const track = TRACKS[agent.track];
+  const mix = agent.track === 'management' ? managementMix(agent, industry) : 1;
+  const leadership = agent.track === 'management' ? (agent.traits.leadership ?? 1) : 1;
+  const core = quarter.core * (1 - track.coreWeightDrop * mix);
+  const political = quarter.political * Math.max(0, 1 + track.politicalWeightGain * mix) * leadership;
+  const people = quarter.citizenship * track.peopleWeight * mix * leadership * (agent.pol / 100);
+  return core + political + people;
+}
+
 export function quarterPerformance(agent, random, industry) {
   const quarter = agent.quarter;
   const days = Math.max(1, quarter.days);
-  const raw = (quarter.core + quarter.political) / days * PERFORMANCE.quarterScale;
+  const raw = trackWeightedOutput(agent, industry) / days * PERFORMANCE.quarterScale;
   const faceTime = 1 + (industry?.faceTimePerHour ?? 0) * Math.max(0, agent.plan.hours - 8);
   const multiplier = (quarter.performanceMultiplier ?? 1) * faceTime;
   const score = raw * multiplier + (quarter.performanceBonus ?? 0) + random.normal(0, PERFORMANCE.noiseDeviation);
@@ -208,6 +288,7 @@ export function quarterPerformance(agent, random, industry) {
  * A bottom rating becomes a PIP only when it is also clearly behind.
  */
 export function rateLevels(org, levelCount) {
+  const pipBar = org.industry?.pipBelowMedian ?? PERFORMANCE.pipBelowMedian;
   for (let level = 0; level < levelCount; level += 1) {
     for (const agent of agentsAtLevel(org, level)) {
       if (!onLeaveThisQuarter(agent)) continue;
@@ -228,7 +309,7 @@ export function rateLevels(org, levelCount) {
       if (fromTop <= PERFORMANCE.greatlyExceedsTop) rating = 'greatlyExceeds';
       else if (fromTop <= PERFORMANCE.exceedsTop) rating = 'exceeds';
       else if (fromTop <= PERFORMANCE.meetAllTop) rating = 'meetAll';
-      else if (fromTop > 1 - PERFORMANCE.meetSomeBottom && agent.quarter.performance < PERFORMANCE.pipBelowMedian * median) {
+      else if (fromTop > 1 - PERFORMANCE.meetSomeBottom && agent.quarter.performance < pipBar * median) {
         rating = 'meetSome';
       }
       agent.quarter.rating = rating;
@@ -236,6 +317,9 @@ export function rateLevels(org, levelCount) {
       agent.quarter.poolSize = pool.length;
       agent.quarter.median = median;
       agent.lastRating = rating;
+      const rankScore = pool.length > 1 ? 1 - index / (pool.length - 1) : 0.5;
+      agent.recentStanding = rankScore;
+      agent.standing = (agent.standing ?? 0.5) + (rankScore - (agent.standing ?? 0.5)) * MONEY.standingSmoothing;
       agent.ratings.push(rating);
       if (agent.ratings.length > 8) agent.ratings.shift();
       agent.readiness += READINESS.ratingBonus[rating] / (1 + READINESS.levelDifficulty * level);
@@ -271,7 +355,7 @@ export function rollDepartures(org, random, market, playerId) {
       const unhappy = agent.motivation < 40 ? ORG.quitUnhappy : 0;
       const marketPull = market === 'boom' ? 1.5 : market === 'recession' ? 0.4 : 1;
       // Senior people are paid to stay: quitting falls 12% a level.
-      const seniority = Math.max(0.3, 1 - 0.12 * agent.level);
+      const seniority = Math.max(0.3, 1 - 0.12 * agent.level) * (org.industry?.quitMultiplier ?? 1);
       const quitChance = (ORG.quitBase + unhappy + ORG.quitOpen * agent.plan.openness) * marketPull * seniority
         + (agent.burnout.active ? 0.15 : 0);
       if (random.chance(quitChance)) reason = 'quit';
@@ -296,12 +380,19 @@ export function applyReviewRules(org, industry) {
     if (agent.tenured) {
       agent.pip.active = false;
     } else if (agent.pip.active) {
-      if (rating === 'meetSome') agent.quarter.terminated = 'fired';
+      if (rating === 'meetSome' && agent.level >= ORG.managementFromLevel) {
+        // A manager who cannot make it work steps back to the level below
+        // rather than out of the door.
+        stepBack(agent, industry);
+      } else if (rating === 'meetSome') {
+        agent.quarter.terminated = 'fired';
+      }
       else {
         agent.pip.active = false;
         agent.quarter.pipCleared = true;
       }
-    } else if (rating === 'meetSome') {
+    } else if (rating === 'meetSome' && agent.quartersAtLevel >= ORG.rampUpQuarters) {
+      // A new level or a new job gets a ramp-up before a PIP can start.
       agent.pip.active = true;
       agent.pip.quarters = 0;
       agent.motivation -= MOTIVATION.pipHit;
@@ -338,9 +429,23 @@ export function applyTenureReviews(org, industry, citationBar) {
   return results;
 }
 
-export function promote(agent, industry) {
-  agent.level += 1;
+/** Step back one level, keeping the top of the lower band's pay. */
+export function stepBack(agent, industry) {
+  agent.level -= 1;
   agent.quartersAtLevel = 0;
+  agent.quartersInGrade = 0;
+  agent.readiness = 0;
+  agent.pip.active = false;
+  agent.salary = payInBand(industry, agent.level, agent.salary);
+  agent.motivation -= MOTIVATION.stepBackHit;
+  agent.quarter.steppedBack = true;
+}
+
+export function promote(agent, industry, random = null) {
+  agent.level += 1;
+  if (industry.trackFromLevel && agent.level > industry.trackFromLevel && !agent.track) agent.track = defaultTrack(agent, random);
+  agent.quartersAtLevel = 0;
+  agent.quartersInGrade = 0;
   agent.readiness = 0;
   agent.salary = payInBand(industry, agent.level, agent.salary * 1.1);
   agent.motivation += MOTIVATION.promotionLift;
@@ -349,10 +454,45 @@ export function promote(agent, industry) {
   agent.quarter.promoted = true;
 }
 
-function promotionScore(agent, chairLevel, random) {
+// Ratings that show someone is already doing well at their level.
+const STRONG_RATINGS = new Set(['greatlyExceeds', 'exceeds', 'meetAll']);
+
+/**
+ * Promotions go to people who have been performing well for a while, not
+ * on a good quarter: their smoothed stack rank (standing, about a year's
+ * memory) must clear the bar and the latest rating must be top half. The
+ * expert track's upper chairs need exceptional standing.
+ */
+export function performingAtLevel(agent, industry = null) {
+  const latest = [...agent.ratings].reverse().find((rating) => rating !== 'onLeave');
+  if (!latest || !STRONG_RATINGS.has(latest)) return false;
+  const standing = agent.standing ?? 0.5;
+  const expertUpper = agent.track === 'expert' && industry?.trackFromLevel !== undefined && agent.level >= industry.trackFromLevel + 1;
+  return standing >= (expertUpper ? ORG.expertPromotionStanding : ORG.promotionStanding);
+}
+
+/** The score of an outside candidate: ready, with a strong record elsewhere. */
+function externalCandidateScore(random, chairLevel) {
+  const standing = random.between(ORG.externalStanding[0], ORG.externalStanding[1]);
+  // Seasoned outsiders bring their own politics and leadership, more so for
+  // senior chairs.
+  return READINESS.cap + standing * ORG.standingPromotionWeight + 20 + chairLevel * ORG.outsiderSeniorityPerLevel + random.between(0, 20);
+}
+
+function promotionScore(agent, chairLevel, random, politicsWeight = 1) {
   const ratingBonus = { greatlyExceeds: 30, exceeds: 20, meetAll: 10, meetMost: 0, meetSome: -40 }[agent.lastRating] ?? 0;
-  const politics = (agent.pol - 100) * ORG.promotionPoliticsPerLevel * chairLevel;
-  return agent.readiness + ratingBonus + (agent.alignment - 1) * 40 + politics + random.between(0, 10);
+  const trackPolitics = agent.track ? TRACKS[agent.track].promotionPolitics : 1;
+  const politics = (agent.pol - 100) * ORG.promotionPoliticsPerLevel * chairLevel * trackPolitics * politicsWeight;
+  // Committees for manager chairs look for leaders, not only producers.
+  const leads = agent.track !== 'expert' && chairLevel >= ORG.managementFromLevel;
+  const leadership = leads ? ((agent.traits.leadership ?? 1) - 1) * ORG.leadershipPromotionWeight : 0;
+  // Among the ready, the chair goes to the strongest track record.
+  const record = (agent.standing ?? 0.5) * ORG.standingPromotionWeight;
+  // Committees favour rising stars: years stuck at a level read as a
+  // plateau, and late-career promotions are rare.
+  const plateau = Math.max(0, (agent.quartersInGrade ?? agent.quartersAtLevel) / 4 - ORG.plateauAfterYears) * ORG.plateauPerYear;
+  const late = Math.max(0, agent.age - ORG.latePromotionAge) * ORG.latePerYear;
+  return agent.readiness + record + ratingBonus + (agent.alignment - 1) * 40 + politics + leadership - plateau - late + random.between(0, 10);
 }
 
 /**
@@ -366,14 +506,22 @@ export function fillVacancies(org, industry, random, { playerId = null, playerEl
     let vacancies = industry.seats[level] - agentsAtLevel(org, level).length;
     while (vacancies > 0) {
       const candidates = agentsAtLevel(org, level - 1).filter((agent) => agent.readiness >= READINESS.threshold
+        && performingAtLevel(agent, industry)
         && !agent.pip.active && !agent.quarter.terminated && (agent.id !== playerId || playerEligible));
-      const internal = candidates.length > 0 && random.chance(ORG.internalFillChance[level]);
+      const scores = new Map(candidates.map((agent) => [agent, promotionScore(agent, level, random, industry.politicsWeight ?? 1)]));
+      candidates.sort((a, b) => scores.get(b) - scores.get(a));
+      // A real search: often an outside candidate with a strong record is on
+      // the slate too, more often the more senior the chair.
+      const externalOnly = random.chance(ORG.externalOnlyChance[level]);
+      let outsider = -Infinity;
+      if (random.chance(ORG.externalSearchChance[level])) {
+        for (let index = 0; index < ORG.outsideCandidates[level]; index += 1) outsider = Math.max(outsider, externalCandidateScore(random, level));
+      }
+      const internal = !externalOnly && candidates.length > 0 && scores.get(candidates[0]) > outsider;
       if (internal) {
-        const scores = new Map(candidates.map((agent) => [agent, promotionScore(agent, level, random)]));
-        candidates.sort((a, b) => scores.get(b) - scores.get(a));
         const chosen = candidates[0];
         const quartersAtFormerLevel = chosen.quartersAtLevel;
-        promote(chosen, industry);
+        promote(chosen, industry, random);
         promotions.push({ agent: chosen, level, quartersAtFormerLevel, passedOver: candidates.slice(1) });
       } else {
         org.agents.push(hirePeer(random, industry, level));
@@ -398,16 +546,61 @@ export function decayUnusedReadiness(org) {
   }
 }
 
+/** What someone's recent work is worth in their band: pay for current standing. */
+export function currentValue(agent, industry) {
+  const base = industry.salaries[agent.level];
+  return base * (1 + (MONEY.bandTop - 1) * (agent.recentStanding ?? agent.standing ?? 0.5));
+}
+
+/** The salary someone's smoothed standing has earned. */
+export function payTarget(agent, industry) {
+  const base = industry.salaries[agent.level];
+  return base * (1 + (MONEY.bandTop - 1) * (agent.standing ?? 0.5));
+}
+
+/** A year of growth: the division adds seats, opening chairs to fill. */
+export function growOrganization(org) {
+  const industry = org.industry;
+  org.seatGrowth = Math.min(ORG.maxSeatGrowth, org.seatGrowth * (1 + (industry.growthPerYear ?? 0)));
+  const base = industry.base.seats;
+  const scale = COMPANY_TIERS[org.tier].seatScale;
+  // Growth widens the base and middle of the pyramid; directors grow at
+  // half the rate and the top two chairs not at all.
+  industry.seats = base.map((seats, level) => {
+    const growth = level >= ORG.growthStopsAtLevel ? 1 : level === ORG.growthStopsAtLevel - 1 ? 1 + (org.seatGrowth - 1) / 2 : org.seatGrowth;
+    return Math.max(1, Math.round(seats * scale * growth));
+  });
+}
+
+/** Move the company to another tier, keeping its people and growth. */
+export function retierOrganization(org, tierId) {
+  const seats = org.industry.seats;
+  org.tier = tierId;
+  org.industry = tieredIndustry(org.industry.base, tierId);
+  org.industry.seats = seats;
+}
+
+/** Year-end pay review: close part of the gap to the target; never cut. */
+export function reviewPay(org, industry) {
+  for (const agent of employedAgents(org)) {
+    const target = payTarget(agent, industry);
+    const catchUp = Math.min(1, MONEY.payCatchUpPerYear * (industry.payCatchUp ?? 1));
+    if (target > agent.salary) agent.salary = payInBand(industry, agent.level, agent.salary + (target - agent.salary) * catchUp);
+  }
+}
+
 /**
- * Choose who goes in a layoff: expensive and poorly networked first,
- * shielded by performance and political cover.
+ * Who goes in a layoff: the expensive for what they do now, and the poorly
+ * connected. Someone paid for past glory who has slipped lately is exposed
+ * unless they have rapport above them.
  */
-export function layoffScore(agent, levelMedianSalary, random) {
+export function layoffScore(agent, levelMedianSalary, random, industry) {
   const cost = agent.salary / levelMedianSalary - 1;
-  const network = (agent.alignment - 1) + agent.informants * 0.05;
+  const overpaid = industry ? agent.salary / currentValue(agent, industry) - 1 : 0;
+  const rapport = (agent.alignment - 1) + agent.informants * 0.05;
   const performance = { greatlyExceeds: 0.6, exceeds: 0.4, meetAll: 0.2, meetMost: 0, meetSome: -0.4 }[agent.lastRating] ?? 0;
   const loyalty = (1 - agent.plan.openness) * 0.3;
-  return cost - network - performance - loyalty + random.normal(0, 0.15);
+  return 0.5 * cost + 1.5 * overpaid - rapport - performance - loyalty + random.normal(0, 0.15);
 }
 
 export function runLayoffs(org, industry, share, random) {
@@ -418,7 +611,7 @@ export function runLayoffs(org, industry, share, random) {
     if (pool.length === 0) continue;
     const salaries = pool.map((agent) => agent.salary).sort((a, b) => a - b);
     const median = salaries[Math.floor(salaries.length / 2)];
-    const scored = pool.map((agent) => ({ agent, score: layoffScore(agent, median, random) }));
+    const scored = pool.map((agent) => ({ agent, score: layoffScore(agent, median, random, industry) }));
     scored.sort((a, b) => b.score - a.score);
     const count = Math.floor(pool.length * share + random.next());
     for (let index = 0; index < count; index += 1) {
@@ -436,6 +629,7 @@ export function ageAgents(org) {
     clampVitals(agent);
     agent.age += 0.25;
     agent.quartersAtLevel += 1;
+    agent.quartersInGrade = (agent.quartersInGrade ?? agent.quartersAtLevel - 1) + 1;
     agent.quartersEmployed += 1;
     if (agent.burnout.active) {
       agent.burnout.quarters += 1;

@@ -135,6 +135,26 @@ h2, h3 { margin: 0; text-wrap: balance; }
 .pick-card h3 { font-size: 24px; text-transform: uppercase; letter-spacing: 0.02em; }
 .pick-card .portrait { width: 64px; height: 64px; }
 .pick-card p { margin: 0; color: var(--ink-soft); line-height: 1.4; font-size: 14px; }
+.pick-grid.characters { flex: 0 0 auto; align-content: start; }
+.pick-card.character { grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 4px 12px; padding: 12px; }
+.pick-card.character .portrait { grid-row: span 3; width: 56px; height: 56px; }
+.pick-card.character h3 { font-size: 20px; }
+.pick-card.character .archetype { font-size: 13px; }
+.pick-card.selected { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(244, 197, 66, 0.35); }
+.pick-detail {
+  width: min(1100px, 100%);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: var(--panel);
+  border: 1px solid var(--panel-line);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+}
+.pick-detail-text { flex: 1; min-width: 0; }
+.pick-detail-text h3 { font-size: 20px; text-transform: uppercase; letter-spacing: 0.02em; }
+.pick-detail-text p { margin: 4px 0 0; color: var(--ink-soft); line-height: 1.4; font-size: 14px; }
+.pick-detail .explain { margin: 0; }
 .tag-row { display: flex; flex-wrap: wrap; gap: 6px; }
 .tag {
   font-size: 14px;
@@ -594,6 +614,10 @@ details.developer[open] summary { margin-bottom: 8px; }
 .peer-table td { padding: 4px 6px; border-top: 1px solid var(--panel-line); white-space: nowrap; }
 .peer-table tr.you td { color: var(--gold); font-weight: 700; }
 .table-wrap { overflow-x: auto; }
+.ladder-table td:nth-child(2) { white-space: normal; }
+.ladder-table .muted { opacity: 0.45; }
+.ladder-table .track-or { color: var(--ink-faint); font-size: 12px; }
+.ladder-table .fork-note { font-size: 12px; color: var(--ink-faint); font-weight: 400; }
 .relation { display: inline-block; min-width: 38px; text-align: right; }
 .relation.ally { color: #7fe3a0; }
 .relation.enemy { color: #ff8a8d; }
@@ -693,6 +717,18 @@ details.developer[open] summary { margin-bottom: 8px; }
   .pick-card { grid-template-columns: auto minmax(0, 1fr); padding: 10px 12px; gap: 4px 12px; }
   .pick-card .portrait { grid-row: span 3; width: 52px; height: 52px; }
   .pick-card.industry { grid-template-columns: minmax(0, 1fr); }
+  .pick-grid.characters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .career-blurb { padding: 8px 10px; gap: 10px; }
+  .career-blurb .portrait { width: 44px; height: 44px; }
+  .career-blurb .lead { font-size: 14px; line-height: 1.35; }
+  .pick-card.character { padding: 8px 10px; gap: 2px 8px; }
+  .pick-card.character .portrait { width: 40px; height: 40px; }
+  .pick-card.character h3 { font-size: 16px; }
+  .pick-card.character .tag { font-size: 11px; padding: 1px 6px; }
+  .pick-card.character .archetype { display: none; }
+  .pick-detail { flex-direction: column; align-items: stretch; gap: 8px; padding: 10px 12px; }
+  .pick-detail-text h3 { font-size: 16px; }
+  .pick-detail-text p { font-size: 13px; }
   .hud { grid-template-columns: minmax(0, 1fr) auto auto; }
   .hud .age, .hud .wealth { grid-row: 2; }
   .clock { grid-column: 1; grid-row: 2; padding: 6px 8px; }

@@ -68,7 +68,7 @@ test('Simon and Jennifer take long hours well, Chloe badly, Joseph in between', 
   assert.ok(simon.health > joseph.health + 10 && jennifer.health > joseph.health + 10);
   assert.ok(chloe.health < joseph.health - 10);
   assert.ok(simon.motivation > joseph.motivation && chloe.motivation < joseph.motivation);
-  assert.deepEqual(characterTraits('joseph'), {}, 'an average Joe');
+  assert.equal(characterTraits('joseph').strainResistance, undefined, 'an average Joe on long hours');
 });
 
 test('Jennifer tires of desk work and Simon of networking', () => {

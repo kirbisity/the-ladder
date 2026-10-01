@@ -4,10 +4,10 @@
 
 import { RATING_LABELS, RATINGS, dailyCoreOutput, stagnationYears, projectSpec, projectsOpenTo, CORE, POLITICS } from '../sim/agent.js';
 import { employedAgents, agentsAtLevel, TEAM_COUNT } from '../sim/org.js';
-import { titleOf, formatMoney, netWorth, managerOf, teamHappiness, quarterlyExpenses, dryPowder, fmlaStatus, holidayStatus } from '../sim/game.js';
+import { titleOf, formatMoney, netWorth, managerOf, teamHappiness, quarterlyExpenses, dryPowder, fmlaStatus, holidayStatus, employerIndustry, fireNumber } from '../sim/game.js';
 import { careerSummary } from '../sim/story.js';
 import { drawPerson } from './figures.js';
-import { PROJECTS, READINESS, INDUSTRY_STATS, ORG, TIME, MOTIVATION, RELATIONSHIP, CHARACTERS, INDUSTRIES, HOLIDAY } from '../config.js';
+import { PROJECTS, READINESS, INDUSTRY_STATS, ORG, TIME, MOTIVATION, RELATIONSHIP, CHARACTERS, INDUSTRIES, HOLIDAY, COMPANY_TIERS, MONEY } from '../config.js';
 
 export function escapeHtml(text) {
   return String(text).replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
@@ -68,10 +68,12 @@ export function eventPanel(game) {
 
 export function reviewPanel(game, report) {
   const player = game.player;
-  const title = report.unemployed ? 'Out of work' : RATING_LABELS[report.rating] ?? 'Quarter closed';
+  const checkIn = !report.unemployed && !report.review && !report.lostJob;
+  const title = report.unemployed ? 'Out of work' : checkIn ? 'Check-in' : RATING_LABELS[report.rating] ?? 'Quarter closed';
   const ladder = report.rating && report.rating !== 'onLeave' ? ratingLadder(report.rating) : '';
   const figures = [];
   if (report.rank) figures.push(figure('Rank', `${report.rank} / ${report.poolSize}`));
+  if (checkIn && report.checkInRank) figures.push(figure('Running rank', `${report.checkInRank} / ${report.checkInPool}`));
   if (report.performance !== undefined && report.median) figures.push(figure('Score vs median', `${Math.round(report.performance)} / ${Math.round(report.median)}`));
   figures.push(figure('Readiness', `${Math.round(player.readiness)} / ${READINESS.threshold}`));
   const cash = (report.income ?? 0) - (report.expenses ?? 0);
@@ -85,7 +87,10 @@ export function reviewPanel(game, report) {
       : /PIP|Leapfrog|let go|laid off|counselled|ER|denied|recession|undercuts|poorly|Layoffs/i.test(note) ? 'bad' : '';
     notes.push(`<li class="${tone}">${escapeHtml(note)}</li>`);
   }
-  const kicker = `Q${report.quarterOfYear} · Year ${report.year} review`;
+  if (checkIn && report.nextReviewIn) {
+    notes.unshift(`<li>No formal review this quarter: ${escapeHtml(game.org?.companyName ?? 'the company')} reviews every ${employerIndustry(game).reviewEvery} quarters. The next one, in ${report.nextReviewIn} quarter${report.nextReviewIn === 1 ? '' : 's'}, averages the whole period.</li>`);
+  }
+  const kicker = `Q${report.quarterOfYear} · Year ${report.year} ${checkIn ? 'check-in' : 'review'}`;
   return `${head(kicker, report.promoted ? `Promoted: ${escapeHtml(titleOf(game, player.level))}` : escapeHtml(title), false)}
     ${ladder}
     <div class="figures">${figures.join('')}</div>
@@ -202,9 +207,42 @@ export function orgPanel(game, tab = 'chart', selectedId = null) {
       <p class="lead">No badge, no org chart. Raise the Open slider to widen the search; each quarter out of work makes the next offer harder to get.</p>`;
   }
   const tabs = `<div class="tabs"><button class="button small ${tab === 'chart' ? 'primary' : ''}" data-org-tab="chart">Org chart</button>
-    <button class="button small ${tab === 'peers' ? 'primary' : ''}" data-org-tab="peers">Peer tracking</button></div>`;
-  const body = tab === 'peers' ? peerTracking(game) : orgChart(game, selectedId);
-  return `${head(`${escapeHtml(game.org.companyName)} · ${escapeHtml(game.org.divisionNames[game.org.divisionIndex])}`, 'Org tree')}${tabs}${body}`;
+    <button class="button small ${tab === 'peers' ? 'primary' : ''}" data-org-tab="peers">Peer tracking</button>
+    <button class="button small ${tab === 'ladder' ? 'primary' : ''}" data-org-tab="ladder">Career ladder</button></div>`;
+  const body = tab === 'peers' ? peerTracking(game) : tab === 'ladder' ? careerLadder(game) : orgChart(game, selectedId);
+  const tier = COMPANY_TIERS[game.org.tier];
+  return `${head(`${escapeHtml(game.org.companyName)} · ${escapeHtml(tier?.name ?? '')} · ${escapeHtml(game.org.divisionNames[game.org.divisionIndex])}`, 'Org tree')}${tabs}${body}`;
+}
+
+/**
+ * Every rung of this employer's ladder, top down: the title on each track,
+ * the pay band, how many chairs are filled, and where you stand.
+ */
+export function careerLadder(game) {
+  const industry = employerIndustry(game);
+  const player = game.player;
+  const fork = industry.trackFromLevel;
+  const tier = COMPANY_TIERS[game.org.tier];
+  const rows = [];
+  for (let level = industry.seats.length - 1; level >= 0; level -= 1) {
+    const seated = agentsAtLevel(game.org, level).length;
+    const you = level === player.level;
+    const management = titleOf(game, level, 'management');
+    const expert = fork !== undefined && level > fork ? titleOf(game, level, 'expert') : null;
+    const base = industry.salaries[level];
+    const band = `${formatMoney(base)}–${formatMoney(base * MONEY.bandTop)}`;
+    const titles = expert && expert !== management
+      ? `<span class="${player.track === 'expert' ? 'muted' : ''}">${escapeHtml(management)}</span> <span class="track-or">or</span> <span class="${player.track === 'management' ? 'muted' : ''}">${escapeHtml(expert)}</span>`
+      : escapeHtml(management);
+    rows.push(`<tr class="${you ? 'you' : ''}"><td>${level + 1}</td><td>${titles}${you ? ' <strong>· you</strong>' : ''}${fork !== undefined && level === fork + 1 ? '<div class="fork-note">The fork: management or expert</div>' : ''}</td>
+      <td>${band}</td><td>${seated} / ${industry.seats[level]}</td></tr>`);
+  }
+  const reviews = { 1: 'every quarter', 2: 'twice a year', 4: 'once a year' }[industry.reviewEvery] ?? `every ${industry.reviewEvery} quarters`;
+  const track = player.track ? ` You are on the <strong>${player.track}</strong> track.` : '';
+  return `<p class="explain"><strong>${escapeHtml(tier?.name ?? 'Company')}</strong> employer: ${escapeHtml(tier?.blurb ?? '')} Reviews ${reviews}.${track}</p>
+    <div class="table-wrap"><table class="peer-table ladder-table"><thead><tr><th>#</th><th>Title</th><th>Pay band</th><th>Chairs</th></tr></thead>
+    <tbody>${rows.join('')}</tbody></table></div>
+    <p class="explain">A promotion needs readiness ${READINESS.threshold}, strong recent ratings and an empty chair; senior chairs often go to outside hires. Pay moves within the band with your standing, a few years behind it.</p>`;
 }
 
 function orgChart(game, selectedId) {
@@ -308,21 +346,38 @@ export function performancePanel(game) {
 
 // ── Skills and life ────────────────────────────────────────────────────
 
-export function careerPanel(game) {
+export function careerPanel(game, tab = 'profile') {
   const player = game.player;
   const character = game.character;
   const manager = managerOf(game);
   const allies = game.org ? employedAgents(game.org).filter((agent) => agent !== player && agent.relationship >= RELATIONSHIP.loyalLine).length : 0;
   const enemies = game.org ? employedAgents(game.org).filter((agent) => agent !== player && agent.relationship <= RELATIONSHIP.hostileLine).length : 0;
   const team = teamHappiness(game);
-  return `${head(`${character.mbti} · ${escapeHtml(character.archetype)}`, escapeHtml(player.name))}
+  const tabs = `<div class="tabs">${[['profile', 'Profile'], ['career', 'Chart'], ['money', 'Money']].map(([id, label]) => `<button class="button small ${tab === id ? 'primary' : ''}" data-career-tab="${id}">${label}</button>`).join('')}</div>`;
+  const heading = head(`${character.mbti} · ${escapeHtml(character.archetype)}`, escapeHtml(player.name));
+  if (tab === 'career') return `${heading}${tabs}${historyChart(game) || '<p class="explain">The chart fills in as the quarters go by.</p>'}`;
+  if (tab === 'money') return `${heading}${tabs}${wealthChart(game) || '<p class="explain">The chart fills in as the quarters go by.</p>'}${moneyFacts(game)}`;
+  return `${heading}${tabs}
     <div class="project-tile career-blurb" style="grid-template-columns:auto minmax(0,1fr)">${portrait(player.look, 64)}
       <div><p class="lead">${escapeHtml(character.blurb)}</p></div></div>
     <div class="figures">${figure('IQ', player.iq)}${figure('Political skill', player.pol)}${figure('Skill', Math.round(player.skill))}${figure('Informants', Math.floor(player.informants))}</div>
     <div class="figures">${figure('Salary', formatMoney(player.salary))}${figure('Savings', formatMoney(game.savings))}${figure('Home equity', formatMoney(game.homeEquity))}${figure('Earned so far', formatMoney(game.lifetimeEarnings))}</div>
     <div class="figures">${figure('Allies', allies)}${figure('Enemies', enemies)}${figure('Manager', manager ? escapeHtml(manager.name.split(' ')[0]) : '—')}${team !== null ? figure('Team mood', `${Math.round(team)}%`) : figure('Spending / qtr', formatMoney(quarterlyExpenses(game)))}</div>
-    <p>${game.married ? 'Married' : 'Single'}${game.dependents ? `, ${game.dependents} child${game.dependents > 1 ? 'ren' : ''}` : ''}${game.homeEquity > 0 ? ', homeowner' : ', renting'}. Market: ${game.market}.</p>
-    ${historyChart(game)}`;
+    <p>${game.married ? 'Married' : 'Single'}${game.dependents ? `, ${game.dependents} child${game.dependents > 1 ? 'ren' : ''}` : ''}${game.homeEquity > 0 ? ', homeowner' : ', renting'}. Market: ${game.market}.</p>`;
+}
+
+/** The numbers behind the money chart: where pay sits in its band, and the FIRE number. */
+function moneyFacts(game) {
+  const player = game.player;
+  const industry = employerIndustry(game);
+  const facts = [figure('Net worth', formatMoney(netWorth(game))), figure('Spending / yr', formatMoney(quarterlyExpenses(game) * 4)), figure('FIRE number', formatMoney(fireNumber(game)))];
+  if (game.employment.employed) {
+    const base = industry.salaries[player.level];
+    const position = Math.round((player.salary / base - 1) / (MONEY.bandTop - 1) * 100);
+    facts.push(figure('Pay in band', `${Math.max(0, Math.min(100, position))}%`));
+  }
+  return `<div class="figures">${facts.join('')}</div>
+    <p class="explain">Raises follow your standing in the stack rank toward a target in the band, a few years behind it. A slump never cuts pay, but it leaves you expensive for what you deliver, and that is who a layoff list finds first.</p>`;
 }
 
 /** Health, motivation and level over the career, as an SVG chart. */
@@ -342,6 +397,39 @@ export function historyChart(game) {
       <path d="${path('health')}" fill="none" stroke="#5fd081" stroke-width="2" vector-effect="non-scaling-stroke"/>
       <path d="${path('motivation')}" fill="none" stroke="#5c9bff" stroke-width="2" vector-effect="non-scaling-stroke"/>
       <path d="${levelPath}" fill="none" stroke="#f4c542" stroke-width="3" vector-effect="non-scaling-stroke"/>
+    </svg></div>`;
+}
+
+/**
+ * Money over the career: net worth (area) and salary (line), each on its own
+ * scale with its peak labelled, so a modest salary still reads next to a
+ * large net worth.
+ */
+export function wealthChart(game) {
+  const history = game.history.filter((entry) => entry.netWorth !== undefined);
+  if (history.length < 2) return '';
+  const width = 600;
+  const height = 150;
+  const pad = 8;
+  const top = 18;
+  const x = (index) => pad + index / (history.length - 1) * (width - 2 * pad);
+  const worthValues = history.map((entry) => entry.netWorth);
+  const worthMax = Math.max(1, ...worthValues);
+  const worthMin = Math.min(0, ...worthValues);
+  const salaryMax = Math.max(1, ...history.map((entry) => entry.salary ?? 0));
+  const yWorth = (value) => height - pad - (value - worthMin) / (worthMax - worthMin) * (height - pad - top);
+  const ySalary = (value) => height - pad - value / salaryMax * (height - pad - top);
+  const worthLine = history.map((entry, index) => `${index ? 'L' : 'M'}${x(index).toFixed(1)},${yWorth(entry.netWorth).toFixed(1)}`).join(' ');
+  const worthArea = `${worthLine} L${x(history.length - 1).toFixed(1)},${yWorth(0).toFixed(1)} L${x(0).toFixed(1)},${yWorth(0).toFixed(1)} Z`;
+  const salaryLine = history.map((entry, index) => `${index ? 'L' : 'M'}${x(index).toFixed(1)},${ySalary(entry.salary ?? 0).toFixed(1)}`).join(' ');
+  const last = history[history.length - 1];
+  return `<div><div class="modal-kicker">Money: <span style="color:#46b96b">net worth</span> (peak ${formatMoney(worthMax)}, now ${formatMoney(last.netWorth)}) · <span style="color:#f4c542">salary</span> (peak ${formatMoney(salaryMax)}, now ${last.salary ? formatMoney(last.salary) : 'none'})</div>
+    <svg class="chart" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-label="Net worth and salary over the career">
+      <rect width="${width}" height="${height}" rx="10" fill="rgba(255,255,255,0.04)"/>
+      ${worthMin < 0 ? `<line x1="${pad}" x2="${width - pad}" y1="${yWorth(0).toFixed(1)}" y2="${yWorth(0).toFixed(1)}" stroke="rgba(255,255,255,0.25)" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"/>` : ''}
+      <path d="${worthArea}" fill="rgba(70,185,107,0.25)" stroke="none"/>
+      <path d="${worthLine}" fill="none" stroke="#46b96b" stroke-width="2" vector-effect="non-scaling-stroke"/>
+      <path d="${salaryLine}" fill="none" stroke="#f4c542" stroke-width="2.5" vector-effect="non-scaling-stroke"/>
     </svg></div>`;
 }
 
@@ -407,6 +495,13 @@ export const HELP_PAGES = [
   { title: 'Climbing', items: [
     'A promotion needs two things at once: readiness of 100, and an empty chair above you.',
     'Readiness without a chair fades. Peers want the same chairs; someone junior jumping past you hurts.',
+    'Past the fork you choose a track: management (judged more and more on influence and your team) or expert (judged on your own work). The Org tree\'s Career ladder shows both.',
+    'Raises follow your standing a few years behind it, and are never cut. Paid more than your recent work is worth, you are first on a layoff list unless someone above vouches for you.',
+  ] },
+  { title: 'Employers', items: [
+    'High-growth companies review every quarter, PIP the most, grow fast and pay the most. Established ones review twice a year; steady ones once, with fewer PIPs and more politics.',
+    'Startups pay less plus equity: most fold, a few sell and pay out. Companies drift between tiers over the years.',
+    'Higher tiers lose people their jobs more often, and get them to financial independence sooner. Moving to a smaller employer can round your title up; a bigger one may down-level you.',
     'The Dedicated–Open slider trades focus and layoff protection for recruiter calls and a faster job search.',
   ] },
   { title: 'Burnout and time off', items: [
@@ -416,8 +511,8 @@ export const HELP_PAGES = [
   ] },
   { title: 'How it ends', items: [
     'Retire at 62 with the highest title and the most wealth you can, and read the story of your career.',
-    'Or retire early: once your net worth covers 25 years of spending (the FIRE number), the game offers you the door.',
-    'Health at zero is death. Out of work with no savings left is homelessness.',
+    'Or retire early: once your net worth covers your spending for life (25 years of it at 60, about 33 at 40: the FIRE number), the game offers you the door.',
+    'Health at zero is death. Out of work, a long search costs more than money: stress and illness, a strained marriage, and, past the debt you can carry, homelessness.',
     'Motivation at zero is a breakdown, but the last 10% resists: only a long stretch of burnout with no rest gets you there.',
   ] },
 ];
@@ -535,14 +630,23 @@ export function gameOverPanel(game) {
       <button class="button" data-action="same-again">Same person again</button><button class="button" data-action="new-career">New career</button></div>`;
 }
 
-export function characterCards() {
-  return CHARACTERS.map((character) => `<button class="pick-card" data-character="${character.id}">
+/** Compact cards for the roster; the selected one is described below the grid. */
+export function characterCards(selectedId = null) {
+  return CHARACTERS.map((character) => `<button class="pick-card character ${character.id === selectedId ? 'selected' : ''}" data-character="${character.id}" aria-pressed="${character.id === selectedId}">
     ${portrait(character.look, 64)}
     <h3>${escapeHtml(character.name)}</h3>
     <div class="tag-row"><span class="tag blue">${character.mbti}</span><span class="tag">IQ ${character.iq}</span><span class="tag">Pol ${character.pol}</span></div>
-    <p><strong>${escapeHtml(character.archetype)}.</strong></p>
-    <p class="blurb">${escapeHtml(character.blurb)}</p>
+    <p class="archetype">${escapeHtml(character.archetype)}</p>
   </button>`).join('');
+}
+
+/** The selected character, in full, with the button that commits to them. */
+export function characterDetail(characterId) {
+  const character = CHARACTERS.find((entry) => entry.id === characterId);
+  if (!character) return '<p class="explain">Pick someone to read about them. Everyone runs the same rules; only their numbers differ.</p>';
+  return `<div class="pick-detail-text"><h3>${escapeHtml(character.name)} · ${escapeHtml(character.archetype)}</h3>
+      <p>${escapeHtml(character.blurb)}</p></div>
+    <button class="button primary" data-action="pick-character">Be ${escapeHtml(character.name.split(' ')[0])}</button>`;
 }
 
 const INDUSTRY_BLURBS = {

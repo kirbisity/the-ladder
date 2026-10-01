@@ -29,6 +29,20 @@ export function hasLoyalFriend(game) {
   return peers(game, (agent) => agent.relationship >= RELATIONSHIP.loyalLine).length > 0;
 }
 
+/**
+ * Odds of a political gamble paying off: political skill, scaled by a
+ * character's event savvy, within sensible bounds.
+ */
+export function politicalOdds(game, floor = 0.2, span = 140) {
+  return clamp(game.player.pol / span * (game.player.traits.eventSavvy ?? 1), floor, 0.9);
+}
+
+/** A good outcome's odds, improved by event savvy (a bad one's, reduced). */
+export function savvy(game, chance, good = true) {
+  const factor = game.player.traits.eventSavvy ?? 1;
+  return clamp(good ? chance * factor : chance / factor, 0, 0.95);
+}
+
 export function employed(game) {
   return game.employment.employed;
 }

@@ -55,8 +55,8 @@ test('Simon lasts years longer than Chloe on the same grind', () => {
 });
 
 test('every defeat state is reachable by some style of play', () => {
-  const coaster = sweep('coaster');
+  const erratic = sweep('random');
   assert.ok(grinder.share((entry) => entry.outcome === 'death') > 0, 'death');
   assert.ok(grinder.share((entry) => entry.outcome === 'breakdown') > 0, 'breakdown');
-  assert.ok(coaster.share((entry) => entry.outcome === 'homeless') > 0, 'homelessness');
+  assert.ok(erratic.share((entry) => entry.outcome === 'homeless') > 0, 'homelessness');
 });

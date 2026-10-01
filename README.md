@@ -20,15 +20,30 @@ Play: <https://kirbisity.github.io/the-ladder/>
   breakdown, but the last 10% resists every fall.
 - **Performance** is ranked against everyone at your level each quarter, in
   the design's brackets (top 5%, top 20%, middle, bottom 15% → PIP).
-- **Promotion** needs readiness of 100 *and* an empty chair. Chairs open when
-  people quit, retire, are fired or laid off, or move up themselves.
+- **Promotion** needs readiness of 100, a strong standing (a smoothed stack
+  rank) *and* an empty chair. Chairs open when people quit, retire, are fired
+  or laid off, or move up themselves; senior chairs often go to outside
+  hires, and years stuck at a level read as a plateau. Past the fork you pick
+  a **track**: management (judged more and more on influence and people) or
+  expert (judged on your own work). The Org tree's Career ladder shows both.
+- **Pay** follows standing toward a target in the level's band, a few years
+  behind it, and is never cut. Someone paid for past glory who has slipped
+  is first on a layoff list unless someone above vouches for them.
+- **Employers** come in tiers: high-growth (quarterly reviews, most PIPs, fast
+  growth, best pay), established (twice a year), steady (once a year, more
+  politics) and startups (equity; most fold, a few sell). Companies drift
+  between tiers. Higher tiers cost more jobs and reach financial
+  independence sooner.
 - **Peers** pick their plans by utility (ambition × gain − self-preservation
   × risk) and keep a ledger with you: allies warn and sponsor, enemies
   undercut you in calibration.
 - **Characters**: Simon C (INTJ, takes long hours well, hates networking),
   Jennifer B (ENFP, takes long hours well, a natural networker), Chloe C
-  (ENTP, moonshots, burns out fast on long hours) and Joseph J (ISTJ, an
-  average Joe). Everyone in the game goes by first name and last initial.
+  (ENTP, moonshots, needs fun and autonomy), Joseph J (ISTJ, an average Joe),
+  Richard K (ESTJ, works the room), Chris W (INTP, IQ 150, sustains extreme
+  hours), Adam R (ENTJ, the natural leader) and Eve M (ISFJ, steady, but long
+  hours wear her down). Everyone in the game goes by first name and last
+  initial, and they differ only in numbers on the character card.
 - **Industries** are patches over one default, each with its own seven
   projects and its own event deck: tech (on-call, migrations, RTO mandates,
   CVEs), consulting (up or out, utilization, death-march cases, sales
@@ -40,9 +55,13 @@ Play: <https://kirbisity.github.io/the-ladder/>
   car trouble, family.
 - **Time off**: holidays of one, two or four weeks (15 paid days a year),
   and FMLA.
+- **Out of work**, the search costs more than money the longer it runs:
+  mood sinks, stress raises the odds of illness and medical bills, a
+  marriage may break (half of everything, plus lawyers), and debt piles up.
 - **Defeat**: health at zero (death), motivation at zero (breakdown), or out
-  of work with no savings (homelessness). **Victory**: retire at 62, or
-  retire early (FIRE) once net worth covers 25 years of spending. Every
+  of work past the debt you can carry (homelessness). **Victory**: retire at
+  62, or retire early (FIRE) once net worth covers your spending for life
+  (25 years of it at 60, about 33 at 40). Every
   ending plays an animated scene (a funeral, a rainy alley, a hospital
   ward, retirement in a home that matches the money, a trip round the
   world) and closes with the story of the career, written from its
@@ -62,6 +81,20 @@ npm run balance -- 25 tech all
 `test/balance.test.js` pins the targets as relationships between play styles:
 grinding fails, steady play retires, minimal effort stays low, the top chair
 stays rare, and each defeat state is reachable.
+
+`tools/characters.js` plays every character with the same policy and prints
+how high they climb, how often they lose jobs and how they end;
+`test/characters.test.js` pins how the characters relate (Joseph lands
+senior, Adam leads, Chris sustains twelve-hour days, Chloe does best in
+academia). The outcome report plays each character at each kind of
+employer and writes a page:
+
+```
+node tools/characters.js 20 tech            # [careers] [industry|all] [policy] [tier]
+node tools/report.js 30 tech out/tech.json   # one file per industry, plus `extras`
+node tools/report-page.js out out/report.html
+node tools/spiral.js 150 27                  # the unemployment spiral by quarters out
+```
 
 ## Develop
 

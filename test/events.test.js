@@ -104,7 +104,7 @@ test('big and risky projects open with seniority', () => {
 });
 
 test('FMLA: a year in, twelve weeks unpaid, no rating, faster recovery, once a year', () => {
-  const game = createGame({ seed: 43 });
+  const game = createGame({ seed: 43, tierLock: 'aggressive' });
   assert.equal(fmlaStatus(game).eligible, false, 'not in the first year');
   playQuarters(game, FMLA.eligibleAfterQuarters);
   assert.equal(fmlaStatus(game).eligible, true);
@@ -128,7 +128,7 @@ test('every career ends with a story, whatever the ending', () => {
   const told = new Map();
   for (let seed = 7000; seed < 7060 && told.size < 4; seed += 1) {
     for (const policyName of ['balanced', 'grinder', 'coaster']) {
-      const game = createGame({ seed, characterId: 'jennifer', industryId: 'tech' });
+      const game = createGame({ seed, characterId: 'joseph', industryId: 'tech' });
       while (!game.outcome) playQuarter(game, POLICIES[policyName]);
       if (told.has(game.outcome.kind)) continue;
       const story = careerSummary(game);
@@ -192,12 +192,18 @@ test('holidays: paid days first, then unpaid; faster recovery; rated on days wor
   assert.ok(game.player.motivation > rested.player.motivation, 'away recovers faster than at the desk');
 });
 
-test('FIRE: offered once net worth covers 25 years of spending, and ends the career on yes', () => {
+test('FIRE: offered once net worth covers a lifetime of spending, and ends the career on yes', () => {
   const game = createGame({ seed: 46 });
   clearEvents(game);
   game.player.age = 40;
   assert.equal(fireReady(game), false);
-  game.savings = fireNumber(game) * 1.1;
+  const age = game.player.age;
+  game.player.age = 55;
+  const late = fireNumber(game);
+  game.player.age = 35;
+  assert.ok(fireNumber(game) > late * 1.2, 'retiring younger needs a bigger pot');
+  game.player.age = age;
+  game.savings = fireNumber(game) * 2;
   assert.equal(fireReady(game), true);
   finishQuarterDays(game);
   closeQuarter(game);
@@ -206,6 +212,7 @@ test('FIRE: offered once net worth covers 25 years of spending, and ends the car
   assert.equal(game.outcome, null, 'declining keeps you working');
   assert.equal(fireReady(game), false, 'and it will not ask again for a while');
   game.fireAskedQuarter = -99;
+  clearEvents(game);
   finishQuarterDays(game);
   closeQuarter(game);
   assert.equal(game.currentEvent?.event.id, 'fireOffer');

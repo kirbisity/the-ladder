@@ -17,7 +17,7 @@ import { peerLook } from './figures.js';
 import { createAudio } from './audio.js';
 import {
   eventPanel, reviewPanel, moneyPanel, vitalsPanel, orgPanel, performancePanel, careerPanel, projectPanel, helpPanel, menuPanel,
-  gameOverPanel, storyPanel, timeOffPanel, settingsPanel, characterCards, characterDetail, industryCards, employerCards, industryMeter, projectedCompletion, escapeHtml,
+  gameOverPanel, storyPanel, timeOffPanel, settingsPanel, characterCards, characterProfile, industryCards, employerCards, industryMeter, projectedCompletion, escapeHtml,
 } from './panels.js';
 import { createIntro } from './intro.js';
 import { createCutscenePlayer, END_SCENES, INTERIM_SCENES, JOURNAL_SCENES, endingSceneFor, sceneData } from './cutscenes.js';
@@ -713,6 +713,7 @@ function handleAction(action, target) {
     }
     case 'back-title': showScreen('title'); break;
     case 'back-character': showScreen('character'); break;
+    case 'back-roster': showScreen('character'); break;
     case 'back-industry': showScreen('industry'); break;
     case 'help': openModal('help', helpPanel(0)); break;
     case 'close-modal':
@@ -808,13 +809,9 @@ function bindInput() {
     }
     const character = event.target.closest('[data-character]');
     if (character) {
-      // First tap reads about them; a second tap on the same card commits.
-      if (app.pick.characterId === character.dataset.character) {
-        showScreen('industry');
-        return;
-      }
       app.pick.characterId = character.dataset.character;
-      renderCharacterPick();
+      $('#profile-body').innerHTML = characterProfile(app.pick.characterId);
+      showScreen('profile');
       return;
     }
     const industry = event.target.closest('[data-industry]');
@@ -923,8 +920,7 @@ function selectTab(name) {
 }
 
 function renderCharacterPick() {
-  $('#character-grid').innerHTML = characterCards(app.pick?.characterId ?? null);
-  $('#character-detail').innerHTML = characterDetail(app.pick?.characterId ?? null);
+  $('#character-grid').innerHTML = characterCards();
 }
 
 // ── Boot ───────────────────────────────────────────────────────────────

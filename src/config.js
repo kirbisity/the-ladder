@@ -590,10 +590,14 @@ export const INDUSTRY_STATS = {
 //   noveltyLift          — multiplier on the lift from landing a high-impact project
 //   coreBonus, politicsBonus, relationshipBonus, networkingDrain,
 //   networkingHealthDrain, deskWorkDrain/Limit, moonshot*, rigidManagerClash
+//   difficulty           — 1 to 3: how hard the climb is on average, set from the
+//                           outcome report's Director-or-higher rates across all
+//                           industries (1 above ~55%, 2 around 35-45%, 3 under 10%)
 // look: colours plus the features the portrait, office and cut scenes draw.
 export const CHARACTERS = [
   {
     id: 'simon',
+    difficulty: 2,
     name: 'Simon C',
     mbti: 'INTJ',
     iq: 140,
@@ -608,6 +612,7 @@ export const CHARACTERS = [
   },
   {
     id: 'jennifer',
+    difficulty: 2,
     name: 'Jennifer B',
     mbti: 'ENFP',
     iq: 140,
@@ -622,6 +627,7 @@ export const CHARACTERS = [
   },
   {
     id: 'chloe',
+    difficulty: 2,
     name: 'Chloe C',
     mbti: 'ENTP',
     iq: 150,
@@ -639,6 +645,7 @@ export const CHARACTERS = [
   },
   {
     id: 'joseph',
+    difficulty: 3,
     name: 'Joseph J',
     mbti: 'ISTJ',
     iq: 130,
@@ -653,6 +660,7 @@ export const CHARACTERS = [
   },
   {
     id: 'richard',
+    difficulty: 2,
     name: 'Richard K',
     mbti: 'ESTJ',
     iq: 130,
@@ -667,6 +675,7 @@ export const CHARACTERS = [
   },
   {
     id: 'chris',
+    difficulty: 1,
     name: 'Chris W',
     mbti: 'INTP',
     iq: 150,
@@ -681,6 +690,7 @@ export const CHARACTERS = [
   },
   {
     id: 'adam',
+    difficulty: 1,
     name: 'Adam R',
     mbti: 'ENTJ',
     iq: 140,
@@ -695,6 +705,7 @@ export const CHARACTERS = [
   },
   {
     id: 'eve',
+    difficulty: 3,
     name: 'Eve M',
     mbti: 'ISFJ',
     iq: 125,

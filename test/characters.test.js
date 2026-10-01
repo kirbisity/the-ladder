@@ -75,3 +75,11 @@ test('the higher the tier, the sooner tech reaches financial independence; a uni
   assert.ok(stable >= 44 && stable <= 56, `steady tech around 50 (${stable})`);
   assert.ok(medianFireAge('academia', 'stable') > stable + 5, 'a university pay does not usually get there early');
 });
+
+test('each character carries a difficulty from 1 to 3 that matches how they actually climb', () => {
+  for (const character of CHARACTERS) assert.ok([1, 2, 3].includes(character.difficulty), character.id);
+  const reach = (level) => CHARACTERS.filter((character) => character.difficulty === level).map((character) => tech[character.id].director);
+  const average = (values) => values.reduce((sum, value) => sum + value, 0) / values.length;
+  assert.ok(reach(1).length && reach(2).length && reach(3).length, 'the scenario: every level is used');
+  assert.ok(average(reach(1)) > average(reach(2)) && average(reach(2)) > average(reach(3)), 'an easier climb reaches the top more often');
+});

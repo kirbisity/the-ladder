@@ -10,6 +10,9 @@ import { engine } from './model3d.js';
 
 const { Node, ellipsoid, prism, box, tube, disc, flatten, paint, rotation, hexToRgb, shadeHex, pushFace } = engine;
 
+const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+
 // The scenes squash height (a tile is 1 wide and half as tall on screen), so
 // a unit of z is this much of a true unit.
 const V = 0.8165;
@@ -83,128 +86,313 @@ function along(keys, t) {
   return keys[keys.length - 1][1];
 }
 
+/** Smooth a half-ring by the given number of corner-cutting rounds (0 keeps its sharp corners). */
+function smoothRing(points, rounds) {
+  let out = points;
+  for (let i = 0; i < rounds; i += 1) out = chaikin(out);
+  return out;
+}
+
+/** One round of corner cutting: every corner of a polyline becomes a short slanted edge. */
+function chaikin(points) {
+  const out = [points[0]];
+  for (let i = 0; i < points.length - 1; i += 1) {
+    const [a, b] = [points[i], points[i + 1]];
+    out.push([a[0] * 0.75 + b[0] * 0.25, a[1] * 0.75 + b[1] * 0.25], [a[0] * 0.25 + b[0] * 0.75, a[1] * 0.25 + b[1] * 0.75]);
+  }
+  out.push(points[points.length - 1]);
+  return out;
+}
+
 /**
- * The shell of a car, lofted: cross-sections along its length, each a ring
- * from the sill up over the shoulder, the glass and the roof and down the
- * other side. Panels in the glass zones are painted as glass.
+ * The shell of a car, lofted: cross-sections along its length, each a
+ * rounded ring from the sill up over the shoulder, the glass and the roof
+ * and down the other side. Many stations and a smoothed ring give the body
+ * its curves: a rounded nose, flared arches over the wheels, a raked screen.
+ * Panels in the glass zones are painted as glass.
  */
-function loftBody(root, spec) {
+function loftBody(root, spec, style) {
   const { L, W, lift, belt, tumble, top, glass } = spec;
-  const stations = 56;
+  const stations = style.stations;
   const half = W / 2;
   const body = hexToRgb(spec.body);
   const glassColor = hexToRgb('#7fa3bd');
   const trim = hexToRgb(shadeHex(spec.body, -0.55));
+  const arches = [0.2, 0.8];
   const rings = [];
   for (let i = 0; i <= stations; i += 1) {
     const t = i / stations;
-    const x = t * L;
     const zt = lift + along(top, t);
     const zb = Math.min(lift + belt, zt - 0.04);
-    const nose = t < 0.1 ? 0.84 + t * 1.6 : t > 0.9 ? 0.86 + (1 - t) * 1.4 : 1;
-    const w = half * nose;
-    const inCabin = zt - zb > 0.1;
-    const roofHalf = w * (inCabin ? tumble : 0.86);
-    const side = (zb + zt) / 2;
-    // Half ring, sill to centre line, then mirrored.
-    const halfRing = [
-      [w * 0.9, lift - 0.02],
-      [w, lift + 0.08],
-      [w, zb - 0.02],
-      [w * 0.99, zb],
-      [w * (1 + tumble) / 2 * 0.96, side],
-      [roofHalf, zt - 0.03],
-      [roofHalf * 0.5, zt + 0.005],
+    // Plan shape: an elliptical nose and tail, and a flare over each wheel arch.
+    const edge = Math.min(t, 1 - t);
+    const round = style.smooth > 0 && edge < 0.07 ? Math.sqrt(Math.max(0, 1 - ((0.07 - edge) / 0.07) ** 2)) * 0.28 + 0.72 : 1;
+    const flare = 1 + (style.smooth > 0 ? 0.035 : 0) * arches.reduce((sum, centre) => sum + Math.exp(-(((t - centre) / 0.07) ** 2)), 0);
+    const w = half * round * flare;
+    const cabin = zt - zb > 0.1;
+    const roofHalf = w * (cabin ? tumble : 0.88);
+    const sideMid = (zb + zt) / 2;
+    const halfRing = smoothRing([
+      [w * 0.88, lift - 0.02],
+      [w, lift + 0.09],
+      [w, zb - 0.03],
+      [w * 0.985, zb + 0.01],
+      [w * (1 + tumble) / 2 * 0.95, sideMid],
+      [roofHalf, zt - 0.035],
+      [roofHalf * 0.55, zt + 0.004],
       [0, zt + 0.012],
-    ];
+    ], style.smooth);
     const ring = [...halfRing.map(([y, z]) => [half - y, z]), ...halfRing.slice(0, -1).reverse().map(([y, z]) => [half + y, z])];
-    rings.push({ x, ring, zt, zb, t });
+    rings.push({ x: t * L, ring, zt, zb, t, roofHalf });
   }
   const point = (x, y, z) => [x, z * V, y];
-  const centreOf = (x, zmid) => [x, zmid * V, half];
+  // The whole ring is wound one way, so one test decides every panel: a roof panel must face up.
+  const probe = rings[Math.floor(stations / 2)];
+  const mid = Math.floor(probe.ring.length / 2);
+  const next = rings[Math.floor(stations / 2) + 1];
+  const roofQuad = [point(probe.x, ...probe.ring[mid - 1]), point(next.x, ...next.ring[mid - 1]), point(next.x, ...next.ring[mid]), point(probe.x, ...probe.ring[mid])];
+  const probeNormal = cross(sub(roofQuad[1], roofQuad[0]), sub(roofQuad[2], roofQuad[0]));
+  const windOut = probeNormal[1] >= 0;
   for (let i = 0; i < stations; i += 1) {
     const r0 = rings[i];
     const r1 = rings[i + 1];
     const tm = (r0.t + r1.t) / 2;
     const cabin = r0.zt - r0.zb > 0.1 && r1.zt - r1.zb > 0.1;
     const inRange = (range) => tm >= range[0] && tm <= range[1];
+    const frontScreen = inRange(glass.front);
+    const rearScreen = inRange(glass.rear);
+    const sideWindow = cabin && inRange(glass.side) && Math.abs(tm - (glass.side[0] + glass.side[1]) / 2) > 0.012;
     for (let j = 0; j < r0.ring.length - 1; j += 1) {
       const quad = [point(r0.x, ...r0.ring[j]), point(r1.x, ...r1.ring[j]), point(r1.x, ...r1.ring[j + 1]), point(r0.x, ...r0.ring[j + 1])];
-      // j: 0-1 sill and lower side, 2 belt, 3-4 greenhouse side, 5-6 and the mirror: roof.
-      const mirrored = Math.min(j, r0.ring.length - 2 - j);
+      const zc = (r0.ring[j][1] + r0.ring[j + 1][1] + r1.ring[j][1] + r1.ring[j + 1][1]) / 4;
+      const yc = (r0.ring[j][0] + r0.ring[j + 1][0]) / 2;
+      const offset = Math.abs(yc - half);
+      const zbm = (r0.zb + r1.zb) / 2;
       let color = body;
-      const sideGlass = cabin && inRange(glass.side) && (mirrored === 3 || mirrored === 4);
-      const frontGlass = inRange(glass.front) && mirrored >= 4;
-      const rearGlass = inRange(glass.rear) && mirrored >= 4;
-      if (sideGlass && Math.abs(tm - (glass.side[0] + glass.side[1]) / 2) > 0.012) color = glassColor;
-      if (frontGlass || rearGlass) color = glassColor;
-      if (mirrored === 0) color = trim;
-      pushFace(root, quad, centreOf(tm * L, (r0.zt + r0.zb) / 2), color, color === glassColor ? 0.15 : 0);
+      if (zc < lift + 0.06) color = trim;
+      else if (cabin && zc > zbm + 0.04) {
+        // Greenhouse: side glass low on the cabin, screens across the top.
+        const onRoof = offset < ((r0.roofHalf + r1.roofHalf) / 2) * 0.62;
+        if (onRoof ? (frontScreen || rearScreen) : sideWindow) color = glassColor;
+      }
+      root.faces.push({ points: windOut ? quad : quad.slice().reverse(), color, bias: color === glassColor ? 0.15 : 0, alpha: 1 });
     }
   }
-  // The nose and tail: closed with fascia panels, with lights and a grille in front.
-  const front = rings[stations];
-  const rear = rings[0];
+  // The nose and tail: each end is closed with one filled panel, with a dark lower edge and lamps at the corners.
   const cap = (ring, x, dir, kind) => {
-    const centre = centreOf(x, (ring.zt + ring.zb) / 2);
-    for (let j = 0; j < ring.ring.length - 1; j += 1) {
-      const outer = Math.min(j, ring.ring.length - 2 - j);
-      const lower = outer === 0;
-      const cx = (ring.ring[j][0] + ring.ring[j + 1][0]) / 2;
-      const panel = [point(x, ...ring.ring[j]), point(x, ...ring.ring[j + 1]), point(x + dir * 0.02, ...ring.ring[j + 1]), point(x + dir * 0.02, ...ring.ring[j])];
-      let color = body;
-      if (kind === 'front' && outer <= 2 && outer >= 1) color = hexToRgb('#fff3c4');
-      else if (kind === 'rear' && outer <= 2 && outer >= 1) color = hexToRgb('#b81f26');
-      else if (lower) color = hexToRgb('#1a1c20');
-      void cx;
-      pushFace(root, panel, centre, color, 0.1);
+    const outline = ring.ring.map(([y, z]) => point(x + dir * 0.005, y, z));
+    // Newell's method gives a polygon's normal even where it is concave; wind it to face outward.
+    const normal = [0, 0, 0];
+    for (let i = 0; i < outline.length; i += 1) {
+      const [a, b] = [outline[i], outline[(i + 1) % outline.length]];
+      normal[0] += (a[1] - b[1]) * (a[2] + b[2]);
+      normal[1] += (a[2] - b[2]) * (a[0] + b[0]);
+      normal[2] += (a[0] - b[0]) * (a[1] + b[1]);
     }
+    root.faces.push({ points: normal[0] * dir >= 0 ? outline : outline.slice().reverse(), color: body, bias: 0.05, alpha: 1 });
+    const lamp = kind === 'front' ? '#fff3c4' : '#b81f26';
+    for (const y of [half * 0.16, W - half * 0.16 - 0.16]) wbox(root, kind === 'front' ? x - 0.005 : -0.02, y, lift + 0.1, 0.03, 0.16, 0.09, lamp, 0.7);
+    wbox(root, kind === 'front' ? x - 0.01 : -0.025, 0.1, lift + 0.0, 0.035, W - 0.2, 0.07, '#1a1c20', 0.5);
   };
-  cap(front, L, 1, 'front');
-  cap(rear, 0, -1, 'rear');
-  // Grille, bumper bars, plates, lamps and a stripe of chrome across the nose.
-  wbox(root, L - 0.005, half - 0.24, lift + 0.12, 0.03, 0.48, 0.1, '#15171a', 0.5);
-  wbox(root, L - 0.005, half - 0.24, lift + 0.12, 0.034, 0.48, 0.012, '#c9ced4', 0.6);
-  wbox(root, L - 0.03, 0.03, lift - 0.03, 0.06, W - 0.06, 0.06, '#2a2d33', 0.4);
-  wbox(root, -0.02, 0.03, lift - 0.03, 0.06, W - 0.06, 0.06, '#2a2d33', 0.4);
-  wbox(root, -0.03, half - 0.14, lift + 0.08, 0.02, 0.28, 0.1, '#f2f2ee', 0.6);
-  for (const y of [0.1, W - 0.1]) wbox(root, L - 0.02, y - 0.06, lift + 0.11, 0.03, 0.12, 0.05, '#fff7d6', 0.7);
-  // Door seams, handles, mirrors and a side moulding on the visible side.
-  const seamZ0 = lift + 0.1;
-  for (const frac of [0.33, 0.52, 0.72]) wbox(root, L * frac, W + 0.004, seamZ0, 0.008, 0.006, belt - 0.12, shadeHex(spec.body, -0.28), 0.3);
-  for (const frac of [0.4, 0.6]) wbox(root, L * frac, W + 0.01, lift + belt - 0.1, 0.12, 0.014, 0.025, '#d3d8de', 0.5);
-  wbox(root, L * 0.34, W + 0.003, lift + 0.2, L * 0.46, 0.008, 0.02, shadeHex(spec.body, -0.3), 0.3);
-  for (const y of [-0.05, W + 0.01]) {
-    wbox(root, L * 0.33, y, lift + belt + 0.02, 0.08, 0.055, 0.06, spec.body, 0.4);
-    wbox(root, L * 0.335, y + (y < 0.5 ? 0.0 : 0.012), lift + belt + 0.035, 0.065, 0.03, 0.035, '#9fb4c4', 0.45);
-  }
+  cap(rings[stations], L, 1, 'front');
+  cap(rings[0], 0, -1, 'rear');
+  // A plain grille and bumpers.
+  wbox(root, L - 0.005, half - 0.22, lift + 0.12, 0.03, 0.44, 0.1, '#15171a', 0.5);
+  wbox(root, L - 0.03, 0.04, lift - 0.03, 0.06, W - 0.08, 0.06, '#2a2d33', 0.4);
+  wbox(root, -0.02, 0.04, lift - 0.03, 0.06, W - 0.08, 0.06, '#2a2d33', 0.4);
 }
 
-/** A wheel: a tyre, a rim with spokes and a hub, and a dark arch behind it. */
+/** A generic wheel: a dark tyre, a plain hub, and a dark arch behind it. */
 function wheel(node, x, y, side, r) {
   const sign = side > 0 ? 1 : -1;
-  const cz = r;
-  const arch = ellipsoid;
-  arch(node, [x, (cz + 0.03) * V, y + sign * 0.02], [r * 1.1, r * 1.12 * V, 0.04], '#0e0f11', { lat: 3, lon: 20, bias: 0.15 });
-  ellipsoid(node, [x, cz * V, y], [r, r * V, 0.11], '#141516', { lat: 5, lon: 22, bias: 0.25 });
-  ellipsoid(node, [x, cz * V, y + sign * 0.07], [r * 0.68, r * 0.68 * V, 0.05], '#8c929a', { lat: 3, lon: 20, bias: 0.4 });
-  ellipsoid(node, [x, cz * V, y + sign * 0.09], [r * 0.5, r * 0.5 * V, 0.03], '#5e646c', { lat: 3, lon: 16, bias: 0.45 });
-  for (let spoke = 0; spoke < 5; spoke += 1) {
-    const a = (spoke / 5) * Math.PI * 2 + 0.3;
-    tube(node, [[x, cz * V, y + sign * 0.1], [x + Math.cos(a) * r * 0.6, (cz + Math.sin(a) * r * 0.6) * V, y + sign * 0.1]], 0.011, '#b9bec6', { sides: 3, bias: 0.55 });
+  ellipsoid(node, [x, (r + 0.03) * V, y + sign * 0.02], [r * 1.1, r * 1.12 * V, 0.04], '#0e0f11', { lat: 3, lon: 24, bias: 0.15 });
+  ellipsoid(node, [x, r * V, y], [r, r * V, 0.11], '#141516', { lat: 6, lon: 28, bias: 0.25 });
+  ellipsoid(node, [x, r * V, y + sign * 0.075], [r * 0.62, r * 0.62 * V, 0.04], '#9aa0a8', { lat: 3, lon: 24, bias: 0.4 });
+}
+
+/** How a car is modelled. Lofted styles differ in stations along the body and rounds of smoothing; toy and voxel are their own builders. */
+export const CAR_STYLES = {
+  smooth: { label: 'Smooth', stations: 84, smooth: 2 },
+  soft: { label: 'Soft facets', stations: 30, smooth: 1 },
+  lowpoly: { label: 'Low-poly', stations: 12, smooth: 0 },
+  wedge: { label: 'Angular wedge', stations: 9, smooth: 0, wedge: true },
+  toy: { label: 'Toy', toy: true },
+  voxel: { label: 'Voxel', voxel: true },
+  blocky: { label: 'Blocky with sloped glass', blocky: true },
+};
+
+/** A toy car: a rounded blob of body and cabin on big wheels. */
+function buildToyCar(kind) {
+  const spec = CARS[kind] ?? CARS.sedan;
+  const root = new Node();
+  const { L, W } = spec;
+  const body = hexToRgb(spec.body);
+  const sizeUp = 1.0 + (spec.tall ? 0.15 : 0);
+  const h = sizeUp;
+  ellipsoid(root, [L / 2, 0.4 * V * h, W / 2], [L * 0.5, 0.3 * V * h, W * 0.5], body, { lat: 10, lon: 26 });
+  ellipsoid(root, [L * 0.46, 0.7 * V * h, W / 2], [L * (spec.low ? 0.2 : 0.23), 0.3 * V * h, W * 0.36], hexToRgb('#8fb4cf'), { lat: 9, lon: 24, bias: 0.1 });
+  ellipsoid(root, [L * 0.46, 0.8 * V * h, W / 2], [L * (spec.low ? 0.19 : 0.22), 0.22 * V * h, W * 0.35], body, { lat: 7, lon: 24, reach: Math.PI * 0.55, bias: 0.2 });
+  for (const y of [0.18, W - 0.18]) ellipsoid(root, [L * 0.97, 0.45 * V, y], [0.08, 0.08 * V, 0.1], '#fff3c4', { lat: 4, lon: 10, bias: 0.4 });
+  for (const y of [0.18, W - 0.18]) ellipsoid(root, [L * 0.03, 0.45 * V, y], [0.07, 0.07 * V, 0.08], '#d1363c', { lat: 4, lon: 10, bias: 0.4 });
+  const r = spec.wheel * 1.5;
+  for (const x of [L * 0.22, L * 0.78]) {
+    for (const [y, side] of [[W + 0.02, 1], [-0.02, -1]]) {
+      ellipsoid(root, [x, r * V, y], [r, r * V, 0.1], '#17181a', { lat: 6, lon: 20, bias: 0.25 });
+      ellipsoid(root, [x, r * V, y + side * 0.07], [r * 0.55, r * 0.55 * V, 0.04], '#c3c8ce', { lat: 3, lon: 16, bias: 0.4 });
+    }
   }
-  ellipsoid(node, [x, cz * V, y + sign * 0.11], [r * 0.14, r * 0.14 * V, 0.03], '#2a2d33', { lat: 3, lon: 8, bias: 0.6 });
+  return root;
+}
+
+/** A voxel car: a grid of small cubes cut to the car's profile, painted body, glass and tyre. */
+function buildVoxelCar(kind) {
+  const spec = CARS[kind] ?? CARS.sedan;
+  const root = new Node();
+  const { L, W, lift, belt, top, tumble, glass } = spec;
+  const cell = 0.11;
+  const nx = Math.round(L / cell);
+  const ny = Math.round(W / cell);
+  const half = W / 2;
+  const filled = new Set();
+  const key = (i, j, k) => `${i},${j},${k}`;
+  const cellColor = (i, j, k) => {
+    const t = (i + 0.5) / nx;
+    const z = lift + (k + 0.5) * cell;
+    const zt = lift + along(top, t);
+    const zb = Math.min(lift + belt, zt - 0.04);
+    const offset = Math.abs((j + 0.5) * cell - half);
+    if (z > zb && zt - zb > 0.1) {
+      const onRoof = z > zt - cell * 1.2;
+      const edge = offset > half * 0.6;
+      if (!onRoof && ((t >= glass.front[0] && t <= glass.front[1]) || (t >= glass.rear[0] && t <= glass.rear[1]) || (edge && t >= glass.side[0] && t <= glass.side[1]))) return '#8fb4cf';
+    }
+    return spec.body;
+  };
+  for (let i = 0; i < nx; i += 1) {
+    const t = (i + 0.5) / nx;
+    const zt = lift + along(top, t);
+    const zb = Math.min(lift + belt, zt - 0.04);
+    for (let j = 0; j < ny; j += 1) {
+      const offset = Math.abs((j + 0.5) * cell - half);
+      for (let k = 0; k < 24; k += 1) {
+        const z = lift + (k + 0.5) * cell;
+        if (z > zt) break;
+        const limit = z > zb ? half * tumble : half;
+        if (offset <= limit) filled.add(key(i, j, k));
+      }
+    }
+  }
+  for (const id of filled) {
+    const [i, j, k] = id.split(',').map(Number);
+    const exposed = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1]].some(([dx, dy, dz]) => !filled.has(key(i + dx, j + dy, k + dz)));
+    if (exposed) wbox(root, i * cell, j * cell, lift + k * cell, cell, cell, cell, cellColor(i, j, k), 0);
+  }
+  // Chunky wheels: a square tyre block with a lighter hub.
+  const wr = Math.max(2, Math.round(spec.wheel / cell + 0.4)) * cell;
+  for (const x of [L * 0.2, L * 0.8]) for (const y of [-0.02, W - wr * 0.4 + 0.02]) {
+    wbox(root, x - wr / 2, y, 0, wr, wr * 0.5, wr, '#17181a', 0.3);
+    wbox(root, x - wr / 4, y + (y < 0 ? -0.01 : wr * 0.5), wr / 4, wr / 2, 0.01, wr / 2, '#9aa0a8', 0.5);
+  }
+  return root;
+}
+
+/**
+ * A blocky car: the body is a chain of solid blocks along the profile, flat
+ * where the profile is flat and sloped where it rises or falls, so the
+ * windscreen, rear screen and cabin roof are inclined planes. A lower layer
+ * runs the full width; the cabin above it is narrower. Wheels are plain
+ * cylinders. No smoothing: the corners stay hard.
+ */
+function buildBlockyCar(kind) {
+  const spec = CARS[kind] ?? CARS.sedan;
+  const root = new Node();
+  const { L, W, lift, belt, top, tumble, glass } = spec;
+  const body = hexToRgb(spec.body);
+  const glassColor = hexToRgb('#7fa3bd');
+  const trim = hexToRgb(shadeHex(spec.body, -0.5));
+  const margin = (W - W * tumble) / 2;
+  const P = (x, y, z) => [x, z * V, y];
+  /** A solid with a flat floor and a top that runs from height h0 at x0 to h1 at x1, between widths y0 and y1. */
+  const ramp = (x0, x1, y0, y1, zFloor, h0, h1, colors) => {
+    const c = [P(x0, y0, zFloor), P(x1, y0, zFloor), P(x1, y1, zFloor), P(x0, y1, zFloor), P(x0, y0, h0), P(x1, y0, h1), P(x1, y1, h1), P(x0, y1, h0)];
+    const centre = [(x0 + x1) / 2, ((zFloor + (h0 + h1) / 2) / 2) * V, (y0 + y1) / 2];
+    const face = (idx, color, bias = 0) => pushFace(root, idx.map((i) => c[i]), centre, color, bias);
+    face([4, 5, 6, 7], colors.top ?? body, colors.top === glassColor ? 0.2 : 0);
+    face([0, 1, 5, 4], colors.side0 ?? body, colors.side0 === glassColor ? 0.2 : 0);
+    face([3, 2, 6, 7], colors.side1 ?? body, colors.side1 === glassColor ? 0.2 : 0);
+    face([1, 2, 6, 5], colors.front ?? body);
+    face([0, 3, 7, 4], colors.back ?? body);
+    face([0, 1, 2, 3], body);
+  };
+  // The base layer, nose to tail, with a dark sill.
+  const baseTop = lift + belt;
+  ramp(0, L, 0, W, lift, baseTop, baseTop, { side0: body, side1: body });
+  ramp(0, L, -0.004, W + 0.004, lift, lift + 0.07, lift + 0.07, { side0: trim, side1: trim, top: trim });
+  // Walk the profile in segments; each one is a block above the base layer.
+  const keys = top;
+  for (let i = 0; i < keys.length - 1; i += 1) {
+    const [t0, v0] = keys[i];
+    const [t1, v1] = keys[i + 1];
+    const h0 = lift + v0;
+    const h1 = lift + v1;
+    const x0 = t0 * L;
+    const x1 = t1 * L;
+    const above = Math.min(h0, h1) > baseTop + 0.06;
+    const rises = Math.abs(h1 - h0) > 0.1;
+    const tm = (t0 + t1) / 2;
+    const screen = tm >= glass.front[0] - 0.02 && tm <= glass.front[1] + 0.02 || tm >= glass.rear[0] - 0.02 && tm <= glass.rear[1] + 0.02;
+    if (Math.max(h0, h1) <= baseTop + 0.02) {
+      // Hood and boot: a low slab on the base.
+      ramp(x0, x1, 0.02, W - 0.02, baseTop, Math.max(h0, baseTop), Math.max(h1, baseTop), {});
+      continue;
+    }
+    const roofSegment = above && !rises;
+    // Cabin block: narrower than the base, with glass sides along the roof run and a sloped glass top on the screens.
+    const lowH0 = Math.max(h0, baseTop);
+    const lowH1 = Math.max(h1, baseTop);
+    ramp(x0, x1, margin, W - margin, baseTop, lowH0, lowH1, {
+      top: screen && rises ? glassColor : body,
+      side0: roofSegment || (above && !screen) ? glassColor : body,
+      side1: roofSegment || (above && !screen) ? glassColor : body,
+      front: body,
+      back: body,
+    });
+  }
+  // Nose and tail details and the cylinder wheels.
+  wbox(root, L - 0.01, W * 0.22, lift + 0.12, 0.03, W * 0.56, 0.1, '#15171a', 0.5);
+  for (const y of [0.08, W - 0.24]) wbox(root, L - 0.015, y, lift + belt * 0.5, 0.035, 0.16, 0.09, '#fff3c4', 0.6);
+  for (const y of [0.08, W - 0.24]) wbox(root, -0.02, y, lift + belt * 0.5, 0.035, 0.16, 0.09, '#d1363c', 0.6);
+  wbox(root, L - 0.04, 0.02, lift - 0.03, 0.08, W - 0.04, 0.07, '#2a2d33', 0.4);
+  wbox(root, -0.04, 0.02, lift - 0.03, 0.08, W - 0.04, 0.07, '#2a2d33', 0.4);
+  // Wheels: a short cylinder at each corner, with a lighter cylinder for the rim.
+  const r = spec.wheel * 0.95;
+  for (const x of [L * 0.2, L * 0.8]) {
+    for (const [y0, y1, rimY] of [[-0.03, 0.13, -0.045], [W - 0.13, W + 0.03, W + 0.03]]) {
+      prism(root, [x, r, y0], [x, r, y1], r, r, '#17181a', { sides: 18, caps: true, bias: 0.3 });
+      prism(root, [x, r, rimY], [x, r, rimY + 0.015], r * 0.58, r * 0.58, '#9aa0a8', { sides: 16, caps: true, bias: 0.5 });
+    }
+  }
+  if (spec.rack) wbox(root, L * 0.4, 0.2, lift + top[3][1] + 0.0, L * 0.4, W - 0.4, 0.04, '#2a2d33', 0.4);
+  if (spec.spoiler) wbox(root, 0.03, 0.15, lift + along(top, 0.05) + 0.1, 0.18, W - 0.3, 0.03, '#15171a', 0.5);
+  return root;
 }
 
 /** A detailed car, nose toward +x, standing on the ground at the origin. */
-export function buildCar(kind) {
-  const spec = CARS[kind] ?? CARS.sedan;
+export function buildCar(kind, styleName = 'smooth') {
+  const style = CAR_STYLES[styleName] ?? CAR_STYLES.smooth;
+  if (style.blocky) return buildBlockyCar(kind);
+  if (style.toy) return buildToyCar(kind);
+  if (style.voxel) return buildVoxelCar(kind);
+  const spec = style.wedge ? { ...(CARS[kind] ?? CARS.sedan), tumble: 0.6, top: wedgeProfile(CARS[kind] ?? CARS.sedan) } : (CARS[kind] ?? CARS.sedan);
   const root = new Node();
   const { L, W, lift, belt, top } = spec;
-  // The chassis, then the smooth lofted shell.
-  wbox(root, 0.05, 0.05, lift - 0.06, L - 0.1, W - 0.1, 0.1, '#1a1c20');
-  loftBody(root, spec);
-  // Wheels at the four corners (the near side shows tyre and rim; the far side only a sliver).
+  // The chassis, then the lofted shell.
+  wbox(root, 0.05, 0.05, lift - 0.06, L - 0.1, W - 0.1, 0.1, '#1a1c20', -2);
+  // A body-coloured core under the shell, as high as the lowest of its decks, so that where a panel faces
+  // away (the rear screen) the eye lands on paint, not on the chassis.
+  const coreTop = Math.min(...[0.06, 0.1, 0.85, 0.92, 0.96, 1].map((t) => along(top, t))) - 0.04;
+  wbox(root, 0.08, 0.08, lift + 0.04, L - 0.16, W - 0.16, Math.max(0.1, coreTop - 0.04), spec.body, -1);
+  loftBody(root, spec, style);
   for (const x of [L * 0.2, L * 0.8]) {
     wheel(root, x, W + 0.012, 1, spec.wheel);
     wheel(root, x, -0.012, -1, spec.wheel);
@@ -217,14 +405,17 @@ export function buildCar(kind) {
   if (spec.spoiler) {
     wbox(root, 0.04, 0.2, lift + along(top, 0.06) + 0.08, 0.16, W - 0.4, 0.03, '#15171a', 0.55);
     for (const y of [0.2, W - 0.24]) wbox(root, 0.08, y, lift + along(top, 0.06), 0.04, 0.04, 0.1, '#15171a', 0.5);
-    wbox(root, L * 0.33, W / 2 - 0.1, lift + along(top, 0.3) + 0.01, L * 0.17, 0.2, 0.025, shadeHex(spec.body, -0.35), 0.4);
   }
   if (spec.worn) {
     for (const [x, z] of [[0.35, 0.2], [0.55, 0.3], [1.3, 0.22], [1.55, 0.3]]) wbox(root, x, W + 0.014, lift + z, 0.12, 0.01, 0.07, '#8a4a28', 0.5);
-    wbox(root, L * 0.35, W + 0.012, lift + belt - 0.04, 0.4, 0.01, 0.025, '#7a3a1e', 0.5);
   }
-  void belt;
   return root;
+}
+
+/** The angular wedge's profile: a long low nose and a steep, straight screen and tail. */
+function wedgeProfile(spec) {
+  const peak = Math.max(...spec.top.map(([, h]) => h));
+  return [[0, 0.2], [0.12, 0.26], [0.4, peak * 0.52], [0.52, peak], [0.7, peak * 0.98], [0.86, peak * 0.62], [1, peak * 0.5]];
 }
 
 // ── Houses and apartments ──────────────────────────────────────────────
@@ -435,7 +626,9 @@ function cached(key, build) {
   return cache.get(key);
 }
 
-export const drawCar = (context, k, x, y, kind, z = 0) => drawProp(context, cached(`car:${kind}`, () => buildCar(kind)), k.iso(x, y, z), k.unit);
+/** The model used for every car in the game: change it here (or per call) to restyle them all. */
+export const DEFAULT_CAR_STYLE = 'smooth';
+export const drawCar = (context, k, x, y, kind, z = 0, style = DEFAULT_CAR_STYLE) => drawProp(context, cached(`car:${kind}:${style}`, () => buildCar(kind, style)), k.iso(x, y, z), k.unit);
 export const drawHouse = (context, k, x, y, kind) => drawProp(context, cached(`house:${kind}`, () => buildHouse(kind)), k.iso(x, y), k.unit);
 export const drawApartment = (context, k, x, y, kind) => drawProp(context, cached(`apt:${kind}`, () => buildApartment(kind)), k.iso(x, y), k.unit);
 export const drawUmbrella = (context, k, x, y, z, color, accent) => drawProp(context, cached(`umb:${color}:${accent}`, () => buildUmbrella(color, accent)), k.iso(x, y, z), k.unit);

@@ -11,6 +11,7 @@ import { lifeScenes } from './scenes-life.js';
 import { retirementScenes } from './scenes-retire.js';
 import { careerScenes } from './scenes-career.js';
 import { tragedyScenes } from './scenes-tragedy.js';
+import { SIR_SCENE } from './scenes-sir.js';
 import { drawWorldTour, worldRoute, WORLD_STOPS, WORLD_STOP_SECONDS, WORLD_INTRO_SECONDS } from './scenes-world.js';
 
 export const END_SCENES = {
@@ -38,6 +39,7 @@ export const INTERIM_SCENES = {
   farewell: 'A funeral',
   houseFire: 'The fire',
   diagnosis: 'The diagnosis',
+  sir: 'Super Intelligence Revolution',
   house: 'The keys',
   burnout: 'Burnout',
   healthScare: 'The ambulance',
@@ -48,7 +50,7 @@ export const INTERIM_SCENES = {
 
 // Journal moments that earn a short scene.
 export const JOURNAL_SCENES = {
-  promoted: 'promoted', lostJob: 'lostJob', rehired: 'newJob', joined: 'newJob', dating: 'dating', married: 'married', child: 'child', parentalLeave: 'newborn', carCrash: 'carCrash', bereaved: 'farewell', houseFire: 'houseFire', cancer: 'diagnosis', breakup: 'breakup', divorce: 'divorce', house: 'house',
+  promoted: 'promoted', lostJob: 'lostJob', rehired: 'newJob', joined: 'newJob', dating: 'dating', married: 'married', child: 'child', parentalLeave: 'newborn', carCrash: 'carCrash', bereaved: 'farewell', houseFire: 'houseFire', cancer: 'diagnosis', sir: 'sir', startupExit: 'startupWin', breakup: 'breakup', divorce: 'divorce', house: 'house',
   burnout: 'burnout', healthScare: 'healthScare', holiday: 'holiday', fmla: 'fmla', startupWin: 'startupWin',
 };
 
@@ -469,7 +471,7 @@ const SCENES = {
 // The FIRE ending tours a shuffled route of places (see scenes-world.js); the
 // big personal moments are drawn in scenes-life.js.
 const retirements = retirementScenes({ kit, sky, tree, mixColor, peerLook });
-Object.assign(SCENES, { retiredModest: retirements[0], retiredComfortable: retirements[1], retiredWealthy: retirements[2], retiredLuxury: retirements[3] }, lifeScenes({ interim, sky, rain, falling, tree, mixColor, peerLook, umbrella: drawUmbrella }), careerScenes({ interim, sky, rain, falling, tree, mixColor, peerLook, umbrella: drawUmbrella }), tragedyScenes({ interim, sky, rain, tree, mixColor, peerLook, umbrella: drawUmbrella }), {
+Object.assign(SCENES, { retiredModest: retirements[0], retiredComfortable: retirements[1], retiredWealthy: retirements[2], retiredLuxury: retirements[3] }, lifeScenes({ interim, sky, rain, falling, tree, mixColor, peerLook, umbrella: drawUmbrella }), careerScenes({ interim, sky, rain, falling, tree, mixColor, peerLook, umbrella: drawUmbrella }), tragedyScenes({ interim, sky, rain, tree, mixColor, peerLook, umbrella: drawUmbrella }), { sir: SIR_SCENE }, {
   fire: {
     duration: WORLD_INTRO_SECONDS + WORLD_STOPS * WORLD_STOP_SECONDS,
     captions: (data) => [`At ${data.age}, ${data.firstName} decided the money was enough.`, ...worldRoute(data.seed ?? 1).map((place) => place.line)],
@@ -521,6 +523,7 @@ export function createCutscenePlayer(overlay) {
   const context = canvas.getContext('2d');
   let current = null;
   let frame = 0;
+  let onPlay = null;
 
   function resize() {
     const ratio = window.devicePixelRatio || 1;
@@ -540,6 +543,7 @@ export function createCutscenePlayer(overlay) {
     overlay.hidden = false;
     resize();
     current = { id, scene, data, onDone, started: performance.now(), lines: scene.captions(data).filter(Boolean), elapsed: 0 };
+    if (onPlay) onPlay(id);
     render(performance.now());
   }
 
@@ -581,7 +585,7 @@ export function createCutscenePlayer(overlay) {
     if (done) done();
   }
 
-  return { play, skip: finish, seek, resize, isPlaying: () => Boolean(current), current: () => current };
+  return { play, skip: finish, seek, resize, isPlaying: () => Boolean(current), current: () => current, setOnPlay: (hook) => { onPlay = hook; } };
 }
 
 /** What a scene needs to know about the player. */
@@ -590,7 +594,7 @@ const CAR_KINDS = { old: 'hatchback', new: 'sedan', family: 'suv', luxury: 'spor
 
 export function sceneData(game) {
   const player = game.player;
-  const born = new Date().getFullYear() - 22;
+  const born = game.birthYear ?? new Date().getFullYear() - 22;
   const peak = Math.max(game.peakLevel ?? 0, player.level);
   const lastOf = (kind) => [...(game.journal ?? [])].reverse().find((entry) => entry.kind === kind);
   return {
@@ -608,6 +612,7 @@ export function sceneData(game) {
     lostLabel: lastOf('bereaved')?.label ?? null,
     fireOwned: lastOf('houseFire')?.owned ?? game.homeEquity > 0,
     illnessWho: lastOf('cancer')?.who ?? 'player',
+    sirYear: game.sir?.year ?? null,
     gender: game.character?.gender ?? 'male',
     partnerLook: (game.partner ?? game.exPartner)?.look ?? null,
     partnerFirstName: (game.partner ?? game.exPartner)?.name.split(' ')[0] ?? null,

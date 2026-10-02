@@ -8,8 +8,9 @@ import { titleOf, formatMoney, netWorth, managerOf, teamHappiness, quarterlyExpe
 import { careerSummary, careerSoFar } from '../sim/story.js';
 import { SIM_RESULTS } from '../data/sim-results.js';
 import { ADJUSTABLE, MAX_STEPS, adjustmentPoints, applyAdjustments } from '../sim/adjust.js';
+import { startYearOf, payFactor, calendarYear } from '../sim/era.js';
 import { drawPerson } from './figures.js';
-import { PROJECTS, READINESS, INDUSTRY_STATS, ORG, TIME, MOTIVATION, RELATIONSHIP, CHARACTERS, INDUSTRIES, HOLIDAY, COMPANY_TIERS, MONEY, TIER_MIX, FACE_STYLES, DIFFICULTY } from '../config.js';
+import { PROJECTS, READINESS, INDUSTRY_STATS, ORG, TIME, MOTIVATION, RELATIONSHIP, CHARACTERS, INDUSTRIES, HOLIDAY, COMPANY_TIERS, MONEY, TIER_MIX, FACE_STYLES, DIFFICULTY, ERA } from '../config.js';
 
 export function escapeHtml(text) {
   return String(text).replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
@@ -522,7 +523,7 @@ function vitalsEvents(game, vitals) {
 export function journeyPanel(game) {
   const progress = fireProgress(game);
   const { headline, paragraphs } = careerSoFar(game, { worth: progress.worth, fireShare: progress.share });
-  return `${head(`Age ${Math.floor(game.player.age)}`, headline)}
+  return `${head(`Age ${Math.floor(game.player.age)} · ${calendarYear(game)}`, headline)}
     <div class="story-body">${paragraphs.map((text) => `<p>${escapeHtml(text)}</p>`).join('')}</div>`;
 }
 
@@ -677,6 +678,7 @@ export function settingsPanel(settings, soundOn, endScenes, interimScenes) {
   return `${head('Menu', 'Settings')}
     <div class="settings-rows">
       <div class="settings-row"><span>Sound</span><button class="button small" data-action="sound">${soundOn ? 'On' : 'Off'}</button></div>
+      <div class="settings-row"><span>Music for big moments</span><button class="button small" data-action="toggle-music">${settings.music !== false ? 'On' : 'Off'}</button></div>
       <div class="settings-row"><span>Cut scenes for big moments</span><button class="button small" data-action="toggle-cutscenes">${settings.cutscenes ? 'On' : 'Off'}</button></div>
     </div>
     <details class="developer"><summary>Developer</summary>
@@ -857,7 +859,7 @@ function wideRow(label, value, scale, word, detail) {
 }
 
 /** Everything about a character: stats, traits, quirks, difficulty, and the button that begins. */
-export function characterProfile(characterId, faceStyle = null, adjust = {}) {
+export function characterProfile(characterId, faceStyle = null, adjust = {}, birthYear = ERA.defaultBirthYear) {
   const base = CHARACTERS.find((entry) => entry.id === characterId);
   if (!base) return '';
   // The numbers shown are the character's with the player's small adjustments applied.
@@ -895,9 +897,28 @@ export function characterProfile(characterId, faceStyle = null, adjust = {}) {
     <p class="profile-blurb">${escapeHtml(character.blurb)} <span class="muted">${escapeHtml(DIFFICULTY_NOTES[character.difficulty])}</span></p>
     ${bestFit(character.id) ? `<p class="best-fit"><strong>Best fit:</strong> ${bestFit(character.id).track} · strongest in ${escapeHtml(bestFit(character.id).industry)} · hardest in ${escapeHtml(bestFit(character.id).worst)}</p>` : ''}
     <div class="face-picker"><span>Face</span>${Object.entries(FACE_STYLES).map(([id, entry]) => `<button class="face-chip ${id === (faceStyle ?? character.look.faceStyle) ? 'on' : ''}" data-face-style="${id}">${escapeHtml(entry.label)}</button>`).join('')}</div>
+    ${birthYearPicker(birthYear)}
     <div class="profile-stats">${rows}</div>
     <ul class="quirks">${quirks.map((quirk) => `<li>${escapeHtml(quirk)}</li>`).join('')}</ul>
     ${adjustPanel(adjust)}`;
+}
+
+/** The birth year: when the career starts, what it pays, and how soon the Super Intelligence Revolution arrives in each field. */
+function birthYearPicker(birthYear) {
+  const start = startYearOf(birthYear);
+  const factor = payFactor(birthYear);
+  const fields = Object.entries(ERA.sirYear).map(([id, year]) => {
+    const name = { tech: 'Tech', consulting: 'Consulting', privateEquity: 'Private equity', academia: 'Academia' }[id];
+    const at = Math.max(year, start);
+    const age = at - birthYear;
+    return `<span class="${start >= year ? 'already' : ''}">${name}: ${start >= year ? 'already here' : `${year}, at ${age}`}</span>`;
+  }).join('');
+  return `<div class="birth-year">
+    <label for="birth-year"><strong>Born ${birthYear}</strong> · graduates ${start} · starting pay ${factor >= 1 ? '+' : '−'}${Math.abs(Math.round((factor - 1) * 100))}%</label>
+    <input type="range" id="birth-year" min="${ERA.birthYears[0]}" max="${ERA.birthYears[1]}" step="1" value="${birthYear}" aria-label="Birth year">
+    <div class="birth-scale"><span>${ERA.birthYears[0]}</span><span>${ERA.birthYears[1]}</span></div>
+    <div class="sir-years"><em>Super Intelligence Revolution</em>${fields}</div>
+  </div>`;
 }
 
 /** The trade-off controls: up to two small steps on each skill, every step up paid for by a step down. */

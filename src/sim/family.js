@@ -4,7 +4,7 @@
 // formula as extra terms (lifeMoodTerms). The partner is a simulated
 // person with a job, a body, a mood and a temperament.
 
-import { SOCIAL, FAMILY, MONEY } from '../config.js';
+import { SOCIAL, FAMILY, MONEY, WEEKEND } from '../config.js';
 import { RECOVERY, POLITICS, clamp, blowResilience } from './agent.js';
 import { record } from './story.js';
 import { illnessMoodTerms, illnessFamilyTerm, advanceIllness, widow } from './misfortune.js';
@@ -34,7 +34,7 @@ export function socialGain(game) {
   const raw = parts.reduce((sum, part) => sum + part.value, 0);
   const temperament = isExtrovert(player) ? SOCIAL.extrovertGain : SOCIAL.introvertGain;
   const evenings = clamp(1 - SOCIAL.hoursPenaltyPerHour * Math.max(0, plan.hours - 9), SOCIAL.gainFloor, 1);
-  const work = game.employment.employed ? 1 : SOCIAL.joblessGainShare;
+  const work = (game.employment.employed ? 1 : SOCIAL.joblessGainShare) * (plan.weekends ? WEEKEND.socialShare : 1);
   const total = raw * temperament * evenings * work;
   return { total, parts, temperament, evenings, work };
 }
@@ -257,6 +257,7 @@ export function familyTarget(game) {
   add(`Hours past what ${partner.name.split(' ')[0]} tolerates (${partner.workTolerance})`, -Math.min(FAMILY.hoursPenaltyCap, FAMILY.hoursPenaltyPerHour * excess * hoursFactor));
   add('Evenings to rest together', FAMILY.restBonus * player.plan.shares[RECOVERY]);
   add('Temperament', (partner.warmth - 0.5) * FAMILY.warmthWeight);
+  if (player.plan.weekends) add('Weekends at work', -WEEKEND.familyCost);
   if (game.savings < 0) add('Money worries', -FAMILY.debtStrain);
   if (!game.employment.employed) add('The job search', -FAMILY.joblessStrain);
   if (game.family?.boostQuarters > 0) add('Making an effort', game.family.boost);

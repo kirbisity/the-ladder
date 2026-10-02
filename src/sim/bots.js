@@ -122,6 +122,8 @@ function adaptiveChoose(game, choices) {
   }
   // Financial independence: a thoughtful player takes it once the climb has
   // stopped being worth what it costs, or once they are old enough to enjoy it.
+  // Fifty: a thoughtful player stops if worn out, otherwise carries on to sixty.
+  if (game.currentEvent?.event.id === 'retireOffer') return player.health < 55 || player.motivation < 40 ? 0 : 1;
   if (game.currentEvent?.event.id === 'fireOffer') {
     const wornOrStalled = player.health < 65 || player.motivation < 45 || stagnationYears(player) >= 3 || !game.employment.employed;
     const done = player.age >= 50 || (player.age >= 40 && wornOrStalled);
@@ -204,8 +206,8 @@ export function playQuarter(game, policy) {
  */
 // Balance is measured on the career, not on fate: crashes, fires and cancer are switched off, so a character's
 // retirement rate does not hang on whether the dice took them in a car.
-export function playCareer({ seed, characterId, industryId, policyName, tierLock = null, track = null }) {
-  const game = createGame({ seed, characterId, industryId, tierLock, misfortune: false });
+export function playCareer({ seed, characterId, industryId, policyName, tierLock = null, track = null, birthYear = undefined }) {
+  const game = createGame({ seed, characterId, industryId, tierLock, misfortune: false, birthYear });
   game.botForceTrack = track;
   game.botRandom = (function makeBotRandom() {
     let state = seed * 7919 + 13;

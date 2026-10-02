@@ -17,6 +17,8 @@ import { MORE_LIFE, MORE_WORK } from './events/more.js';
 import { HOME_LIFE, WOMENS_WORK } from './events/home.js';
 import { FAMILY_LIFE } from './events/family.js';
 import { TRAGEDY } from './events/tragedy.js';
+import { SIR_EVENT, ERA_WORK, retireEvent } from './events/era.js';
+import { ERA } from '../config.js';
 import { MORE_INDUSTRY_ARCS } from './events/moreIndustry.js';
 
 // Cards that need no job: the market moves for everyone.
@@ -37,7 +39,7 @@ function normalise(event) {
   return { ...event, category, scope, timing: life ? 'life' : 'start' };
 }
 
-const DECK = [...CORE_DECK, ...LIFE_DECK, ...MORE_LIFE, ...MORE_WORK, ...HOME_LIFE, ...WOMENS_WORK, ...FAMILY_LIFE, ...TRAGEDY, ...JOBLESS_DECK, ...INDUSTRY_DECK, ...MORE_INDUSTRY_ARCS].map(normalise);
+const DECK = [...CORE_DECK, ...LIFE_DECK, ...MORE_LIFE, ...MORE_WORK, ...HOME_LIFE, ...WOMENS_WORK, ...FAMILY_LIFE, ...TRAGEDY, SIR_EVENT, ...ERA_WORK, ...JOBLESS_DECK, ...INDUSTRY_DECK, ...MORE_INDUSTRY_ARCS].map(normalise);
 const DECK_BY_ID = new Map(DECK.map((event) => [event.id, event]));
 
 export function eventById(id) {
@@ -81,6 +83,12 @@ function markDrawn(game, event) {
  */
 export function drawEvent(game, random) {
   const eligible = eligibleCards(game, 'start');
+  // After the revolution, most work cards are its own: demos, pilots, workshops.
+  const eraCards = eligible.filter((event) => event.category === 'era');
+  if (game.employment.employed && eraCards.length && random.chance(ERA.eraCardShare)) {
+    const fresh = eraCards.filter((entry) => rested(game, entry));
+    return markDrawn(game, random.weighted(fresh.length ? fresh : eraCards, (entry) => entry.weight(game)));
+  }
   const weights = game.employment.employed ? EVENT_DIALS.categoryWeights : { jobless: 85, macro: 15 };
   const categories = Object.keys(weights).filter((category) => eligible.some((event) => event.category === category));
   const category = random.weighted(categories, (name) => weights[name]);
@@ -131,6 +139,8 @@ export function trackEvent() {
     ],
   };
 }
+
+export { retireEvent };
 
 /** Financial independence: the game offers early retirement. */
 export function fireEvent() {

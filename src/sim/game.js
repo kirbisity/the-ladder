@@ -5,7 +5,7 @@
 
 import {
   TIME, MONEY, JOBS, HEALTH, MOTIVATION, READINESS, RELATIONSHIP, EVENTS as EVENT_DIALS,
-  INDUSTRIES, INDUSTRY_STATS, CHARACTERS, ORG, PROJECTS, FMLA, HOLIDAY, FIRE, COMPANY_TIERS, TIER_SHIFT, TIER_MIX, JOBLESS, AGING, BANDWIDTH, SOCIAL, FAMILY } from '../config.js';
+  INDUSTRIES, INDUSTRY_STATS, CHARACTERS, ORG, PROJECTS, FMLA, HOLIDAY, FIRE, COMPANY_TIERS, TIER_SHIFT, TIER_MIX, JOBLESS, AGING, BANDWIDTH, SOCIAL, FAMILY, ERA } from '../config.js';
 import { createRandom } from './random.js';
 import {
   createAgent, stepDay, clamp, clampVitals, healthTarget, motivationTarget, blowResilience, strainAgeFactor, defaultPlan, payInBand, projectFor, projectSpec, defaultTrack, utilizationOf, RATING_LABELS,
@@ -17,9 +17,10 @@ import {
   updateAlignment, runLayoffs, ageAgents, startQuarterFor, employedAgents, agentsAtLevel, performingAtLevel, reviewPay, payTarget,
   pickTier, tieredIndustry, companyNameFor, growOrganization, retierOrganization,
 } from './org.js';
-import { drawEvent, drawLifeEvent, eventById, offerEvent, fireEvent, trackEvent } from './events.js';
+import { drawEvent, drawLifeEvent, eventById, offerEvent, fireEvent, trackEvent, retireEvent } from './events.js';
 import { record } from './story.js';
 import { validAdjustments, applyAdjustments } from './adjust.js';
+import { clampBirthYear, industryForEra, startYearOf, sirQuarter, sirWave, sirLayoffDue, sirLayoffShare, calendarYear } from './era.js';
 import {
   closeLifeQuarter, lifeMoodTerms, childCostPerYear, partnerTakeHome, partnerCostPerYear, afterDivorce,
 } from './family.js';
@@ -41,10 +42,12 @@ const MARKET_TRANSITIONS = {
  * Returns:
  *   the game state, in the plan phase of the first quarter
  */
-export function createGame({ seed = Date.now() % 1e9, characterId = 'simon', industryId = 'tech', playerName = null, tierLock = null, startTier = null, faceStyle = null, misfortune = true, adjust = null } = {}) {
+export function createGame({ seed = Date.now() % 1e9, characterId = 'simon', industryId = 'tech', playerName = null, tierLock = null, startTier = null, faceStyle = null, misfortune = true, adjust = null, birthYear = ERA.defaultBirthYear } = {}) {
   const random = createRandom(seed);
   const character = CHARACTERS.find((entry) => entry.id === characterId) ?? CHARACTERS[0];
-  const industry = INDUSTRIES[industryId] ?? INDUSTRIES.tech;
+  const born = clampBirthYear(birthYear);
+  // Pay is in the money of the year the career starts (see era.js).
+  const industry = industryForEra(INDUSTRIES[industryId] ?? INDUSTRIES.tech, born);
   // Small, paid-for tweaks chosen on the character screen (see adjust.js).
   const steps = adjust && validAdjustments(adjust) ? adjust : {};
   const adjusted = applyAdjustments(character, steps);
@@ -83,6 +86,10 @@ export function createGame({ seed = Date.now() % 1e9, characterId = 'simon', ind
     // The life outside the office (see family.js): the circle of friends, a
     // partner and the marriage with them, the children, a past partner.
     adjust: steps,
+    birthYear: born,
+    startYear: startYearOf(born),
+    // Set when the Super Intelligence Revolution reaches the field: { quarter, year }.
+    sir: null,
     social: SOCIAL.start,
     partner: null,
     family: null,
@@ -345,6 +352,20 @@ export function beginQuarter(game) {
     && game.player.readiness >= 50 && !game.eventQueue.some((entry) => entry.event.id === 'trackChoice')) {
     game.eventQueue.unshift({ event: trackEvent(), data: {} });
   }
+  // The Super Intelligence Revolution reaches the field: once, at its year (or two quarters in for a late starter).
+  if (!game.sir && game.quarterIndex >= sirQuarter(game)) {
+    game.sir = { quarter: game.quarterIndex, year: calendarYear(game) };
+    game.market = 'boom';
+    if (game.savings > 0) game.savings *= 1 + ERA.savingsJump;
+    record(game, 'sir', { year: game.sir.year });
+    const card = eventById('superIntelligence');
+    if (card) game.eventQueue.unshift({ event: card, data: { year: game.sir.year } });
+  }
+  // At fifty, an ordinary retirement is offered once; saying no carries on to sixty.
+  if (!game.flags.retireAsked && game.player.age >= TIME.earlyRetirementAge && game.player.age < TIME.retirementAge) {
+    game.flags.retireAsked = true;
+    game.eventQueue.unshift({ event: retireEvent(), data: {} });
+  }
   if (fireReady(game)) {
     game.fireAskedQuarter = game.quarterIndex;
     game.eventQueue.unshift({ event: fireEvent(), data: { number: fireNumber(game) } });
@@ -408,6 +429,13 @@ export function fireReady(game) {
   return age >= FIRE.minimumAge && age < TIME.retirementAge - 1
     && netWorth(game) >= fireNumber(game)
     && (asked === null || asked === undefined || game.quarterIndex - asked >= FIRE.askEveryQuarters);
+}
+
+/** An ordinary retirement, taken at the offer at fifty. */
+export function retireNow(game) {
+  record(game, 'retiredEarly');
+  endGame(game, 'retired');
+  game.outcome.early = true;
 }
 
 /** Retire early, on your own terms. */
@@ -747,6 +775,7 @@ function closeEmployedQuarter(game, report) {
   const org = game.org;
   const industry = org.industry;
 
+  org.sirWave = sirWave(game);
   peerSocialActions(game, report);
   for (const agent of employedAgents(org)) {
     const projectResult = resolveProject(agent, industry, random);
@@ -813,6 +842,15 @@ function closeEmployedQuarter(game, report) {
   }
 
   closeStartupQuarter(game, report);
+  // After the revolution, a round of layoffs every year, harder at the bottom and harder every five years.
+  if (sirLayoffDue(game)) {
+    const wave = sirWave(game);
+    const cut = runLayoffs(org, industry, (level) => sirLayoffShare(wave, level), random);
+    report.layoffs = (report.layoffs ?? 0) + cut.length;
+    report.notes.push(`An AI restructuring: ${cut.length} roles in the division are automated away${wave > 1 ? ` (wave ${wave})` : ''}.`);
+    report.stinger = 'layoff';
+    if (!player.quarter.terminated) record(game, 'layoffSurvived', { cut: cut.length, ai: true });
+  }
   if (game.flags.layoffAt !== null && game.flags.layoffAt <= game.quarterIndex) {
     const share = game.market === 'recession' ? 0.18 : 0.12;
     const cut = runLayoffs(org, industry, share, random);
@@ -962,7 +1000,7 @@ function closeUnemployedQuarter(game, report) {
   const boost = game.flags.searchBoost ?? 0;
   game.flags.searchBoost = 0;
   const chance = clamp((JOBS.searchBase + JOBS.searchOpen * player.plan.openness + ratingBoost + boost
-    - JOBS.searchStigmaPerQuarter * (employment.unemployedQuarters - 1) - agePenalty) * marketFactor, 0.03, 0.95);
+    - JOBS.searchStigmaPerQuarter * (employment.unemployedQuarters - 1) - agePenalty) * marketFactor * aiHiringFactor(game), 0.03, 0.95);
   report.searchChance = chance;
   if (random.chance(chance)) {
     const demote = employment.unemployedQuarters >= JOBS.reentryDemoteAfterQuarters || employment.firedFor === 'fired' ? 1 : 0;
@@ -974,6 +1012,14 @@ function closeUnemployedQuarter(game, report) {
   }
   if (game.savings < 0) report.notes.push(`Living on credit: ${formatMoney(-game.savings)} owed. Past ${formatMoney(MONEY.debtCushion)}, the lease goes.`);
   rollDivorce(game, report);
+}
+
+/** After the revolution, junior roles are the ones agents fill: searching at a low level gets harder every wave. */
+function aiHiringFactor(game) {
+  const wave = sirWave(game);
+  if (!wave) return 1;
+  const level = game.employment.lastLevel ?? game.player.level;
+  return level < ERA.middleLevel ? Math.max(0.35, 1 - ERA.juniorHiringPerWave * wave) : Math.max(0.6, 1 - ERA.juniorHiringPerWave * wave / 3);
 }
 
 /** Divorce odds under the strain of a long search. */

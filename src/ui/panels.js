@@ -809,9 +809,9 @@ function ratioWord(ratio) {
 }
 
 /** One stat as a bar (1 = average, at the tick) with its plain-words reading. */
-function statRow(label, ratio, detail = '') {
+function statRow(label, ratio, detail = '', control = '') {
   const width = Math.max(4, Math.min(100, ratio / 2.5 * 100));
-  return `<div class="stat-row"><div class="stat-top"><span>${label}</span><strong>${ratioWord(ratio)}</strong></div>
+  return `<div class="stat-row"><div class="stat-top"><span>${label}</span>${control}<strong>${ratioWord(ratio)}</strong></div>
     <div class="stat-bar"><div style="width:${width}%"></div><i style="left:${1 / 2.5 * 100}%"></i></div>${detail ? `<small>${detail}</small>` : ''}</div>`;
 }
 
@@ -847,14 +847,14 @@ function iqTopShare(iq) {
   return share < 0.001 ? `1 in ${Math.round(1 / share).toLocaleString('en-US')}` : `top ${(share * 100).toFixed(share < 0.01 ? 1 : 0)}%`;
 }
 
-function wideRow(label, value, scale, word, detail) {
+function wideRow(label, value, scale, word, detail, control = '') {
   const width = Math.max(3, Math.min(100, (value - scale.low) / (scale.high - scale.low) * 100));
   const ticks = scale.marks.map(([at, name]) => `<i style="left:${(at - scale.low) / (scale.high - scale.low) * 100}%" title="${name}"></i>`).join('');
   const marks = scale.marks.map(([at, name]) => {
     const left = (at - scale.low) / (scale.high - scale.low) * 100;
     return `<span style="left:${left}%${left < 8 ? ';transform:none' : ''}">${name}</span>`;
   }).join('');
-  return `<div class="stat-row wide"><div class="stat-top"><span>${label}</span><strong>${value} · ${word}</strong></div>
+  return `<div class="stat-row wide"><div class="stat-top"><span>${label}</span>${control}<strong>${value} · ${word}</strong></div>
     <div class="stat-bar wide"><div style="width:${width}%"></div>${ticks}</div><div class="stat-marks">${marks}</div><small>${detail}</small></div>`;
 }
 
@@ -866,18 +866,21 @@ export function characterProfile(characterId, faceStyle = null, adjust = {}, bir
   const adjusted = applyAdjustments(base, adjust);
   const character = { ...base, iq: adjusted.iq, pol: adjusted.pol };
   const t = adjusted.traits;
+  // Each tunable stat carries its own − and + (see adjust.js): the bars move as the player tunes.
+  const points = adjustmentPoints(adjust);
+  const tune = (id) => tuner(id, adjust, points);
   const hoursBody = 1 / (t.strainResistance ?? 1);
   const hoursMood = 1 / (t.exhaustionResistance ?? 1);
   const rows = [
-    wideRow('Intelligence', character.iq, WIDE_SCALES.iq, iqWord(character.iq), `${iqTopShare(character.iq)} of people: more output from every hour of focus.`),
-    wideRow('Political skill', character.pol, WIDE_SCALES.pol, polWord(character.pol), 'How far networking, calibration and gambles in events pay off.'),
-    statRow('Body under long hours', hoursBody, 'How well health holds when the days get long.'),
-    statRow('Mood under long hours', hoursMood, 'How well motivation holds when the days get long.'),
-    statRow('Shrugs off bad news', 1 + (t.steadiness ?? 0) * 2, t.steadiness ? `Takes ${Math.round((1 - t.steadiness) * 100)}% of every blow to mood.` : 'Takes blows to mood in full.'),
-    statRow('Leadership', t.leadership ?? 1, 'Pull toward manager and director chairs.'),
+    wideRow('Intelligence', character.iq, WIDE_SCALES.iq, iqWord(character.iq), `${iqTopShare(character.iq)} of people: more output from every hour of focus.`, tune('iq')),
+    wideRow('Political skill', character.pol, WIDE_SCALES.pol, polWord(character.pol), 'How far networking, calibration and gambles in events pay off.', tune('pol')),
+    statRow('Body under long hours', hoursBody, 'How well health holds when the days get long.', tune('body')),
+    statRow('Mood under long hours', hoursMood, 'How well motivation holds when the days get long.', tune('mood')),
+    statRow('Shrugs off bad news', 1 + (t.steadiness ?? 0) * 2, t.steadiness ? `Takes ${Math.round((1 - t.steadiness) * 100)}% of every blow to mood.` : 'Takes blows to mood in full.', tune('steady')),
+    statRow('Leadership', t.leadership ?? 1, 'Pull toward manager and director chairs.', tune('lead')),
     statRow('Reads the room in events', t.eventSavvy ?? 1, 'Odds on political gambles in events.'),
-    statRow('Output at the desk', t.coreBonus ?? 1),
-    statRow('Networking pays back', t.politicsBonus ?? 1),
+    statRow('Output at the desk', t.coreBonus ?? 1, '', tune('desk')),
+    statRow('Networking pays back', t.politicsBonus ?? 1, '', tune('network')),
     statRow('Builds relationships', t.relationshipBonus ?? 1),
     statRow('Need for freedom', 1 + (t.autonomyNeed ?? 0), t.autonomyNeed ? 'Motivation tracks how much say the job gives: best in a university, worst in finance.' : ''),
     statRow('Lift from exciting projects', t.noveltyLift ?? 1),
@@ -898,41 +901,27 @@ export function characterProfile(characterId, faceStyle = null, adjust = {}, bir
     ${bestFit(character.id) ? `<p class="best-fit"><strong>Best fit:</strong> ${bestFit(character.id).track} · strongest in ${escapeHtml(bestFit(character.id).industry)} · hardest in ${escapeHtml(bestFit(character.id).worst)}</p>` : ''}
     <div class="face-picker"><span>Face</span>${Object.entries(FACE_STYLES).map(([id, entry]) => `<button class="face-chip ${id === (faceStyle ?? character.look.faceStyle) ? 'on' : ''}" data-face-style="${id}">${escapeHtml(entry.label)}</button>`).join('')}</div>
     ${birthYearPicker(birthYear)}
+    <div class="tune-bar"><span>Tune the stats with − and +: every step up is paid for by a step down, two at most on any.</span><strong>${points ? `${points} point${points > 1 ? 's' : ''} to spend` : 'Balanced'}</strong>${Object.keys(adjust).some((id) => adjust[id]) ? '<button class="button ghost small" data-adjust-reset>Reset</button>' : ''}</div>
     <div class="profile-stats">${rows}</div>
-    <ul class="quirks">${quirks.map((quirk) => `<li>${escapeHtml(quirk)}</li>`).join('')}</ul>
-    ${adjustPanel(adjust)}`;
+    <ul class="quirks">${quirks.map((quirk) => `<li>${escapeHtml(quirk)}</li>`).join('')}</ul>`;
 }
 
 /** The birth year: when the career starts, what it pays, and how soon the Super Intelligence Revolution arrives in each field. */
 function birthYearPicker(birthYear) {
   const start = startYearOf(birthYear);
   const factor = payFactor(birthYear);
-  const fields = Object.entries(ERA.sirYear).map(([id, year]) => {
-    const name = { tech: 'Tech', consulting: 'Consulting', privateEquity: 'Private equity', academia: 'Academia' }[id];
-    const at = Math.max(year, start);
-    const age = at - birthYear;
-    return `<span class="${start >= year ? 'already' : ''}">${name}: ${start >= year ? 'already here' : `${year}, at ${age}`}</span>`;
-  }).join('');
   return `<div class="birth-year">
     <label for="birth-year"><strong>Born ${birthYear}</strong> · graduates ${start} · starting pay ${factor >= 1 ? '+' : '−'}${Math.abs(Math.round((factor - 1) * 100))}%</label>
-    <input type="range" id="birth-year" min="${ERA.birthYears[0]}" max="${ERA.birthYears[1]}" step="1" value="${birthYear}" aria-label="Birth year">
+    <input type="range" id="birth-year" min="${ERA.birthYears[0]}" max="${ERA.birthYears[1]}" step="1" value="${birthYear}" aria-label="Birth year" style="--fill:${((birthYear - ERA.birthYears[0]) / (ERA.birthYears[1] - ERA.birthYears[0]) * 100).toFixed(1)}%;--color:#f5c542">
     <div class="birth-scale"><span>${ERA.birthYears[0]}</span><span>${ERA.birthYears[1]}</span></div>
-    <div class="sir-years"><em>Super Intelligence Revolution</em>${fields}</div>
   </div>`;
 }
 
-/** The trade-off controls: up to two small steps on each skill, every step up paid for by a step down. */
-function adjustPanel(adjust) {
-  const points = adjustmentPoints(adjust);
-  const rows = ADJUSTABLE.map((entry) => {
-    const steps = adjust[entry.id] ?? 0;
-    const label = entry.field ? `${steps > 0 ? '+' : ''}${steps * entry.step} ${entry.unit}` : `${steps > 0 ? '+' : ''}${Math.round(steps * entry.step * 100)}%`;
-    return `<div class="adjust-row"><span>${entry.label}</span><button class="button small" data-adjust="${entry.id}" data-dir="-1" ${steps <= -MAX_STEPS ? 'disabled' : ''}>−</button><strong class="${steps > 0 ? 'up' : steps < 0 ? 'down' : ''}">${steps ? label : '0'}</strong><button class="button small" data-adjust="${entry.id}" data-dir="1" ${steps >= MAX_STEPS || points <= 0 ? 'disabled' : ''}>+</button></div>`;
-  }).join('');
-  return `<details class="adjust" ${Object.keys(adjust).length ? 'open' : ''}><summary>Tune the skills <small>${points ? `${points} point${points > 1 ? 's' : ''} to spend` : 'balanced'}</small></summary>
-    <p class="explain">Small trade-offs. Every step up on one skill is paid for by a step down on another, two steps at most on any, and the changes are tiny: they sharpen who this person is, they do not change it.</p>
-    <div class="adjust-grid">${rows}</div>
-    <button class="button ghost small" data-adjust-reset>Reset</button></details>`;
+/** The − and + beside a tunable stat, with the steps taken shown between them. */
+function tuner(id, adjust, points) {
+  const steps = adjust[id] ?? 0;
+  const shown = steps ? `${steps > 0 ? '+' : ''}${steps}` : '';
+  return `<span class="tuner"><button class="tune" data-adjust="${id}" data-dir="-1" ${steps <= -MAX_STEPS ? 'disabled' : ''} aria-label="Lower">−</button><b class="${steps > 0 ? 'up' : steps < 0 ? 'down' : ''}">${shown}</b><button class="tune" data-adjust="${id}" data-dir="1" ${steps >= MAX_STEPS || points <= 0 ? 'disabled' : ''} aria-label="Raise">+</button></span>`;
 }
 
 const INDUSTRY_BLURBS = {

@@ -1000,8 +1000,22 @@ details.developer[open] summary { margin-bottom: 8px; }
 .birth-year label strong { color: var(--gold); font-size: 16px; }
 .birth-year input[type=range] { width: 100%; }
 .birth-scale { display: flex; justify-content: space-between; font-size: 11px; color: var(--ink-faint); }
-.sir-years { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--ink-soft); }
-.sir-years em { font-style: normal; color: #38e1ff; font-weight: 700; }
-.sir-years .already { color: #ff8a8d; }
 .weekend-toggle { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-soft); cursor: pointer; flex-wrap: wrap; }
 .weekend-toggle small { color: var(--ink-faint); font-size: 11px; }
+
+.tune-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; color: var(--ink-faint); margin: 2px 0 6px; }
+.tune-bar strong { color: var(--gold); }
+.stat-top { align-items: center; }
+.tuner { display: inline-flex; align-items: center; gap: 2px; margin-left: auto; margin-right: 8px; }
+.tuner b { min-width: 22px; text-align: center; font-size: 12px; }
+.tuner b.up { color: #7fe3a0; }
+.tuner b.down { color: #ff8a8d; }
+.tune { width: 22px; height: 22px; border-radius: 6px; border: 1px solid var(--panel-line); background: rgba(255,255,255,0.06); color: var(--ink); font-weight: 700; cursor: pointer; line-height: 1; padding: 0; }
+.tune:disabled { opacity: 0.3; cursor: default; }
+.tune:not(:disabled):hover { border-color: #5f9bff; }
+/* On a phone the stat name, tuner and reading share a narrow row: let the reading wrap below. */
+@media (max-width: 640px) {
+  .stat-top { flex-wrap: wrap; row-gap: 2px; }
+  .stat-top > span:first-child { min-width: 0; }
+  .stat-top strong { font-size: 12px; }
+}

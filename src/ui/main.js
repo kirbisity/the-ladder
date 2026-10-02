@@ -34,6 +34,8 @@ const SAVE_KEY = 'the-ladder-save';
 const SETTINGS_KEY = 'the-ladder-settings';
 // Which journal moment wins when several land at once.
 const SCENE_PRIORITY = ['sir', 'carCrash', 'houseFire', 'diagnosis', 'farewell', 'lostJob', 'healthScare', 'burnout', 'promoted', 'newJob', 'house', 'married', 'divorce', 'breakup', 'newborn', 'child', 'dating', 'startupWin', 'fmla', 'holiday'];
+// Scenes that play even on autopilot.
+const ALWAYS_PLAY = new Set(['sir']);
 const SPEEDS = [1, 2, 4, 8];
 // At 1× a quarter takes six seconds: ten workdays a second.
 const DAYS_PER_SECOND = 10;
@@ -119,8 +121,9 @@ function playJournalScenes() {
   const journal = game.journal ?? [];
   const fresh = journal.slice(app.journalSeen ?? journal.length);
   app.journalSeen = journal.length;
-  if (!settings.cutscenes || game.outcome || fresh.length === 0 || app.autopilot) return;
-  const scenes = new Set(fresh.map((entry) => JOURNAL_SCENES[entry.kind]).filter(Boolean));
+  if (!settings.cutscenes || game.outcome || fresh.length === 0) return;
+  // Autopilot skips the everyday scenes, but a once-in-a-career moment always plays (autopilot waits for it).
+  const scenes = new Set(fresh.map((entry) => JOURNAL_SCENES[entry.kind]).filter((scene) => scene && (!app.autopilot || ALWAYS_PLAY.has(scene))));
   const winner = SCENE_PRIORITY.find((scene) => scenes.has(scene));
   if (winner) cutscenes.play(winner, sceneData(game), () => updateHud(true));
 }

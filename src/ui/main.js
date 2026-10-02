@@ -91,6 +91,17 @@ function loadSettings() {
   }
 }
 
+/** Sound starts on: the browser lets it play from the first click, unless the player has switched it off. */
+function enableSoundOnFirstGesture() {
+  const start = () => {
+    document.removeEventListener('pointerdown', start, true);
+    if (settings.sound === false || audio.isEnabled()) return;
+    audio.enable();
+    $('#sound-button').textContent = 'Sound on';
+  };
+  document.addEventListener('pointerdown', start, true);
+}
+
 function saveSettings() {
   try {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
@@ -900,6 +911,8 @@ function handleAction(action, target) {
     case 'sound': {
       if (audio.isEnabled()) audio.disable();
       else audio.enable();
+      settings.sound = audio.isEnabled();
+      saveSettings();
       $('#sound-button').textContent = audio.isEnabled() ? 'Sound on' : 'Sound off';
       if (app.modal === 'settings') openModal('settings', settingsPanel(settings, audio.isEnabled(), END_SCENES, INTERIM_SCENES), true);
       if (game) audio.setState({ running: game.phase === 'running' && !app.paused, burnout: game.player.burnout.active, hours: game.player.plan.hours });
@@ -984,7 +997,6 @@ function bindInput() {
       steps[id] = (steps[id] ?? 0) + Number(adjustButton.dataset.dir);
       if (validAdjustments(steps)) app.pick.adjust = steps;
       $('#profile-body').innerHTML = characterProfile(app.pick.characterId, app.pick.faceStyle, app.pick.adjust ?? {}, app.pick.birthYear);
-      $('#profile-body').querySelector('details.adjust').open = true;
       return;
     }
     if (event.target.closest('[data-adjust-reset]')) {
@@ -1080,12 +1092,12 @@ function bindInput() {
   document.addEventListener('input', (event) => {
     if (event.target.id !== 'birth-year') return;
     app.pick.birthYear = Number(event.target.value);
+    event.target.style.setProperty('--fill', `${(app.pick.birthYear - ERA.birthYears[0]) / (ERA.birthYears[1] - ERA.birthYears[0]) * 100}%`);
     const picker = event.target.closest('.birth-year');
     const fresh = document.createElement('div');
     fresh.innerHTML = characterProfile(app.pick.characterId, app.pick.faceStyle, app.pick.adjust ?? {}, app.pick.birthYear);
     const next = fresh.querySelector('.birth-year');
     picker.querySelector('label').innerHTML = next.querySelector('label').innerHTML;
-    picker.querySelector('.sir-years').innerHTML = next.querySelector('.sir-years').innerHTML;
   });
   $('#weekend-check').addEventListener('change', (event) => {
     if (!app.game) return;
@@ -1136,6 +1148,7 @@ function boot() {
   });
   cutscenes = createCutscenePlayer($('#cutscene'));
   music.setEnabled(settings.music !== false);
+  enableSoundOnFirstGesture();
   cutscenes.setOnPlay((id) => music.playForScene(id));
   intro = createIntro($('#intro-canvas'), $('#intro-line'));
   renderCharacterPick();

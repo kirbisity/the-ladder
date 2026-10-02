@@ -1,7 +1,6 @@
 # Music
 
-Placeholder tracks: each file is two seconds of silence, so the game runs and the wiring can be tested.
-Replace them with real tracks of the same names (MP3). Each plays once, from the start, when its moment's
+The game's music. To change a track, replace the file with another MP3 of the same name. Each plays once, from the start, when its moment's
 cut scene begins, and stops when it ends or when the next track starts.
 
 | File | Plays for |

@@ -10,7 +10,7 @@ import { escapeHtml, portrait, historyChart, wealthChart, outcomeText } from './
 import { snapshotScene, endingSceneFor, sceneData, JOURNAL_SCENES } from './cutscenes.js';
 
 // Moments worth a picture, in the order they are preferred.
-const MOMENT_ORDER = ['promoted', 'married', 'divorce', 'newborn', 'child', 'house', 'startupWin', 'newJob', 'burnout', 'lostJob'];
+const MOMENT_ORDER = ['promoted', 'married', 'divorce', 'carCrash', 'houseFire', 'newborn', 'child', 'house', 'startupWin', 'newJob', 'burnout', 'lostJob'];
 
 const MILESTONE_TEXT = {
   joined: (entry) => `Joined ${entry.company} as ${entry.title}`,
@@ -20,6 +20,12 @@ const MILESTONE_TEXT = {
   married: (entry) => (entry.partner ? `Married ${entry.partner}` : 'Married'),
   breakup: (entry) => `Broke up with ${entry.partner ?? 'a partner'}`,
   child: () => 'A child was born',
+  bereaved: (entry) => (entry.label ? `${entry.label} died` : 'Lost someone close'),
+  carCrash: (entry) => (entry.severity === 'severe' ? 'A serious car crash' : entry.severity === 'moderate' ? 'A car crash' : 'A minor car crash'),
+  houseFire: () => 'A fire at home',
+  cancer: (entry) => (entry.who === 'partner' ? `${entry.partner ?? 'A partner'} was diagnosed with cancer` : 'Diagnosed with cancer'),
+  cancerCleared: (entry) => (entry.who === 'partner' ? 'A partner was declared clear' : 'Declared clear of cancer'),
+  widowed: (entry) => `Lost ${entry.partner ?? 'a partner'}`,
   parentalLeave: () => 'Took parental leave',
   house: () => 'Bought a house',
   divorce: (entry) => (entry.reason === 'strain' ? 'Divorced: too many hours, too little home' : 'Divorced'),

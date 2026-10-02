@@ -7,6 +7,7 @@
 import { SOCIAL, FAMILY, MONEY } from '../config.js';
 import { RECOVERY, POLITICS, clamp, blowResilience } from './agent.js';
 import { record } from './story.js';
+import { illnessMoodTerms, illnessFamilyTerm, advanceIllness, widow } from './misfortune.js';
 
 // ── The social network ─────────────────────────────────────────────────
 
@@ -259,6 +260,7 @@ export function familyTarget(game) {
   if (game.savings < 0) add('Money worries', -FAMILY.debtStrain);
   if (!game.employment.employed) add('The job search', -FAMILY.joblessStrain);
   if (game.family?.boostQuarters > 0) add('Making an effort', game.family.boost);
+  if (illnessFamilyTerm(game)) add(`${partner.name.split(' ')[0]}'s illness fills the house`, illnessFamilyTerm(game));
   if (partner.motivation < 35) add(`${partner.name.split(' ')[0]} is low`, -(35 - partner.motivation) * 0.3);
   const target = terms.reduce((sum, term) => sum + term.value, 0);
   return { terms, target };
@@ -360,6 +362,11 @@ export function afterDivorce(game, reason) {
 export function closeLifeQuarter(game, report) {
   advanceSocial(game);
   syncDependents(game);
+  const illness = advanceIllness(game, report);
+  if (illness === 'widowed') {
+    widow(game, report);
+    return null;
+  }
   if (game.flags.divorceShadow) game.flags.divorceShadow *= FAMILY.divorceShadowFade;
   if (game.flags.divorceShadow < 0.5) game.flags.divorceShadow = 0;
   const partnerEnd = advancePartner(game, report);
@@ -391,7 +398,8 @@ export function lifeMoodTerms(game) {
   }
   const kids = kidsAtHome(game).length + legacyKids(game);
   if (kids > 0) terms.push({ label: 'Kids at home', value: Math.min(FAMILY.kidMotivationCap, FAMILY.kidMotivation * kids) });
-  if (game.flags.divorceShadow > 0.5) terms.push({ label: game.exPartner && !game.married ? 'After the split' : 'After the breakup', value: -game.flags.divorceShadow });
+  if (game.flags.divorceShadow > 0.5) terms.push({ label: game.exPartner?.died ? 'Grief' : game.exPartner && !game.married ? 'After the split' : 'After the breakup', value: -game.flags.divorceShadow });
+  terms.push(...illnessMoodTerms(game));
   return terms;
 }
 

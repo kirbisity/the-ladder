@@ -16,7 +16,7 @@ export const MORE_LIFE = [
     id: 'friendDies',
     category: 'lifestyle',
     title: 'A friend is gone',
-    weight: (game) => (older(game, 26) && !game.flags.friendDied ? 0.4 : 0),
+    weight: () => 0,
     text: 'A friend from college died on Sunday: a cyclist and a driver looking at a phone. The funeral is Friday, four hundred miles away.',
     choices: [
       { label: 'Go, and stay the weekend', tag: 'kind', apply: (game) => {
@@ -36,7 +36,8 @@ export const MORE_LIFE = [
     id: 'grandparentDies',
     category: 'lifestyle',
     title: 'Your grandmother',
-    weight: (game) => (older(game, 28) && game.player.age < 52 && !game.flags.grandparentDied ? 0.35 : 0),
+    // Superseded by the loss roll in misfortune.js, which keeps count across a whole career.
+    weight: () => 0,
     text: 'Your grandmother died in her sleep at ninety-one. The family wants to gather. Your cousins are already booking flights.',
     choices: [
       { label: 'Fly out and help with the service', tag: 'kind', apply: (game) => {
@@ -56,7 +57,7 @@ export const MORE_LIFE = [
     id: 'parentDies',
     category: 'lifestyle',
     title: 'The call you were dreading',
-    weight: (game) => (older(game, 44) && !game.flags.parentDied ? 0.5 : 0),
+    weight: () => 0,
     text: 'Your mother has died, after a short illness. There is a house to empty, a will, and a brother who cannot cope with any of it.',
     choices: [
       { label: 'Take bereavement leave and settle everything', tag: 'rest', apply: (game) => {
@@ -82,7 +83,8 @@ export const MORE_LIFE = [
     id: 'highwayCrash',
     category: 'lifestyle',
     title: 'The crash',
-    weight: (game) => 0.25 + (game.player.plan.hours > 11 ? 0.15 : 0) + (game.player.health < 50 ? 0.1 : 0),
+    // Superseded by the crash roll in misfortune.js: a crash is rare, not a yearly event.
+    weight: () => 0,
     text: (game) => `A truck runs a red light at 60 mph and hits your driver's door. You wake up in the ER with a broken collarbone and three cracked ribs. ${insured(game) ? 'Your plan covers most of it.' : 'You have no insurance.'}`,
     choices: [
       { label: 'Rest and do the physical therapy', tag: 'rest', apply: (game) => {

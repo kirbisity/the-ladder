@@ -26,6 +26,8 @@ const WORLD = { width: 46, depth: 36 };
 const OFFSET = { x: 10, y: 9 };
 const WALK_SPEED = 3.4;
 const IDLE_RETURN_SECONDS = 7;
+// Which way a positive model turn goes on screen (checked by eye: a walker heading right faces right).
+const YAW_SIGN = 1;
 
 const shade = (color, amount) => (amount >= 0 ? mixColor(color, '#ffffff', amount) : mixColor(color, '#000000', -amount));
 
@@ -443,6 +445,91 @@ export function findPath(grid, from, to) {
     }
   }
   return null;
+}
+
+/** Whether a straight walk between two points stays on open floor, with a little clearance either side. */
+export function clearLine(grid, a, b, clearance = 0.28) {
+  const distance = Math.hypot(b.x - a.x, b.y - a.y);
+  const steps = Math.max(1, Math.ceil(distance / 0.2));
+  const nx = -(b.y - a.y) / (distance || 1);
+  const ny = (b.x - a.x) / (distance || 1);
+  for (let step = 0; step <= steps; step += 1) {
+    const t = step / steps;
+    const x = a.x + (b.x - a.x) * t;
+    const y = a.y + (b.y - a.y) * t;
+    for (const side of [-clearance, 0, clearance]) {
+      if (!grid[Math.floor(y + ny * side)]?.[Math.floor(x + nx * side)]) return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Turn a cell-by-cell path into a few straight legs at any angle: from each point, jump to the furthest point
+ * that can be seen in a straight line. The walker then curves between the legs as it steers.
+ */
+export function smoothPath(grid, path) {
+  if (!path || path.length < 3) return path;
+  const smooth = [path[0]];
+  let anchor = 0;
+  while (anchor < path.length - 1) {
+    let furthest = anchor + 1;
+    for (let candidate = path.length - 1; candidate > anchor + 1; candidate -= 1) {
+      if (clearLine(grid, path[anchor], path[candidate])) {
+        furthest = candidate;
+        break;
+      }
+    }
+    smooth.push(path[furthest]);
+    anchor = furthest;
+  }
+  return smooth;
+}
+
+const TURN_RATE = 9;
+const ARRIVE = 0.3;
+
+/**
+ * Move a walker along its path for a moment: it steers its heading toward the next point at a limited turn
+ * rate, so corners become curves, and moves along its heading. Returns true when the path is done.
+ */
+export function stepWalker(walker, dt, speed, grid) {
+  let budget = speed * dt;
+  while (budget > 0 && walker.path.length) {
+    const next = walker.path[0];
+    const dx = next.x - walker.x;
+    const dy = next.y - walker.y;
+    const distance = Math.hypot(dx, dy);
+    const last = walker.path.length === 1;
+    if (distance < (last ? 0.04 : ARRIVE)) {
+      if (last) {
+        walker.x = next.x;
+        walker.y = next.y;
+      }
+      walker.path.shift();
+      continue;
+    }
+    const want = Math.atan2(dy, dx);
+    if (walker.heading === undefined) walker.heading = want;
+    let turn = want - walker.heading;
+    turn = Math.atan2(Math.sin(turn), Math.cos(turn));
+    const maxTurn = TURN_RATE * dt;
+    walker.heading += Math.max(-maxTurn, Math.min(maxTurn, turn));
+    // Slow into tight turns; never step off the floor (fall back to heading straight for the point).
+    const pace = Math.abs(turn) > 1.2 ? 0.45 : 1;
+    const move = Math.min(budget, distance) * pace;
+    let x = walker.x + Math.cos(walker.heading) * move;
+    let y = walker.y + Math.sin(walker.heading) * move;
+    if (grid && !grid[Math.floor(y)]?.[Math.floor(x)]) {
+      x = walker.x + dx / distance * move;
+      y = walker.y + dy / distance * move;
+    }
+    walker.x = x;
+    walker.y = y;
+    budget -= move / pace;
+    if (pace < 1) break;
+  }
+  return walker.path.length === 0;
 }
 
 /** The cell the player can actually walk to that is nearest a point: flood-filled from where they stand. */
@@ -967,9 +1054,16 @@ export function createOfficeWorld(canvas) {
 
   // ── People ─────────────────────────────────────────────────────────
 
-  function standingFigure(look, x, y, pose, time, facing, z = 0) {
+  /** The figure's turn for a heading on the floor: the camera looks along (+x, +y), so that is "toward us". */
+  function yawFor(heading) {
+    const dx = Math.cos(heading);
+    const dy = Math.sin(heading);
+    return YAW_SIGN * Math.atan2((dx - dy) / Math.SQRT2, (dx + dy) / Math.SQRT2);
+  }
+
+  function standingFigure(look, x, y, pose, time, heading, z = 0) {
     const p = iso(x, y, z);
-    drawPerson(ctx, p.x, p.y, 8.4 * scale, look, { pose, expression: 'happy', time, facing });
+    drawPerson(ctx, p.x, p.y, 8.4 * scale, look, { pose, expression: 'happy', time, facing: 1, yaw: heading === undefined ? -0.3 : yawFor(heading) });
   }
 
   function seated(look, seat, time, typingRate, posture) {
@@ -1081,7 +1175,7 @@ export function createOfficeWorld(canvas) {
     if (state.mode === 'seated') return;
     state.sit = null;
     const path = findPath(grid, state, layout.player.seat);
-    state.path = path ? path.slice(1) : [];
+    state.path = path ? [...smoothPath(grid, path).slice(1, -1), { x: layout.player.seat.x, y: layout.player.seat.y }] : [];
     state.target = null;
     state.mode = state.path.length ? 'returning' : 'seated';
     if (state.mode === 'seated') {
@@ -1093,24 +1187,7 @@ export function createOfficeWorld(canvas) {
   function step(dt, scene) {
     // The player.
     if (state.mode === 'walking' || state.mode === 'returning') {
-      let budget = WALK_SPEED * dt;
-      while (budget > 0 && state.path.length) {
-        const next = state.path[0];
-        const dx = next.x - state.x;
-        const dy = next.y - state.y;
-        const distance = Math.hypot(dx, dy);
-        if (distance <= budget) {
-          state.x = next.x;
-          state.y = next.y;
-          state.path.shift();
-          budget -= distance;
-        } else {
-          state.x += dx / distance * budget;
-          state.y += dy / distance * budget;
-          budget = 0;
-        }
-        state.facing = dx - dy >= 0 ? 1 : -1;
-      }
+      stepWalker(state, dt, WALK_SPEED, grid);
       if (state.path.length === 0) arrive();
     } else if (state.mode === 'idle') {
       state.idleTime += dt;
@@ -1120,24 +1197,7 @@ export function createOfficeWorld(canvas) {
     // Colleagues wandering to the pantry and back.
     for (const npc of npcs) {
       if (npc.path.length) {
-        let budget = WALK_SPEED * 0.8 * dt;
-        while (budget > 0 && npc.path.length) {
-          const next = npc.path[0];
-          const dx = next.x - npc.x;
-          const dy = next.y - npc.y;
-          const distance = Math.hypot(dx, dy);
-          if (distance <= budget) {
-            npc.x = next.x;
-            npc.y = next.y;
-            npc.path.shift();
-            budget -= distance;
-          } else {
-            npc.x += dx / distance * budget;
-            npc.y += dy / distance * budget;
-            budget = 0;
-          }
-          npc.facing = dx - dy >= 0 ? 1 : -1;
-        }
+        stepWalker(npc, dt, WALK_SPEED * 0.8, grid);
         if (npc.path.length === 0) npc.pause = 2 + random() * 4;
       } else {
         npc.pause -= dt;
@@ -1145,7 +1205,7 @@ export function createOfficeWorld(canvas) {
           const target = layout.pois[Math.floor(random() * layout.pois.length)];
           const goal = reachableNear(grid, npc, target);
           const path = goal ? findPath(grid, npc, goal) : null;
-          npc.path = path ? path.slice(1) : [];
+          npc.path = path ? smoothPath(grid, path).slice(1) : [];
           if (!npc.path.length) npc.pause = 3;
         }
       }
@@ -1213,14 +1273,14 @@ export function createOfficeWorld(canvas) {
       }
     }
     // People who move.
-    for (const npc of npcs) add(npc.x + npc.y, () => standingFigure(npc.look, npc.x, npc.y, npc.path.length ? 'walking' : 'standing', scene.time * 2, npc.facing));
+    for (const npc of npcs) add(npc.x + npc.y, () => standingFigure(npc.look, npc.x, npc.y, npc.path.length ? 'walking' : 'standing', scene.time * 2, npc.heading));
     if (state.mode !== 'seated') {
       const sitting = state.mode === 'idle' && state.sit;
       const key = sitting ? state.sit.entry.x + (state.sit.entry.w ?? 2.6) + state.sit.entry.y + 1.2 : state.x + state.y + 0.05;
       add(key, () => {
         const moving = state.mode === 'walking' || state.mode === 'returning';
         const wave = state.mode === 'chat' && peopleNear(state.x, state.y);
-        standingFigure(scene.player.look, state.x, state.y, moving ? 'walking' : sitting ? 'sitting' : wave ? 'waving' : 'standing', scene.time * 2.4, state.facing, sitting ? 10 : 0);
+        standingFigure(scene.player.look, state.x, state.y, moving ? 'walking' : sitting ? 'sitting' : wave ? 'waving' : 'standing', scene.time * 2.4, sitting ? Math.PI / 4 : state.heading, sitting ? 10 : 0);
       });
     }
     drawables.sort((a, b) => a.key - b.key);
@@ -1241,7 +1301,7 @@ export function createOfficeWorld(canvas) {
   }
 
   /** Set off for a goal from wherever the player is now (standing up from the desk, or turning round mid-walk). */
-  function setOff(goalPoint, target) {
+  function setOff(goalPoint, target, exact = null) {
     const from = state.mode === 'seated' ? { x: layout.player.seat.x + 0.1, y: layout.player.seat.y + 0.4 } : { x: state.x, y: state.y };
     const goal = reachableNear(grid, from, goalPoint);
     if (!goal) return false;
@@ -1251,7 +1311,10 @@ export function createOfficeWorld(canvas) {
     state.x = from.x;
     state.y = from.y;
     state.sit = null;
-    state.path = path.slice(1);
+    // Straight legs at any angle, ending exactly where the player clicked when that spot is open.
+    const legs = smoothPath(grid, path).slice(1);
+    if (exact && legs.length && clearLine(grid, legs[legs.length - 1], exact, 0.1)) legs.push(exact);
+    state.path = legs;
     state.target = target;
     state.idleTime = 0;
     state.mode = state.path.length ? 'walking' : 'idle';
@@ -1286,7 +1349,7 @@ export function createOfficeWorld(canvas) {
     }
     const couch = !target && layout.items.find((entry) => entry.kind === 'couch' && at.x >= entry.x - 0.3 && at.x <= entry.x + entry.w + 0.3 && at.y >= entry.y - 0.3 && at.y <= entry.y + 1.5);
     const ok = couch ? setOff({ x: Math.max(couch.x + 0.6, Math.min(couch.x + couch.w - 0.6, at.x)), y: couch.y + 1.7 }, null) && (state.target = null, true)
-      : setOff(target ? { x: target.x, y: target.y } : at, target);
+      : setOff(target ? { x: target.x, y: target.y } : at, target, target ? null : at);
     return ok ? { status: 'walking', poi: target } : { status: 'blocked' };
   }
 
@@ -1309,6 +1372,7 @@ export function createOfficeWorld(canvas) {
   return {
     draw, resize, screenPoint, click, deskAnchor, walkTo,
     mode: () => state.mode,
+    walker: () => ({ x: state.x, y: state.y, heading: state.heading, legs: state.path.length }),
     setInteractHook: (hook) => { hooks.onInteract = hook; },
     isAway: () => state.mode !== 'seated',
     endChat, goToDesk, sitting: () => Boolean(state.sit),

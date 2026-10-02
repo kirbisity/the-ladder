@@ -14,11 +14,11 @@
 import { drawFigure3D, drawHead3D } from './model3d.js';
 
 /** A figure standing (or posed) with its feet at (x, y), u pixels to a head radius. */
-export function drawPerson(context, x, y, u, look, { pose = 'standing', outfit = null, expression = null, time = 0, facing = 1 } = {}) {
+export function drawPerson(context, x, y, u, look, { pose = 'standing', outfit = null, expression = null, time = 0, facing = 1, yaw = undefined } = {}) {
   context.save();
   context.translate(x, y);
   context.scale(facing, 1);
-  drawFigure3D(context, 0, 0, u, look, { pose, outfit, expression, time });
+  drawFigure3D(context, 0, 0, u, look, { pose, outfit, expression, time, yaw });
   context.restore();
 }
 

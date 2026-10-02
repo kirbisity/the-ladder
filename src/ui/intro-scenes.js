@@ -91,12 +91,12 @@ function confetti(context, width, height, time, count = 80) {
 
 // ── Beat 1: commencement ───────────────────────────────────────────────
 
-function commencement(context, width, height, time, data) {
+function commencement(context, width, height, time, data, cam = {}) {
   sky(context, width, height, '#8fc4ee', '#fdeccd');
   glow(context, width * 0.82, height * 0.14, height * 0.6, 'rgba(255,236,190,0.9)');
   cloud(context, width * 0.2 + Math.sin(time * 0.1) * 20, height * 0.12, 70, 'rgba(255,255,255,0.8)');
   cloud(context, width * 0.55 - Math.sin(time * 0.08) * 20, height * 0.07, 50, 'rgba(255,255,255,0.7)');
-  const k = makeKit(context, Math.min(width, height * 1.7) / 40, width * 0.5, height * 0.6);
+  const k = makeKit(context, Math.min(width, height * 1.7) / 40 * (cam.zoom ?? 1), width * (cam.x ?? 0.5), height * (cam.y ?? 0.6));
   // Lawn, mown in stripes, a gravel path to the stage, the hall and trees behind.
   k.ground(-60, -60, 60, 60, '#79ad5e');
   for (let stripe = -12; stripe < 14; stripe += 1) k.ground(stripe * 2, -30, stripe * 2 + 1, 30, '#72a557');
@@ -185,10 +185,10 @@ function commencement(context, width, height, time, data) {
 
 // ── Beat 2: after the ceremony ─────────────────────────────────────────
 
-function familyPhoto(context, width, height, time, data) {
+function familyPhoto(context, width, height, time, data, cam = {}) {
   sky(context, width, height, '#9ccbf0', '#fff2d6');
   glow(context, width * 0.2, height * 0.16, height * 0.6, 'rgba(255,240,200,0.9)');
-  const k = makeKit(context, Math.min(width, height * 1.7) / 30, width * 0.5, height * 0.62);
+  const k = makeKit(context, Math.min(width, height * 1.7) / 30 * (cam.zoom ?? 1), width * (cam.x ?? 0.5), height * (cam.y ?? 0.62));
   k.ground(-60, -60, 60, 60, '#7db262');
   for (let stripe = -12; stripe < 14; stripe += 1) k.ground(stripe * 2, -30, stripe * 2 + 1, 30, '#76aa5b');
   k.ground(-3, -20, 3, 20, '#d0c19c');
@@ -244,10 +244,10 @@ function tower(context, k, x, y, w, d, h, body, windows, lit) {
   }
 }
 
-function mondayMorning(context, width, height, time, data) {
+function mondayMorning(context, width, height, time, data, cam = {}) {
   sky(context, width, height, '#f2a779', '#fde6bd');
   glow(context, width * 0.18, height * 0.32, height * 0.7, 'rgba(255,214,150,0.95)');
-  const k = makeKit(context, Math.min(width, height * 1.7) / 38, width * 0.5, height * 0.76);
+  const k = makeKit(context, Math.min(width, height * 1.7) / 38 * (cam.zoom ?? 1), width * (cam.x ?? 0.5), height * (cam.y ?? 0.76));
   k.ground(-60, -60, 60, 60, '#a8a49a');
   // The street: asphalt along x, kerbs, markings and a crossing.
   k.ground(-60, 3, 60, 10, '#4f545d');
@@ -306,9 +306,9 @@ function mondayMorning(context, width, height, time, data) {
 
 // ── Beat 4: eight rungs ────────────────────────────────────────────────
 
-function ladderUp(context, width, height, time, data) {
+function ladderUp(context, width, height, time, data, cam = {}) {
   sky(context, width, height, '#5aa0de', '#d9ecf8');
-  const k = makeKit(context, Math.min(width, height * 1.7) / 60, width * 0.5, height * 0.95);
+  const k = makeKit(context, Math.min(width, height * 1.7) / 60 * (cam.zoom ?? 1), width * (cam.x ?? 0.5), height * (cam.y ?? 0.95));
   k.ground(-60, -60, 60, 60, '#b9b6ac');
   // The tower, seen from its foot: the face climbing out of the picture, eight floors lit one by one.
   const h = 48;
@@ -342,11 +342,178 @@ function ladderUp(context, width, height, time, data) {
   birds(context, width, height, time, 4, 'rgba(30,40,60,0.6)');
 }
 
-const BEATS = [commencement, familyPhoto, mondayMorning, ladderUp];
+// ── New shots for the fast cut ─────────────────────────────────────────
 
-/** Draw one beat of the opening, `time` seconds into it. */
+/** The badge gate in the lobby: the badge taps, the light goes green, the barrier swings. */
+function badgeGate(context, width, height, time, data) {
+  sky(context, width, height, '#dfe8f1', '#f6f9fc');
+  const k = makeKit(context, Math.min(width, height * 1.7) / 13, width * (0.5 - time * 0.03), height * 0.66);
+  k.ground(-40, -40, 40, 40, '#d4d9df');
+  for (let tile = -12; tile < 13; tile += 1) {
+    k.ground(tile, -12, tile + 0.03, 12, 'rgba(0,0,0,0.07)');
+    k.ground(-12, tile, 12, tile + 0.03, 'rgba(0,0,0,0.07)');
+  }
+  k.box(-8, -5, 0, 16, 0.3, 6, '#a9cde4');
+  const sign = k.iso(0, -4.7, 4.6);
+  context.fillStyle = '#1d3f6e';
+  context.font = `800 ${Math.max(16, k.unit * 0.7)}px Barlow Condensed, sans-serif`;
+  context.textAlign = 'center';
+  context.fillText(data.company.toUpperCase(), sign.x, sign.y);
+  for (let gate = -1; gate <= 1; gate += 1) {
+    k.box(gate * 2.2 - 0.15, -1, 0, 0.3, 1.6, 1.1, '#9aa5b3');
+    const ok = gate === 0 && time > 0.8;
+    const light = k.iso(gate * 2.2, -0.2, 1.15);
+    context.fillStyle = ok ? '#46e08a' : gate === 0 ? '#e5484d' : '#46e08a';
+    context.beginPath();
+    context.arc(light.x, light.y, 5, 0, Math.PI * 2);
+    context.fill();
+    if (ok) glow(context, light.x, light.y, 40, 'rgba(70,224,138,0.6)');
+  }
+  // The barrier swings open on the green.
+  const swing = Math.min(1, Math.max(0, (time - 0.9) / 0.4));
+  k.box(0.2, -0.3 + swing * 0.8, 0.6, 1.8 * (1 - swing * 0.85), 0.08, 0.4, 'rgba(180,220,245,0.9)');
+  const step = Math.max(0, time - 1.1);
+  k.person(0.9, 2.2 - step * 2.2, data.look, { pose: time < 1.1 ? 'standing' : 'walking', expression: 'happy', time: time * 2.4, size: 0.25, outfit: { top: '#2f3a4a', bottom: '#2f3a4a', shirt: '#ffffff' } });
+  if (time < 1.1) {
+    const badge = k.iso(0.4, 0.6, 1.4);
+    context.fillStyle = '#ffffff';
+    context.fillRect(badge.x - 8, badge.y - 10, 16, 20);
+    context.fillStyle = '#1d3f6e';
+    context.fillRect(badge.x - 8, badge.y - 10, 16, 6);
+    if (time > 0.7) glow(context, badge.x, badge.y, 30, 'rgba(255,255,255,0.8)');
+  }
+  for (let walker = 0; walker < 4; walker += 1) k.person(-5 + walker * 3.2, 1 + ((time * 1.6 + walker) % 4), peerLook((data.seed ?? 1) + 1200 + walker), { pose: 'walking', expression: null, time: time * 2 + walker, size: 0.23, yaw: Math.PI });
+}
+
+/** The lift: doors close, the floor counter races, the doors open on the floor. */
+function liftRide(context, width, height, time, data) {
+  sky(context, width, height, '#cdd3da', '#9aa3ad');
+  const doorOpen = time < 0.5 ? 1 - time / 0.5 : time > 1.8 ? Math.min(1, (time - 1.8) / 0.4) : 0;
+  // The car interior: brushed steel walls, a handrail, a mirror, the panel.
+  context.fillStyle = '#b8c0c9';
+  context.fillRect(0, 0, width, height);
+  for (let stripe = 0; stripe < width; stripe += 6) {
+    context.fillStyle = stripe % 12 ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)';
+    context.fillRect(stripe, 0, 3, height);
+  }
+  // The view through the doors: the office floor, revealed as they part.
+  const gap = width * 0.36 * doorOpen;
+  context.save();
+  context.beginPath();
+  context.rect(width / 2 - gap, height * 0.12, gap * 2, height * 0.88);
+  context.clip();
+  context.fillStyle = '#e9edf2';
+  context.fillRect(0, 0, width, height);
+  for (let desk = 0; desk < 6; desk += 1) {
+    context.fillStyle = '#c3cbd6';
+    context.fillRect(width * (0.25 + desk * 0.1), height * 0.55, width * 0.07, height * 0.06);
+    context.fillStyle = '#1f2329';
+    context.fillRect(width * (0.27 + desk * 0.1), height * 0.47, width * 0.03, height * 0.08);
+  }
+  context.restore();
+  // The doors.
+  context.fillStyle = '#8f99a4';
+  context.fillRect(0, height * 0.12, width / 2 - gap, height);
+  context.fillRect(width / 2 + gap, height * 0.12, width / 2 - gap, height);
+  line(context, width / 2 - gap, height * 0.12, width / 2 - gap, height, '#6d7680', 3);
+  line(context, width / 2 + gap, height * 0.12, width / 2 + gap, height, '#6d7680', 3);
+  // The floor counter over the doors, racing up.
+  const floor = Math.min(32, Math.max(1, Math.round(1 + (time - 0.4) * 22)));
+  context.fillStyle = '#10141a';
+  context.fillRect(width / 2 - 70, height * 0.02, 140, height * 0.08);
+  context.fillStyle = '#ff9d3a';
+  context.font = `700 ${Math.round(height * 0.06)}px Barlow Condensed, sans-serif`;
+  context.textAlign = 'center';
+  context.fillText(`▲ ${floor}`, width / 2, height * 0.085);
+  // The new hire in the corner, adjusting the tie, the reflection in the steel.
+  drawFigureAt(context, data, width * 0.82, height * 0.98, height * 0.05, time);
+}
+
+function drawFigureAt(context, data, x, y, u, time) {
+  const k = makeKit(context, u * 4, x, y);
+  k.person(0, 0, data.look, { pose: 'standing', expression: 'happy', time, size: 0.25, outfit: { top: '#2f3a4a', bottom: '#2f3a4a', shirt: '#ffffff' } });
+}
+
+/** Stepping out on the floor: the manager's handshake, the team waving, a desk with a welcome balloon. */
+function welcome(context, width, height, time, data) {
+  sky(context, width, height, '#e6ecf2', '#f6f9fb');
+  const k = makeKit(context, Math.min(width, height * 1.7) / 15 * (1 + time * 0.06), width * 0.5, height * 0.7);
+  k.ground(-40, -40, 40, 40, '#cbd3dd');
+  for (let tile = -12; tile < 13; tile += 1) k.ground(tile, -12, tile + 0.03, 12, 'rgba(0,0,0,0.06)');
+  k.box(-9, -6, 0, 18, 0.3, 4.6, '#eef2f6');
+  for (const [x, y] of [[-5, -3], [-1.6, -3], [1.8, -3], [-5, 0.6], [1.8, 0.6]]) {
+    k.box(x, y, 0.7, 2.4, 1.2, 0.08, '#f4f4f2');
+    k.box(x + 0.1, y + 0.1, 0, 0.1, 1, 0.7, '#9aa3ad');
+    k.box(x + 0.6, y + 0.15, 0.78, 0.08, 0.9, 0.55, '#1f2329');
+  }
+  // The new desk: a balloon and a welcome card.
+  k.box(-1.6, 0.6, 0.7, 2.4, 1.2, 0.08, '#f4f4f2');
+  const balloon = k.iso(-0.4, 1.0, 3.1 + Math.sin(time * 2) * 0.1);
+  line(context, balloon.x, balloon.y, k.iso(-0.4, 1.0, 0.8).x, k.iso(-0.4, 1.0, 0.8).y, 'rgba(60,60,70,0.6)', 1);
+  context.fillStyle = '#e5484d';
+  context.beginPath();
+  context.ellipse(balloon.x, balloon.y, k.unit * 0.32, k.unit * 0.4, 0, 0, Math.PI * 2);
+  context.fill();
+  const card = k.iso(0.2, 1.2, 0.8);
+  context.fillStyle = '#ffffff';
+  context.fillRect(card.x - 14, card.y - 10, 28, 12);
+  context.fillStyle = '#1d3f6e';
+  context.font = `700 ${Math.max(8, k.unit * 0.18)}px Barlow Condensed, sans-serif`;
+  context.textAlign = 'center';
+  context.fillText('WELCOME', card.x, card.y - 2);
+  // The manager steps forward; the team stands and waves.
+  const meet = Math.min(1, time / 1.2);
+  k.person(1.4 - meet * 0.6, 3.6, peerLook((data.seed ?? 1) + 1300), { pose: meet < 1 ? 'walking' : 'waving', expression: 'happy', time: time * 2, size: 0.24, yaw: Math.PI / 2 + 0.6, outfit: { top: '#8a2f4a', bottom: '#2a2f3a', shirt: '#ffffff' } });
+  k.person(-0.6, 3.8, data.look, { pose: meet < 1 ? 'standing' : 'waving', expression: 'happy', time, size: 0.25, yaw: -0.9, outfit: { top: '#2f3a4a', bottom: '#2f3a4a', shirt: '#ffffff' } });
+  for (let teammate = 0; teammate < 5; teammate += 1) {
+    const at = [[-4, -1.4], [-0.6, -1.4], [2.8, -1.4], [-4, 2.2], [3, 2.4]][teammate];
+    k.person(at[0], at[1], peerLook((data.seed ?? 1) + 1310 + teammate), { pose: Math.sin(time * 5 + teammate) > 0 ? 'waving' : 'standing', expression: 'happy', time: time + teammate, size: 0.22 });
+  }
+}
+
+// ── The cut: each beat is a run of short shots with moving cameras ─────
+
+const SHOT = 2.2;
+const BEATS = [
+  [
+    (c, w, h, t, d) => commencement(c, w, h, t + 0.5, d, { zoom: 0.85 + t * 0.05, x: 0.5 + t * 0.03 }),
+    (c, w, h, t, d) => commencement(c, w, h, 2.2 + t * 0.9, d, { zoom: 1.9 + t * 0.12, x: 0.42 - t * 0.04, y: 0.95 }),
+    (c, w, h, t, d) => commencement(c, w, h, 5.4 + t, d, { zoom: 1.3, x: 0.5, y: 0.45 + t * 0.06 }),
+    (c, w, h, t, d) => commencement(c, w, h, 6.2 + t, d, { zoom: 2.2 + t * 0.1, x: 0.5 + t * 0.05, y: 0.2 }),
+  ],
+  [
+    (c, w, h, t, d) => familyPhoto(c, w, h, t + 1, d, { zoom: 1.6 + t * 0.12, x: 0.5, y: 0.8 }),
+    (c, w, h, t, d) => familyPhoto(c, w, h, t + 3, d, { zoom: 1.1, x: 0.5 - t * 0.04, y: 0.62 }),
+    (c, w, h, t, d) => familyPhoto(c, w, h, t + 5, d, { zoom: 2.2 + t * 0.1, x: 0.5 + t * 0.02, y: 0.38 }),
+  ],
+  [
+    (c, w, h, t, d) => mondayMorning(c, w, h, t, d, { zoom: 0.8 + t * 0.06, x: 0.5 - t * 0.05 }),
+    (c, w, h, t, d) => mondayMorning(c, w, h, 2 + t, d, { zoom: 1.8 + t * 0.15, x: 0.55, y: 0.95 + t * 0.04 }),
+    (c, w, h, t, d) => badgeGate(c, w, h, t, d),
+    (c, w, h, t, d) => liftRide(c, w, h, t, d),
+    (c, w, h, t, d) => welcome(c, w, h, t, d),
+  ],
+  [
+    (c, w, h, t, d) => ladderUp(c, w, h, t * 3, d, { zoom: 1.4, y: 0.95 + t * 0.35 }),
+    (c, w, h, t, d) => ladderUp(c, w, h, 6 + t, d, { zoom: 0.9 - t * 0.04, y: 0.92 }),
+  ],
+];
+
+/** Draw a beat of the opening, `time` seconds into it: its shots in turn, each cut with a white flash, looping. */
 export function drawIntroBeat(context, width, height, beat, time, data) {
-  BEATS[Math.min(beat, BEATS.length - 1)](context, width, height, time, data);
+  const shots = BEATS[Math.min(beat, BEATS.length - 1)];
+  const index = Math.floor(time / SHOT) % shots.length;
+  const local = time % SHOT;
+  shots[index](context, width, height, local, data);
+  const flash = Math.max(0, 1 - local / 0.16);
+  if (flash > 0 && time > SHOT * 0.5) {
+    context.fillStyle = `rgba(255,255,255,${0.8 * flash})`;
+    context.fillRect(0, 0, width, height);
+  }
+  // Letterbox bars, for the film feel.
+  context.fillStyle = '#05070b';
+  context.fillRect(0, 0, width, height * 0.045);
+  context.fillRect(0, height * 0.955, width, height * 0.045);
 }
 
 export const INTRO_BEATS = BEATS.length;

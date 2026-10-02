@@ -28,7 +28,7 @@ import { createCutscenePlayer, END_SCENES, INTERIM_SCENES, JOURNAL_SCENES, endin
 const SAVE_KEY = 'the-ladder-save';
 const SETTINGS_KEY = 'the-ladder-settings';
 // Which journal moment wins when several land at once.
-const SCENE_PRIORITY = ['lostJob', 'healthScare', 'burnout', 'promoted', 'newJob', 'house', 'married', 'divorce', 'breakup', 'newborn', 'child', 'dating', 'startupWin', 'fmla', 'holiday'];
+const SCENE_PRIORITY = ['carCrash', 'houseFire', 'diagnosis', 'farewell', 'lostJob', 'healthScare', 'burnout', 'promoted', 'newJob', 'house', 'married', 'divorce', 'breakup', 'newborn', 'child', 'dating', 'startupWin', 'fmla', 'holiday'];
 const SPEEDS = [1, 2, 4, 8];
 // At 1× a quarter takes six seconds: ten workdays a second.
 const DAYS_PER_SECOND = 10;
@@ -513,7 +513,8 @@ function updateHud(full) {
   $('#banner-fmla').hidden = !leave.eligible;
   $('#banner-holiday').hidden = !holidayStatus(game).allowed;
   $('#leave-banner').hidden = !onFmla && !onHoliday;
-  if (onFmla && game.fmla.kind === 'parental') $('#leave-banner').textContent = `On ${game.character.gender === 'female' ? 'maternity' : 'paternity'} leave: ${game.fmla.daysLeft} workdays left. Unpaid, job-protected, with the baby.`;
+  if (onFmla && game.fmla.kind === 'medical') $('#leave-banner').textContent = `On medical leave: ${game.fmla.daysLeft} workdays left. Unpaid, job-protected, healing.`;
+  else if (onFmla && game.fmla.kind === 'parental') $('#leave-banner').textContent = `On ${game.character.gender === 'female' ? 'maternity' : 'paternity'} leave: ${game.fmla.daysLeft} workdays left. Unpaid, job-protected, with the baby.`;
   else if (onFmla) $('#leave-banner').textContent = `On FMLA leave: ${game.fmla.daysLeft} workdays left. Unpaid, job-protected, recovering fast.`;
   else if (onHoliday) $('#leave-banner').textContent = `On holiday: ${game.holiday.daysLeft} workdays left. Out of office.`;
   $('#pip-banner').hidden = !player.pip.active;

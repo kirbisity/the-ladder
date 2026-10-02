@@ -678,7 +678,7 @@ export function menuPanel(hasGame) {
 
 const OUTCOMES = {
   retired: { title: 'Retirement', line: (game, outcome) => `At ${Math.floor(outcome.age)} you hand in your badge. The highest chair you held: ${outcome.title}.` },
-  death: { title: 'Death', line: (game, outcome) => `Your heart gave out at ${Math.floor(outcome.age)}. The ${game.industry.name.toLowerCase()} world sent flowers and posted the role the next week.` },
+  death: { title: 'Death', line: (game, outcome) => outcome.cause === 'cancer' ? `Cancer took you at ${Math.floor(outcome.age)}, after a long fight. The ${game.industry.name.toLowerCase()} world sent flowers.` : `Your heart gave out at ${Math.floor(outcome.age)}. The ${game.industry.name.toLowerCase()} world sent flowers and posted the role the next week.` },
   breakdown: { title: 'Breakdown', line: (game, outcome) => `At ${Math.floor(outcome.age)} you could not go on. Burnout ran on with no rest until nothing was left.` },
   fire: { title: 'Financial independence', line: (game, outcome) => `At ${Math.floor(outcome.age)} you walk away from the ladder with ${formatMoney(outcome.netWorth)} and a one-way ticket.` },
   homeless: { title: 'Homeless', line: (game, outcome) => `At ${Math.floor(outcome.age)} the savings ran out before the job search did. You lost the apartment.` },

@@ -246,8 +246,9 @@ export function healthTarget(agent, context, terms = null) {
   addTerm(terms, 'Age', -wear);
   addTerm(terms, 'Networking', -networking);
   addTerm(terms, 'Out-of-work stress', -stress);
-  addTerm(terms, 'Travel', -travel);
-  return HEALTH.baseTarget - hoursCost - ageHoursCost + rest - wear - networking - stress - travel;
+  const illness = context.illness ?? 0;
+  addTerm(terms, 'Cancer treatment', -illness);
+  return HEALTH.baseTarget - hoursCost - ageHoursCost + rest - wear - networking - stress - travel - illness;
 }
 
 export function stagnationYears(agent) {

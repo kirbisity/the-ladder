@@ -8,6 +8,9 @@ import { drawCar, drawHouse, drawApartment, drawUmbrella } from './props3d.js';
 import { mixColor } from './office.js';
 import { makeKit, SCENE_CAMERA, CAMERAS } from './scene-camera.js';
 import { lifeScenes } from './scenes-life.js';
+import { retirementScenes } from './scenes-retire.js';
+import { careerScenes } from './scenes-career.js';
+import { tragedyScenes } from './scenes-tragedy.js';
 import { drawWorldTour, worldRoute, WORLD_STOPS, WORLD_STOP_SECONDS, WORLD_INTRO_SECONDS } from './scenes-world.js';
 
 export const END_SCENES = {
@@ -31,6 +34,10 @@ export const INTERIM_SCENES = {
   child: 'A new baby',
   breakup: 'Breakup',
   divorce: 'Divorce',
+  carCrash: 'The crash',
+  farewell: 'A funeral',
+  houseFire: 'The fire',
+  diagnosis: 'The diagnosis',
   house: 'The keys',
   burnout: 'Burnout',
   healthScare: 'The ambulance',
@@ -41,7 +48,7 @@ export const INTERIM_SCENES = {
 
 // Journal moments that earn a short scene.
 export const JOURNAL_SCENES = {
-  promoted: 'promoted', lostJob: 'lostJob', rehired: 'newJob', joined: 'newJob', dating: 'dating', married: 'married', child: 'child', parentalLeave: 'newborn', breakup: 'breakup', divorce: 'divorce', house: 'house',
+  promoted: 'promoted', lostJob: 'lostJob', rehired: 'newJob', joined: 'newJob', dating: 'dating', married: 'married', child: 'child', parentalLeave: 'newborn', carCrash: 'carCrash', bereaved: 'farewell', houseFire: 'houseFire', cancer: 'diagnosis', breakup: 'breakup', divorce: 'divorce', house: 'house',
   burnout: 'burnout', healthScare: 'healthScare', holiday: 'holiday', fmla: 'fmla', startupWin: 'startupWin',
 };
 
@@ -455,116 +462,20 @@ const SCENES = {
     },
   },
 
-  retiredModest: retirementScene(0),
-  retiredComfortable: retirementScene(1),
-  retiredWealthy: retirementScene(2),
-  retiredLuxury: retirementScene(3),
 
   // ── Interim ──
-  promoted: interim(3.8, (data) => [`Promoted: ${data.title}.`], (context, width, height, time, data, k) => {
-    sky(context, width, height, '#cfe0f2', '#eef4fa');
-    k.ground(-4, -2, 5, 6, '#c3cfdd');
-    k.box(-1, -0.5, 0, 3, 0.25, 3.4, '#e6ebf2');
-    const open = Math.min(1, time / 1.5);
-    k.box(0.1, -0.3, 0, 1.2 * (1 - open * 0.8), 0.12, 2.6, '#7a5a3a');
-    const plate = k.iso(0.7, -0.6, 2.95);
-    context.fillStyle = '#c9a24a';
-    context.fillRect(plate.x - k.unit * 0.9, plate.y - k.unit * 0.18, k.unit * 1.8, k.unit * 0.36);
-    context.fillStyle = '#1d1d1d';
-    context.font = `700 ${Math.max(9, k.unit * 0.2)}px Barlow Condensed, sans-serif`;
-    context.textAlign = 'center';
-    context.fillText(data.title.toUpperCase(), plate.x, plate.y + k.unit * 0.08);
-    k.person(1.2, 2.2, data.look, { pose: 'waving', expression: 'happy', time });
-    falling(context, width, height, time, ['#f4c542', '#46b96b', '#3b82f6', '#e5484d'], { count: 80, speed: 160 });
-  }),
-  lostJob: interim(4, (data) => [`${data.firstName} carries a box out of ${data.company}.`], (context, width, height, time, data, k) => {
-    sky(context, width, height, '#7c8794', '#a9b3bd');
-    k.ground(-4, -2, 6, 6, '#8d949b');
-    k.box(-3, -2, 0, 4, 1.2, 4.5, '#5f6f84');
-    k.box(-1.6, -0.85, 0, 1.2, 0.1, 2.2, '#9fb6cf');
-    k.person(-0.8 + time * 0.6, 1.8, data.look, { pose: 'carrying', expression: 'sad', time });
-    rain(context, width, height, time, { count: 90, speed: 600, slant: 0.05 });
-  }),
-  newJob: interim(3.8, (data) => [`First day at ${data.company}.`], (context, width, height, time, data, k) => {
-    sky(context, width, height, '#9ec8ef', '#e6f2fc');
-    k.ground(-4, -2, 6, 6, '#c9ced4');
-    k.box(-3, -3, 0, 5, 1.5, 5.5, '#3e5f86');
-    for (let floor = 0.6; floor < 5.4; floor += 0.9) k.box(-2.9, -1.55, floor, 4.8, 0.05, 0.4, '#a9d0f0');
-    const sign = k.iso(-0.5, -1.4, 5.8);
-    context.fillStyle = '#ffffff';
-    context.font = `700 ${Math.max(10, k.unit * 0.3)}px Barlow Condensed, sans-serif`;
-    context.textAlign = 'center';
-    context.fillText(data.company.toUpperCase(), sign.x, sign.y);
-    k.person(2.5 - time * 0.7, 1.6, data.look, { pose: 'walking', expression: 'happy', time, facing: -1 });
-  }),
-  child: interim(4, () => ['A new person in the house. Nobody sleeps.'], (context, width, height, time, data, k) => {
-    sky(context, width, height, '#2a3550', '#41507a');
-    k.ground(-3, -2, 5, 5, '#d9c7a8');
-    k.box(1, 0.5, 0, 1.4, 0.9, 0.9, '#f2e6d2');
-    k.box(1.05, 0.55, 0.9, 1.3, 0.8, 0.08, '#ffffff');
-    const mobile = k.iso(1.7, 0.95, 2.1);
-    for (let star = 0; star < 4; star += 1) {
-      const angle = time * 0.8 + star * Math.PI / 2;
-      context.fillStyle = ['#f4c542', '#a8c8ff', '#f7c6d4', '#ffffff'][star];
-      context.beginPath();
-      context.arc(mobile.x + Math.cos(angle) * k.unit * 0.5, mobile.y + Math.sin(angle) * k.unit * 0.12, k.unit * 0.1, 0, Math.PI * 2);
-      context.fill();
-    }
-    k.person(0, 1.4, data.look, { pose: 'standing', expression: 'happy', time });
-  }),
-  house: interim(3.8, () => ['The keys are yours.'], (context, width, height, time, data, k) => {
-    sky(context, width, height, '#8ec5ec', '#e2f1fb');
-    k.ground(-4, -3, 6, 6, '#7fb06a');
-    drawHouse(context, k, -2.5, -3, 'modest');
-    k.box(2.2, 1.2, 0, 0.08, 0.08, 1.4, '#6b5038');
-    const sign = k.iso(2.25, 1.2, 1.45);
-    context.fillStyle = '#ffffff';
-    context.fillRect(sign.x - k.unit * 0.6, sign.y - k.unit * 0.4, k.unit * 1.2, k.unit * 0.5);
-    context.fillStyle = '#c8102e';
-    context.font = `700 ${Math.max(9, k.unit * 0.3)}px Barlow Condensed, sans-serif`;
-    context.textAlign = 'center';
-    context.fillText('SOLD', sign.x, sign.y - k.unit * 0.04);
-    k.person(0.8, 2.4, data.look, { pose: 'waving', expression: 'happy', time });
-  }),
-  burnout: interim(4, () => ['Something gives.'], (context, width, height, time, data, k) => {
-    sky(context, width, height, '#141a2e', '#232c48');
-    k.ground(-3, -2, 5, 5, '#5b6577');
-    k.box(-0.6, 0, 0, 2.2, 1.2, 1.4, '#9aa3ad');
-    k.box(0.0, 0.1, 1.4, 0.15, 0.9, 0.9, '#1f2329');
-    const seat = k.iso(0.6, 1.6, 0.9);
-    drawPerson(context, seat.x, seat.y + k.unit * 0.9, k.unit * 0.22, data.look, { pose: 'sitting', expression: 'sad', time });
-    context.fillStyle = `rgba(128, 128, 128, ${Math.min(0.7, time / 4)})`;
-    context.globalCompositeOperation = 'saturation';
-    context.fillRect(0, 0, width, height);
-    context.globalCompositeOperation = 'source-over';
-  }),
-  fmla: interim(4, () => ['Twelve weeks. The laptop stays closed.'], (context, width, height, time, data, k) => {
-    sky(context, width, height, '#7d8fa6', '#b4c2d2');
-    k.ground(-3, -2, 5, 5, '#d9c7a8');
-    k.polygon([k.iso(-3, -2), k.iso(-3, 5), k.iso(-3, 5, 4), k.iso(-3, -2, 4)], '#efe3cf');
-    k.polygon([k.iso(-3, 0.5, 1.5), k.iso(-3, 3, 1.5), k.iso(-3, 3, 3.3), k.iso(-3, 0.5, 3.3)], '#9fb6cf');
-    rain(context, width, height * 0.5, time, { count: 40, speed: 300, slant: 0.05 });
-    k.box(-1, 1, 0, 2.6, 1, 0.6, '#7b8fa6');
-    k.box(-1, 1, 0.6, 2.6, 0.3, 0.7, '#6d8098');
-    k.person(0.2, 1.7, data.look, { pose: 'sitting', expression: null, outfit: { top: '#8a9a7b', bottom: '#5a6470', shirt: '#8a9a7b' }, time, z: 0.6 });
-  }),
-  startupWin: interim(3.8, () => ['The startup sold. Your $20,000 is now $200,000.'], (context, width, height, time, data, k) => {
-    sky(context, width, height, '#f7d774', '#fff4cf');
-    k.ground(-3, -2, 5, 5, '#e8d8a8');
-    k.person(0.5, 1.6, data.look, { pose: 'waving', expression: 'happy', time });
-    falling(context, width, height, time, ['#2f8f50', '#46b96b', '#f4c542'], { count: 70, speed: 140, size: 8 });
-  }),
 };
 
 // The FIRE ending tours a shuffled route of places (see scenes-world.js); the
 // big personal moments are drawn in scenes-life.js.
-Object.assign(SCENES, lifeScenes({ interim, sky, rain, falling, tree, mixColor, peerLook, umbrella: drawUmbrella }), {
+const retirements = retirementScenes({ kit, sky, tree, mixColor, peerLook });
+Object.assign(SCENES, { retiredModest: retirements[0], retiredComfortable: retirements[1], retiredWealthy: retirements[2], retiredLuxury: retirements[3] }, lifeScenes({ interim, sky, rain, falling, tree, mixColor, peerLook, umbrella: drawUmbrella }), careerScenes({ interim, sky, rain, falling, tree, mixColor, peerLook, umbrella: drawUmbrella }), tragedyScenes({ interim, sky, rain, tree, mixColor, peerLook, umbrella: drawUmbrella }), {
   fire: {
     duration: WORLD_INTRO_SECONDS + WORLD_STOPS * WORLD_STOP_SECONDS,
     captions: (data) => [`At ${data.age}, ${data.firstName} decided the money was enough.`, ...worldRoute(data.seed ?? 1).map((place) => place.line)],
     captionAt: (time, data) => {
       const route = worldRoute(data.seed ?? 1);
-      if (time < WORLD_INTRO_SECONDS) return `At ${data.age}, ${data.firstName} decided the money was enough.`;
+      if (time < 2) return `At ${data.age}, ${data.firstName} decided the money was enough.`;
       return route[Math.min(route.length - 1, Math.floor((time - WORLD_INTRO_SECONDS) / WORLD_STOP_SECONDS))].line;
     },
     draw(context, width, height, time, data) {
@@ -578,94 +489,13 @@ Object.assign(SCENES, lifeScenes({ interim, sky, rain, falling, tree, mixColor, 
  * needs more ground than an office doorway), and `originY` slides the ground
  * point the scene is drawn around.
  */
-function interim(duration, captions, draw, { zoom = 1, originY = 0.52 } = {}) {
+function interim(duration, captions, draw, { zoom = 1, originY = 0.52, originX = 0.5 } = {}) {
   return {
     duration,
     captions,
     draw(context, width, height, time, data) {
-      const k = kit(context, width, height, Math.min(width, height * 1.6) / 13 * zoom, width / 2, height * originY);
+      const k = kit(context, width, height, Math.min(width, height * 1.6) / 13 * zoom, width * originX, height * originY);
       draw(context, width, height, time, data, k);
-    },
-  };
-}
-
-/** Retirement by wealth tier: the home, the street and the car say it all. */
-function retirementScene(tier) {
-  const captions = [
-    (data) => [`At ${data.age}, ${data.firstName} retires on what there is.`, 'A small flat, an old hatchback, coupons on the fridge.', 'The view from the balcony is of the car park. The coffee is good, though.'],
-    (data) => [`At ${data.age}, ${data.firstName} retires to a quiet street.`, 'A paid-off house, a reliable sedan, tomatoes in the garden.', 'Mornings without meetings. It turns out that was all anyone wanted.'],
-    (data) => [`At ${data.age}, ${data.firstName} retires well.`, 'A big house on a leafy street, an SUV for the grandchildren, the dog.', 'Forty years of hours, turned into all the hours in the world.'],
-    (data) => [`At ${data.age}, ${data.firstName} retires very, very well.`, 'A villa with a pool, palms, a red sports car, a boat on the horizon.', 'The ladder had a top after all, and the view from it is extraordinary.'],
-  ][tier];
-  return {
-    duration: 12,
-    captions,
-    draw(context, width, height, time, data) {
-      const evening = Math.min(1, time / 12);
-      sky(context, width, height, mixColor('#7fb7ea', '#e98a5a', evening * 0.8), mixColor('#cfe6f8', '#f8c58e', evening * 0.8));
-      const k = kit(context, width, height, Math.min(width, height * 1.6) / 30, width / 2 + width * 0.05, height * 0.58);
-      const lawn = ['#9aa092', '#7fb06a', '#6aa85a', '#76b35f'][tier];
-      k.ground(-40, -40, 40, 40, lawn);
-      k.ground(4.5, -40, 6, 40, '#6d7178');
-      const arrive = Math.min(1, time / 3.5);
-      if (tier === 0) {
-        // A worn apartment block with a balcony.
-        drawApartment(context, k, -4, -3, data.home === 'nice' || data.home === 'luxury' ? 'nice' : 'worn');
-        k.person(-1.85, 0.3, data.look, { pose: 'sitting', expression: null, outfit: { top: '#7b7568', bottom: '#4b4740', shirt: '#7b7568' }, time, z: 2.1, size: 0.17 });
-        car(k, context, 5.25, 4.5 - (1 - arrive) * 4, data.car ?? 'hatchback');
-      } else if (tier === 1) {
-        drawHouse(context, k, -3.5, -2.5, 'modest');
-        tree(k, context, 2.5, -2, { height: 3 });
-        k.person(-0.6, 2.2, data.look, { pose: 'standing', expression: 'happy', outfit: { top: '#5b7f9a', bottom: '#c9b48a', shirt: '#ffffff' }, time });
-        car(k, context, 5.25, 4 - (1 - arrive) * 4, data.car ?? 'sedan');
-      } else if (tier === 2) {
-        drawHouse(context, k, -6.4, -3.5, 'family');
-        for (let index = 0; index < 4; index += 1) tree(k, context, -5 + index * 3.3, 5.5, { height: 3.2, crown: '#3f8f4f' });
-        tree(k, context, 3, -2.5, { height: 3.5 });
-        k.person(-0.2, 2.6, data.look, { pose: 'waving', expression: 'happy', outfit: { top: '#9a4a5a', bottom: '#2f3a4a', shirt: '#ffffff' }, time });
-        k.person(0.9, 2.9, peerLook(data.seed + 21), { pose: 'waving', expression: 'happy', time, size: 0.15 });
-        const dog = k.iso(1.7, 3.2, 0);
-        context.fillStyle = '#b07a3a';
-        context.beginPath();
-        context.ellipse(dog.x, dog.y - k.unit * 0.25, k.unit * 0.35, k.unit * 0.18, 0, 0, Math.PI * 2);
-        context.fill();
-        context.beginPath();
-        context.arc(dog.x + k.unit * 0.35, dog.y - k.unit * 0.42 + Math.sin(time * 8) * 2, k.unit * 0.14, 0, Math.PI * 2);
-        context.fill();
-        car(k, context, 5.25, 3.8 - (1 - arrive) * 4, data.car ?? 'suv');
-      } else {
-        // A villa: white cubes, a pool, palms, the sea and a boat.
-        k.ground(-40, -40, 40, -5, '#2a8fc7');
-        const boat = k.iso(-3 + Math.sin(time * 0.2) * 2, -9);
-        context.fillStyle = '#ffffff';
-        context.beginPath();
-        context.moveTo(boat.x - 30, boat.y);
-        context.lineTo(boat.x + 30, boat.y);
-        context.lineTo(boat.x + 20, boat.y + 8);
-        context.lineTo(boat.x - 22, boat.y + 8);
-        context.fill();
-        drawHouse(context, k, -5, -3.5, 'villa');
-        const shimmer = k.iso(-1 + Math.sin(time) * 1.5, 2.3, 0);
-        context.fillStyle = 'rgba(255, 255, 255, 0.35)';
-        context.fillRect(shimmer.x - 20, shimmer.y - 2, 40, 3);
-        for (const [x, y] of [[2.5, -3], [3, 3.5], [-5.5, 2.5]]) tree(k, context, x, y, { palm: true, crown: '#2f7d3b', trunk: '#8a6a42', height: 4 });
-        k.box(-0.4, 3.7, 0, 1.6, 0.6, 0.25, '#ffffff');
-        k.person(0.3, 4.0, data.look, { pose: 'sitting', expression: 'happy', outfit: { top: '#ffffff', bottom: '#d9c7a8', shirt: '#ffffff' }, time, z: 0.25 });
-        car(k, context, 5.25, 3.6 - (1 - arrive) * 4, data.car ?? 'sports');
-      }
-      // Birds in the evening sky.
-      context.strokeStyle = 'rgba(40, 40, 50, 0.6)';
-      context.lineWidth = 1.5;
-      for (let bird = 0; bird < 4; bird += 1) {
-        const x = (time * 40 + bird * 90) % (width + 60) - 30;
-        const y = height * 0.12 + bird * 9 + Math.sin(time * 3 + bird) * 4;
-        const flap = Math.sin(time * 10 + bird) * 4;
-        context.beginPath();
-        context.moveTo(x - 7, y - flap);
-        context.lineTo(x, y);
-        context.lineTo(x + 7, y - flap);
-        context.stroke();
-      }
     },
   };
 }
@@ -762,6 +592,7 @@ export function sceneData(game) {
   const player = game.player;
   const born = new Date().getFullYear() - 22;
   const peak = Math.max(game.peakLevel ?? 0, player.level);
+  const lastOf = (kind) => [...(game.journal ?? [])].reverse().find((entry) => entry.kind === kind);
   return {
     look: player.look,
     name: player.name,
@@ -773,6 +604,10 @@ export function sceneData(game) {
     company: game.org?.companyName ?? game.lastOrg?.companyName ?? 'the company',
     seed: game.seed ?? 1,
     netWorth: game.outcome?.netWorth ?? 0,
+    crashSeverity: lastOf('carCrash')?.severity ?? 'moderate',
+    lostLabel: lastOf('bereaved')?.label ?? null,
+    fireOwned: lastOf('houseFire')?.owned ?? game.homeEquity > 0,
+    illnessWho: lastOf('cancer')?.who ?? 'player',
     gender: game.character?.gender ?? 'male',
     partnerLook: (game.partner ?? game.exPartner)?.look ?? null,
     partnerFirstName: (game.partner ?? game.exPartner)?.name.split(' ')[0] ?? null,

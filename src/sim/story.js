@@ -146,7 +146,15 @@ export function careerSummary(game) {
   const house = first(journal, 'house');
   if (house) life.push(`bought a house at ${Math.floor(house.age)}`);
   if (first(journal, 'startupWin')) life.push('got rich on a friend\'s startup');
-  if (first(journal, 'bereaved')) life.push('lost a parent');
+  const bereavements = count(journal, 'bereaved');
+  if (bereavements) life.push(bereavements === 1 ? 'lost someone close' : `buried ${plural(bereavements, 'person', 'people')} they loved`);
+  const crashes = journal.filter((entry) => entry.kind === 'carCrash');
+  if (crashes.some((entry) => entry.severity === 'severe')) life.push('survived a car crash that should have ended differently');
+  else if (crashes.length) life.push(crashes.length === 1 ? 'was in a car crash' : `was in ${plural(crashes.length, 'car crash', 'car crashes')}`);
+  if (first(journal, 'houseFire')) life.push('lost a home to fire');
+  const ill = first(journal, 'cancer');
+  if (ill && first(journal, 'cancerCleared')) life.push(ill.who === 'partner' ? `saw ${ill.partner ?? 'a partner'} through cancer and out the other side` : 'beat cancer');
+  else if (ill && ill.who === 'partner' && first(journal, 'widowed')) life.push(`lost ${ill.partner ?? 'a partner'} to cancer`);
   if (first(journal, 'ipo')) life.push('rode a company to its IPO');
   if (divorce) {
     life.push(divorce.reason === 'strain'
@@ -185,7 +193,7 @@ export function careerSummary(game) {
   const age = Math.floor(outcome?.age ?? player.age);
   paragraphs.push({
     retired: pick(game, 6, [`At ${age}, the badge went back in a drawer for good.`, `Retirement came at ${age}, with a cake in the break room.`]),
-    death: `It ended at ${age}, in a hospital, the job still on the phone. The hours had been too long for too long.`,
+    death: outcome?.cause === 'cancer' ? `It ended at ${age}, after a long fight with cancer, in a room with the people who mattered.` : `It ended at ${age}, in a hospital, the job still on the phone. The hours had been too long for too long.`,
     homeless: `It ended at ${age} with the savings gone and the apartment lost, the job search still running.`,
     breakdown: `It ended at ${age}: months of burnout with no rest, until there was nothing left to give, and ${player.name.split(' ')[0]} could not go on.`,
     fire: `At ${age}, financially independent, ${player.name.split(' ')[0]} walked away from the ladder for good: a backpack, a one-way ticket, and no alarm clock.`,

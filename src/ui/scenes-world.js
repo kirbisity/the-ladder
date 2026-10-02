@@ -239,7 +239,7 @@ function paris(context, width, height, time, data, tools) {
   glow(context, width * 0.8, height * 0.32, height * 0.5, 'rgba(255,214,150,0.9)');
   cloud(context, width * 0.2 + Math.sin(time * 0.2) * 20, height * 0.17, 60, 'rgba(255,230,210,0.8)');
   cloud(context, width * 0.55 + Math.sin(time * 0.15) * 20, height * 0.1, 46, 'rgba(255,236,220,0.7)');
-  const k = kit(context, width, height, Math.min(width, height * 1.6) / 32, width / 2, height * 0.62);
+  const k = kit(context, width, height, Math.min(width, height * 1.6) / 24, width / 2, height * 0.62);
   // Far skyline.
   context.fillStyle = 'rgba(180,140,120,0.5)';
   for (let index = 0; index < 22; index += 1) context.fillRect(index * width / 22, height * 0.5 - hash(index) * height * 0.08, width / 22 + 1, height * 0.2);
@@ -343,7 +343,7 @@ function kyoto(context, width, height, time, data, tools) {
   waterShine(context, width, height * 0.57, height * 0.71, time, 'rgba(255,255,255,0.35)', 16);
   context.fillStyle = '#7fa65f';
   context.fillRect(0, height * 0.7, width, height * 0.3);
-  const k = kit(context, width, height, Math.min(width, height * 1.6) / 32, width / 2, height * 0.62);
+  const k = kit(context, width, height, Math.min(width, height * 1.6) / 24, width / 2, height * 0.62);
   // A stone path and a stream.
   k.ground(-14, 3, 14, 4.4, '#d9ccb4');
   k.ground(-14, 4.4, 14, 5.4, '#7fb6c9');
@@ -430,7 +430,7 @@ function alps(context, width, height, time, data, tools) {
   fillPolygon(context, [[gx - 14, gy + 12], [gx + 14, gy + 12], [gx + 12, gy + 30], [gx - 12, gy + 30]], '#c8352f');
   context.fillStyle = '#bfe0f4';
   context.fillRect(gx - 10, gy + 16, 20, 9);
-  const k = kit(context, width, height, Math.min(width, height * 1.6) / 32, width / 2, height * 0.74);
+  const k = kit(context, width, height, Math.min(width, height * 1.6) / 24, width / 2, height * 0.74);
   chalet(k, -6.4, -0.6, tools);
   chalet(k, 4.6, -1.2, tools);
   // A pine wood and a rail fence.
@@ -556,7 +556,7 @@ function egypt(context, width, height, time, data, tools) {
   context.fillStyle = '#c99a5e';
   context.fillRect(sx + 28, sy - 4, 52, 6);
   duneLayer(height * 0.78, 12, '#d4a566', 6, 0.08);
-  const k = kit(context, width, height, Math.min(width, height * 1.6) / 32, width / 2, height * 0.8);
+  const k = kit(context, width, height, Math.min(width, height * 1.6) / 24, width / 2, height * 0.8);
   // The caravan crossing, camel after camel.
   for (let index = 0; index < 3; index += 1) {
     const x = ((time * 26 + index * 150) % (width + 300)) - 150;
@@ -653,7 +653,7 @@ function island(context, width, height, time, data, tools) {
       context.restore();
     }
   }
-  const k = kit(context, width, height, Math.min(width, height * 1.6) / 32, width / 2, height * 0.72);
+  const k = kit(context, width, height, Math.min(width, height * 1.6) / 24, width / 2, height * 0.72);
   // The boardwalk out over the water, and the bungalows along it.
   k.box(-9, 2.3, 0.05, 18, 1.0, 0.14, '#a8825a');
   for (let post = 0; post < 18; post += 1) k.box(-9 + post, 2.25, -0.4, 0.1, 0.1, 0.5, '#6a4c30');
@@ -694,7 +694,7 @@ function santorini(context, width, height, time, data, tools) {
   fillPolygon(context, [[boatX + 2, height * 0.52 - 40], [boatX + 2, height * 0.52 - 2], [boatX + 22, height * 0.52 - 4]], '#ffffff');
   // The cliff and the whitewashed town climbing it.
   fillPolygon(context, [[0, height * 0.52], [width * 0.18, height * 0.5], [width * 0.4, height * 0.62], [width * 0.6, height], [0, height]], '#8a6a52');
-  const k = kit(context, width, height, Math.min(width, height * 1.6) / 30, width * 0.46, height * 0.72);
+  const k = kit(context, width, height, Math.min(width, height * 1.6) / 23, width * 0.46, height * 0.72);
   const blocks = [
     [-7, -4, 2.2, 2, 1.5], [-5, -3.2, 2.4, 1.8, 1.2], [-2.6, -2.4, 2.2, 1.8, 1.7], [-4.5, -0.8, 2.6, 1.8, 1.1],
     [-1.6, -0.2, 2.4, 2, 1.3], [0.6, 0.4, 2.6, 1.8, 1.0], [-6.4, 1.4, 2, 1.6, 0.9],
@@ -807,7 +807,7 @@ function aurora(context, width, height, time, data, tools) {
   }
   // Snowy pines on the shore.
   for (let tree = 0; tree < 16; tree += 1) pine(context, hash(tree) * width, height * (0.67 + hash(tree + 2) * 0.03), 22 + hash(tree + 4) * 20, '#12302a', true);
-  const k = kit(context, width, height, Math.min(width, height * 1.6) / 32, width / 2, height * 0.8);
+  const k = kit(context, width, height, Math.min(width, height * 1.6) / 24, width / 2, height * 0.8);
   // A log cabin with a warm window and smoke.
   k.box(-6, -0.5, 0, 3, 2.2, 1.2, '#7a4a2e');
   for (let log = 0; log < 5; log += 1) k.box(-6, 1.7, 0.1 + log * 0.24, 3, 0.05, 0.03, '#5a3320');
@@ -866,7 +866,7 @@ export const WORLD_PLACES = [
 /** How many places a retirement visits, and how long each stays on screen. */
 export const WORLD_STOPS = 5;
 export const WORLD_STOP_SECONDS = 3.6;
-export const WORLD_INTRO_SECONDS = 3;
+export const WORLD_INTRO_SECONDS = 0;
 
 /** The route for a career: the places shuffled by its seed, the first few kept. */
 export function worldRoute(seed) {
@@ -881,10 +881,6 @@ export function worldRoute(seed) {
  */
 export function drawWorldTour(context, width, height, time, data, tools) {
   const route = worldRoute(data.seed ?? 1);
-  if (time < WORLD_INTRO_SECONDS) {
-    drawFlight(context, width, height, time, route, tools);
-    return { line: 0 };
-  }
   const since = time - WORLD_INTRO_SECONDS;
   const index = Math.min(route.length - 1, Math.floor(since / WORLD_STOP_SECONDS));
   const local = since - index * WORLD_STOP_SECONDS;
@@ -917,49 +913,4 @@ export function drawWorldTour(context, width, height, time, data, tools) {
     context.restore();
   }
   return { line: index + 1 };
-}
-
-function drawFlight(context, width, height, time, route, tools) {
-  tools.sky(context, width, height, '#0f2a4a', '#1d4f7a');
-  context.fillStyle = '#2f6a4f';
-  for (const [x, y, rx, ry] of [[0.2, 0.4, 0.12, 0.16], [0.27, 0.7, 0.06, 0.14], [0.5, 0.36, 0.1, 0.12], [0.54, 0.62, 0.07, 0.15], [0.74, 0.42, 0.16, 0.14], [0.84, 0.74, 0.06, 0.05]]) {
-    context.beginPath();
-    context.ellipse(width * x, height * y, width * rx, height * ry, 0, 0, TAU);
-    context.fill();
-  }
-  // Pins for the stops, and the route stitched through them as a dashed arc.
-  const pins = { paris: [0.48, 0.34], kyoto: [0.82, 0.4], alps: [0.5, 0.38], egypt: [0.55, 0.5], island: [0.66, 0.62], santorini: [0.53, 0.42], aurora: [0.53, 0.2] };
-  const points = route.map((place) => ({ x: width * pins[place.id][0], y: height * pins[place.id][1] }));
-  const progress = Math.min(1, time / (WORLD_INTRO_SECONDS - 0.4));
-  context.setLineDash([6, 8]);
-  context.strokeStyle = 'rgba(255,255,255,0.7)';
-  context.lineWidth = 2;
-  context.beginPath();
-  points.forEach((point, index) => (index ? context.lineTo(point.x, point.y) : context.moveTo(point.x, point.y)));
-  context.stroke();
-  context.setLineDash([]);
-  points.forEach((point, index) => {
-    if (index / (points.length - 1) <= progress + 0.01) {
-      context.fillStyle = '#ffd24a';
-      context.beginPath();
-      context.arc(point.x, point.y, 6, 0, TAU);
-      context.fill();
-      context.fillStyle = '#ffffff';
-      context.font = '700 12px Barlow Condensed, sans-serif';
-      context.fillText(String(index + 1), point.x - 3, point.y + 4);
-    }
-  });
-  const segment = progress * (points.length - 1);
-  const from = points[Math.min(points.length - 1, Math.floor(segment))];
-  const to = points[Math.min(points.length - 1, Math.floor(segment) + 1)];
-  const t = segment - Math.floor(segment);
-  const px = from.x + (to.x - from.x) * t;
-  const py = from.y + (to.y - from.y) * t - Math.sin(t * Math.PI) * 18;
-  context.fillStyle = '#ffffff';
-  context.save();
-  context.translate(px, py);
-  context.rotate(Math.atan2(to.y - from.y, to.x - from.x));
-  context.fillRect(-14, -3, 28, 6);
-  context.fillRect(-4, -12, 6, 24);
-  context.restore();
 }

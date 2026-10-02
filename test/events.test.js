@@ -262,7 +262,7 @@ test('a long career meets many different moments in every industry', () => {
 test('some cards only come with age, and the losses of life are in the deck', () => {
   const game = createGame({ seed: 62 });
   clearEvents(game);
-  for (const id of ['midlifeQuestion', 'kneeSurgery', 'parentDies', 'youngerBoss']) {
+  for (const id of ['midlifeQuestion', 'kneeSurgery', 'youngerBoss']) {
     game.player.age = 28;
     game.player.level = 3;
     assert.equal(eventById(id).weight(game), 0, `${id} at 28`);
@@ -271,6 +271,9 @@ test('some cards only come with age, and the losses of life are in the deck', ()
   }
   for (const id of ['friendDies', 'grandparentDies', 'parentDies', 'highwayCrash', 'petDies', 'burglary']) assert.ok(eventById(id), id);
   assert.ok(eventById('crashAftermath'), 'the crash has a follow-up');
+  // The old yearly-draw cards for death and crashes are retired: misfortune.js rolls them against age, a career at a time.
+  for (const id of ['friendDies', 'grandparentDies', 'parentDies', 'highwayCrash']) assert.equal(eventById(id).weight(game), 0, `${id} is rolled, not drawn`);
+  for (const id of ['passing', 'carCrash', 'houseFire', 'cancer']) assert.ok(eventById(id), id);
 });
 
 /** Put a card in front of the player. */

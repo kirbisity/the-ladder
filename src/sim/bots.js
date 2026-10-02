@@ -199,8 +199,10 @@ export function playQuarter(game, policy) {
  * Returns:
  *   a summary for balance tables
  */
+// Balance is measured on the career, not on fate: crashes, fires and cancer are switched off, so a character's
+// retirement rate does not hang on whether the dice took them in a car.
 export function playCareer({ seed, characterId, industryId, policyName, tierLock = null }) {
-  const game = createGame({ seed, characterId, industryId, tierLock });
+  const game = createGame({ seed, characterId, industryId, tierLock, misfortune: false });
   game.botRandom = (function makeBotRandom() {
     let state = seed * 7919 + 13;
     const next = () => {

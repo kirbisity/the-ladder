@@ -50,8 +50,10 @@ test('twelve-hour weeks: Christian sustains them, Simon strains, Chloe and Eve b
 });
 
 test('Chloe does best in academia; Eve trails Joseph', () => {
-  const chloeAcademia = benchCharacter('chloe', 'academia', CAREERS, 'adaptive');
-  assert.ok(chloeAcademia.director > tech.chloe.director);
+  // A bigger sample than the roster's: the gap is a few careers in sixteen, and a tie is noise.
+  const chloeAcademia = benchCharacter('chloe', 'academia', 40, 'adaptive');
+  const chloeTech = benchCharacter('chloe', 'tech', 40, 'adaptive');
+  assert.ok(chloeAcademia.director > chloeTech.director, `${chloeAcademia.director} vs ${chloeTech.director}`);
   assert.ok(tech.eve.management <= tech.joseph.management);
   assert.ok(tech.eve.director <= tech.joseph.director);
 });

@@ -22,6 +22,7 @@ import { record } from './story.js';
 import {
   closeLifeQuarter, lifeMoodTerms, childCostPerYear, partnerTakeHome, partnerCostPerYear, afterDivorce,
 } from './family.js';
+import { rollMisfortunes, illnessHealthCost } from './misfortune.js';
 
 export const MARKET_STATES = ['boom', 'normal', 'recession'];
 const MARKET_TRANSITIONS = {
@@ -39,7 +40,7 @@ const MARKET_TRANSITIONS = {
  * Returns:
  *   the game state, in the plan phase of the first quarter
  */
-export function createGame({ seed = Date.now() % 1e9, characterId = 'simon', industryId = 'tech', playerName = null, tierLock = null, startTier = null, faceStyle = null } = {}) {
+export function createGame({ seed = Date.now() % 1e9, characterId = 'simon', industryId = 'tech', playerName = null, tierLock = null, startTier = null, faceStyle = null, misfortune = true } = {}) {
   const random = createRandom(seed);
   const character = CHARACTERS.find((entry) => entry.id === characterId) ?? CHARACTERS[0];
   const industry = INDUSTRIES[industryId] ?? INDUSTRIES.tech;
@@ -86,7 +87,7 @@ export function createGame({ seed = Date.now() % 1e9, characterId = 'simon', ind
     yearIncome: 0,
     lastYearIncome: 0,
     market: 'normal',
-    flags: { scheduled: [], outputModifier: 1, pivotQuarters: 0, minHours: 0, layoffAt: null, mentor: null, revealed: [] },
+    flags: { noMisfortune: !misfortune, scheduled: [], outputModifier: 1, pivotQuarters: 0, minHours: 0, layoffAt: null, mentor: null, revealed: [] },
     eventQueue: [],
     currentEvent: null,
     log: [],
@@ -202,6 +203,7 @@ function dayContext(game, employed) {
     moodModifier: game.flags.moodModifier ?? 0,
     ageSensitivity: ageSensitivityOf(game),
     lifeTerms: lifeMoodTerms(game),
+    illness: illnessHealthCost(game),
   };
   if (!employed) {
     const quartersOut = game.employment.unemployedQuarters;
@@ -352,6 +354,11 @@ export function beginQuarter(game) {
       game.eventQueue.push({ event: drawn, data });
     }
   }
+  // Misfortune is rolled against age, so it can come in any quarter, work or not.
+  for (const rolled of rollMisfortunes(game)) {
+    const event = eventById(rolled.id);
+    if (event) game.eventQueue.push({ event, data: rolled.data });
+  }
   game.lifeEventDays = [];
   if (game.quarterIndex > 0 && random.chance(EVENT_DIALS.lifeEventChance)) {
     game.lifeEventDays.push(random.int(EVENT_DIALS.firstLifeDay, EVENT_DIALS.lastLifeDay));
@@ -491,6 +498,17 @@ export function startParentalLeave(game) {
   return days;
 }
 
+/** Medical leave: the same job-protected, unpaid leave, for a crash or for treatment. */
+export function startMedicalLeave(game, days, reason = 'medical') {
+  if (!game.employment.employed || game.fmla.daysLeft > 0) return false;
+  game.fmla.daysLeft = days;
+  game.fmla.kind = reason;
+  game.fmla.lastStartQuarter = game.quarterIndex;
+  game.player.pip.active = false;
+  log(game, `You start ${Math.round(days / 5)} weeks of medical leave.`);
+  return true;
+}
+
 /** Start twelve weeks of FMLA leave. Returns the status message. */
 export function takeFmla(game) {
   const status = fmlaStatus(game);
@@ -621,7 +639,7 @@ export function runDay(game) {
     player.quarter.unpaidDays = (player.quarter.unpaidDays ?? 0) + 1;
     game.fmla.daysLeft -= 1;
     if (game.fmla.daysLeft === 0) {
-      notes.push({ kind: 'leaveOver', text: game.fmla.kind === 'parental' ? 'Parental leave is over. The baby has a routine; you do not, yet.' : 'Your FMLA leave is over. Back to your desk on Monday.' });
+      notes.push({ kind: 'leaveOver', text: game.fmla.kind === 'medical' ? 'Medical leave is over. You are not who you were, but you are back.' : game.fmla.kind === 'parental' ? 'Parental leave is over. The baby has a routine; you do not, yet.' : 'Your FMLA leave is over. Back to your desk on Monday.' });
       game.fmla.kind = null;
     }
   } else if (onHoliday) {
@@ -1283,7 +1301,10 @@ function checkOutcome(game, report) {
   const player = game.player;
   if (game.outcome) return;
   if (player.health <= 0) endGame(game, 'death');
-  else if (!game.employment.employed && game.savings <= -MONEY.debtCushion) endGame(game, 'homeless');
+  else if (game.flags.cancerDeath) {
+    endGame(game, 'death');
+    game.outcome.cause = 'cancer';
+  } else if (!game.employment.employed && game.savings <= -MONEY.debtCushion) endGame(game, 'homeless');
   else if (player.age >= TIME.retirementAge) endGame(game, 'retired');
 }
 

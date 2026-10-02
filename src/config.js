@@ -235,6 +235,42 @@ export const FAMILY = {
   partnerRaiseUntil: 55,
 };
 
+// Misfortune: the things that happen to nearly everyone once, or never.
+// Each is rolled at the start of a quarter against a hazard that follows
+// age, so a career sees them at plausible times and in plausible numbers:
+// relatives and friends pass often (four to eight times a career), a car
+// crash is rare (none to three), a house fire or a cancer may never come.
+export const MISFORTUNE = {
+  // Loss of someone close: a floor, plus more each year past twenty-four as
+  // the generation above ages and friends begin to go. About six a career.
+  lossBase: 0.012,
+  lossPerYear: 0.0013,
+  lossCap: 0.065,
+  // How many times a career loses someone close, before it ends: the hazard above decides when.
+  lossesPerLife: [5, 9],
+  // Who is there to lose: grandparents, parents, a partner's parents, aunts
+  // and uncles, close friends, each with the ages at which they are most
+  // likely to go (low, peak, high of the player's age).
+  loved: {
+    grandparent: { count: 4, window: [24, 36, 52], hit: 8, inherits: [5000, 20000, 0.35], label: 'grandparent' },
+    parent: { count: 2, window: [42, 58, 76], hit: 18, inherits: [30000, 150000, 0.7], label: 'parent' },
+    inlaw: { count: 2, window: [44, 58, 76], hit: 6, inherits: [0, 0, 0], label: 'parent-in-law' },
+    relative: { count: 3, window: [30, 50, 70], hit: 8, inherits: [0, 8000, 0.15], label: 'aunt or uncle' },
+    friend: { count: 3, window: [28, 46, 68], hit: 12, inherits: [0, 0, 0], label: 'close friend' },
+  },
+  // A car crash, per quarter for someone who drives: young drivers and
+  // tired ones crash more. At most `crashMax` in a lifetime.
+  crash: { perQuarter: 0.0085, youngBefore: 28, youngFactor: 1.6, tiredHours: 11, tiredFactor: 1.5, max: 3, cooldown: 16, severity: { minor: 0.5, moderate: 0.35, severe: 0.15 } },
+  // A fire at home, per quarter. Some people have no cover.
+  fire: { perQuarter: 0.0014, uninsured: 0.2, cooldown: 60 },
+  // Cancer, for the player or a married partner: a hazard that starts at
+  // thirty and climbs. Treatment takes quarters; the chance of coming out
+  // clear falls with the stage and rises with proper treatment.
+  cancer: { fromAge: 30, perQuarterPerYear: 0.00012, treatmentQuarters: { aggressive: 6, standard: 8, wait: 10 }, healthTarget: 14, moodWhileIll: 10, careMood: 8, careFamily: 8 },
+  // Odds of surviving, before stage: proper treatment helps.
+  survival: { base: 0.88, perStage: 0.14, aggressive: 0.07, wait: -0.2, care: 0.05, floor: 0.12, ceiling: 0.97 },
+};
+
 export const PERFORMANCE = {
   // Raw daily output is scaled so a typical quarter scores near 100, which
   // makes the noise a share of a score. The design's N(0, 5) is widened a

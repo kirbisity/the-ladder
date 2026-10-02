@@ -348,3 +348,31 @@ test('the social bar costs nothing in a typical career: the circle settles near 
     assert.ok(Math.abs(term) < 8, `${label}: a settled circle is within a few points of the need (${term.toFixed(1)})`);
   }
 });
+
+test('tuning a character: small steps, each paid for, applied to the career and kept out of the personality', async () => {
+  const { ADJUSTABLE, MAX_STEPS, adjustmentPoints, validAdjustments, applyAdjustments } = await import('../src/sim/adjust.js');
+  const { CHARACTERS } = await import('../src/config.js');
+  const simon = CHARACTERS.find((character) => character.id === 'simon');
+  assert.equal(adjustmentPoints({}), 0);
+  assert.equal(validAdjustments({ iq: 1 }), false, 'a step up with nothing given up');
+  assert.equal(validAdjustments({ iq: 1, pol: -1 }), true);
+  assert.equal(validAdjustments({ iq: 3, pol: -3 }), false, 'two steps at most on any skill');
+  assert.equal(adjustmentPoints({ iq: -2 }), 2);
+  assert.equal(validAdjustments({ iq: 2, pol: -1 }), false, 'every step up matched by a step down');
+  // Positive and negative adjustments sum and are small.
+  const tuned = applyAdjustments(simon, { iq: 2, pol: -1, desk: -1, steady: -1 });
+  assert.equal(tuned.iq, simon.iq + 6);
+  assert.equal(tuned.pol, simon.pol - 5);
+  assert.ok(tuned.traits.coreBonus < simon.traits.coreBonus);
+  assert.equal(tuned.traits.steadiness, (simon.traits.steadiness ?? 0) - 0.04);
+  const biggest = ADJUSTABLE.reduce((most, entry) => Math.max(most, entry.field ? 0 : entry.step * MAX_STEPS / Math.max(0.5, entry.base || 1)), 0);
+  assert.ok(biggest <= 0.2, 'no trait moves by more than a fifth');
+  assert.ok(MAX_STEPS * Math.max(...ADJUSTABLE.filter((entry) => entry.field).map((entry) => entry.step)) <= 10, 'IQ and politics move by ten at most');
+  // A career starts with the tuned numbers; an invalid request is ignored.
+  const game = createGame({ seed: 77, characterId: 'simon', adjust: { iq: 2, pol: -2 } });
+  assert.equal(game.player.iq, simon.iq + 6);
+  assert.equal(game.player.pol, simon.pol - 10);
+  assert.equal(game.character.mbti, simon.mbti, 'who they are is untouched');
+  const cheat = createGame({ seed: 77, characterId: 'simon', adjust: { iq: 2 } });
+  assert.equal(cheat.player.iq, simon.iq);
+});

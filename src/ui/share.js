@@ -130,6 +130,20 @@ ${moments.length ? `<section class="moments">${moments.map((picture) => `<img cl
 </main></body></html>`;
 }
 
+/**
+ * Show the shareable page on screen, full size, in a frame the player can scroll, screenshot or save: nothing is
+ * downloaded unless they press Save. `container` is an element that will hold the viewer.
+ */
+export function showShareDocument(game, container) {
+  const html = buildShareDocument(game);
+  container.innerHTML = `<div class="share-bar"><strong>Your story</strong><span>Screenshot it, or save it as a page.</span>
+    <button class="button small primary" data-share-save>Save as a page</button><button class="button small" data-share-close>Close</button></div>
+    <iframe class="share-frame" title="Your career, on one page" sandbox=""></iframe>`;
+  container.querySelector('iframe').srcdoc = html;
+  container.hidden = false;
+  return html;
+}
+
 /** Download the shareable page as a file. */
 export function downloadShareDocument(game) {
   const html = buildShareDocument(game);

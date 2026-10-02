@@ -8,7 +8,7 @@ import {
 } from '../sim/game.js';
 import { serializeGame, deserializeGame } from '../sim/save.js';
 import { rememberAnswer, pickRemembered } from '../sim/autopilot.js';
-import { downloadShareDocument } from './share.js';
+import { downloadShareDocument, showShareDocument } from './share.js';
 import { RATING_LABELS, totalBandwidth, effectiveHours, projectSpec, dailyCoreOutput, onBurnoutLeave } from '../sim/agent.js';
 import { agentsAtLevel, employedAgents } from '../sim/org.js';
 import { CHARACTERS, INDUSTRIES, TIME, BANDWIDTH, MOTIVATION, ORG } from '../config.js';
@@ -20,8 +20,10 @@ import {
   eventPanel, reviewPanel, moneyPanel, vitalsPanel, orgPanel, performancePanel, careerPanel, projectPanel, helpPanel, menuPanel,
   gameOverPanel, storyPanel, journeyPanel, timeOffPanel, settingsPanel, characterCards, characterProfile, industryCards, employerCards, industryMeter, projectedCompletion, escapeHtml,
 } from './panels.js';
+import { validAdjustments } from '../sim/adjust.js';
 import { socialPanel, partnerPanel } from './family-panels.js';
-import { officeVisit, officeVisitStatus } from '../sim/office-life.js';
+import { officeVisitStatus } from '../sim/office-life.js';
+import { dialogueFor, answerDialogue } from '../sim/office-dialogue.js';
 import { socialEquilibrium, familyTarget, dateNight, breakUp, partnerIncome } from '../sim/family.js';
 import { createIntro } from './intro.js';
 import { createCutscenePlayer, END_SCENES, INTERIM_SCENES, JOURNAL_SCENES, endingSceneFor, sceneData } from './cutscenes.js';
@@ -158,9 +160,9 @@ function sampleSceneData() {
   return { look: character.look, name: character.name, firstName: character.name.split(' ')[0], age: 62, born: 1990, died: 2052, title: 'Director', company: 'Stackwell', seed: 7, netWorth: 1e6 };
 }
 
-function startCareer(characterId, industryId, startTier = null, faceStyle = null) {
+function startCareer(characterId, industryId, startTier = null, faceStyle = null, adjust = null) {
   const seed = Math.floor(Math.random() * 1e9);
-  app.game = createGame({ seed, characterId, industryId, startTier, faceStyle });
+  app.game = createGame({ seed, characterId, industryId, startTier, faceStyle, adjust });
   app.paused = false;
   app.dayAccumulator = 0;
   app.readinessChimed = false;
@@ -313,7 +315,22 @@ function finishQuarter() {
 const AUTOPILOT_INTERVAL_MS = 120;
 
 function setAutopilot(on, message = null) {
+  if (on === app.autopilot) {
+    if (message) toast(message);
+    return;
+  }
   app.autopilot = on;
+  // Autopilot is the normal quarter at the fastest speed, answering what it has seen before: the player's own speed is kept for
+  // when it ends, and a red button above everything cancels it at any moment.
+  if (on) {
+    app.speedBeforeAutopilot = app.speedIndex;
+    app.speedIndex = SPEEDS.length - 1;
+  } else if (app.speedBeforeAutopilot !== undefined) {
+    app.speedIndex = app.speedBeforeAutopilot;
+    app.speedBeforeAutopilot = undefined;
+  }
+  $('#autopilot-cancel').hidden = !on;
+  $('#speed-button').textContent = `${SPEEDS[app.speedIndex]}×`;
   if (message) toast(message);
   $('#autopilot-button').classList.toggle('on', on);
   $('#autopilot-button').setAttribute('aria-pressed', String(on));
@@ -340,20 +357,20 @@ function answerKnownEvents() {
   return false;
 }
 
-/** One quarter at a time, the whole simulation, with the same plan as the last. */
-function autopilotStep(now) {
+/** Autopilot between days: answer what it knows, ask about what it does not, and start the next quarter. */
+function autopilotTick(now) {
   const game = app.game;
   if (app.modal || cutscenes.isPlaying() || game.outcome || now - app.lastAutopilot < AUTOPILOT_INTERVAL_MS) return;
   app.lastAutopilot = now;
-  if (answerKnownEvents()) return;
-  if (game.phase === 'plan' && !startRunning(game)) return;
-  let guard = 0;
-  while (app.autopilot && game.phase === 'running' && !game.currentEvent && !app.modal && !game.outcome && guard < 200) {
-    guard += 1;
-    stepOneDay();
+  if (game.currentEvent) {
+    answerKnownEvents();
+    return;
   }
-  if (game.currentEvent && !app.modal) answerKnownEvents();
-  updateHud(true);
+  if (game.phase === 'plan') {
+    if (!startRunning(game)) return;
+    app.paused = false;
+    updateHud(true);
+  }
 }
 
 function frame(now) {
@@ -362,9 +379,9 @@ function frame(now) {
   if (app.screen === 'game' && app.game) {
     const game = app.game;
     const speed = SPEEDS[app.speedIndex];
-    const running = game.phase === 'running' && !app.paused && !app.modal && !cutscenes.isPlaying();
-    if (app.autopilot) autopilotStep(now);
-    else if (running) {
+    const running = game.phase === 'running' && !app.paused && !app.modal && !app.dialogue && !cutscenes.isPlaying();
+    if (app.autopilot) autopilotTick(now);
+    if (running) {
       app.dayAccumulator += seconds * DAYS_PER_SECOND * speed;
       while (app.dayAccumulator >= 1 && game.phase === 'running' && !app.paused && !app.modal) {
         app.dayAccumulator -= 1;
@@ -415,6 +432,7 @@ function drawOffice(seconds) {
     industryId: game.industry.id,
     themeId: officeThemeFor(game.industry.id, game.org?.tier ?? game.lastOrg?.tier),
     productivity: Math.min(1, player.plan.shares[0] * 1.6),
+    running,
   });
 }
 
@@ -473,6 +491,45 @@ function floatChip(text, tone, x, y, z) {
   setTimeout(() => chip.remove(), 2300);
 }
 
+/** A conversation at a place in the office: a small panel over the floor, never a full-screen modal. */
+function openOfficeDialogue(poi) {
+  const game = app.game;
+  const panel = $('#office-dialog');
+  if (!game || !poi || !game.employment.employed) {
+    office.endChat(false);
+    return;
+  }
+  const index = poi.id?.startsWith('peer') ? Number(poi.id.slice(4)) : -1;
+  const dialogue = dialogueFor(game, poi.kind, index >= 0 ? app.peerAgents?.[index] ?? null : null);
+  app.dialogue = dialogue;
+  panel.hidden = false;
+  panel.innerHTML = `<div class="dialog-speaker">${escapeHtml(dialogue.speaker)}</div><p>${escapeHtml(dialogue.line)}</p>
+    <div class="dialog-options">${dialogue.options.map((option) => `<button class="button small" data-dialogue="${option.id}">${escapeHtml(option.label)}</button>`).join('')}</div>`;
+}
+
+/** Close the conversation panel. `finished` is whether the player chose; `return` sends them back to work if the quarter is running. */
+function closeOfficeDialogue(finished = true) {
+  const panel = $('#office-dialog');
+  if (!panel || panel.hidden) return;
+  panel.hidden = true;
+  panel.innerHTML = '';
+  app.dialogue = null;
+  if (finished) office.endChat(app.game.phase === 'running');
+}
+
+function answerOfficeDialogue(optionId) {
+  const game = app.game;
+  const dialogue = app.dialogue;
+  if (!game || !dialogue) return;
+  const result = answerDialogue(game, dialogue, optionId);
+  if (result.applied) updateHud(true);
+  updateOfficeHint();
+  // The answer stays on the panel until the player is done with it: it can be news worth reading.
+  $('#office-dialog').innerHTML = `<div class="dialog-speaker">${escapeHtml(dialogue.speaker)}</div><p>${escapeHtml(result.text)}</p>
+    <div class="dialog-options"><button class="button small primary" data-dialogue-done>Done</button></div>`;
+  app.dialogue = { ...dialogue, answered: true };
+}
+
 /** The small hint on the office: what a click does, and whether this quarter's visit is spent. */
 function updateOfficeHint() {
   const hint = $('#office-hint');
@@ -483,12 +540,17 @@ function updateOfficeHint() {
   hint.classList.toggle('used', !status.allowed);
 }
 
+const MAX_TOASTS = 3;
+
+/** A short notice in the corner: at most three at once, the oldest giving way, none in the player's way. */
 function toast(text) {
+  const container = $('#toasts');
+  while (container.children.length >= MAX_TOASTS) container.firstElementChild.remove();
   const element = document.createElement('div');
   element.className = 'toast';
   element.textContent = text;
-  $('#toasts').append(element);
-  setTimeout(() => element.remove(), 4600);
+  container.append(element);
+  setTimeout(() => element.remove(), 3600);
 }
 
 // ── HUD ────────────────────────────────────────────────────────────────
@@ -790,10 +852,12 @@ function handleAction(action, target) {
     case 'skip-scene': cutscenes.skip(); break;
     case 'share-story':
       if (game.outcome) {
-        downloadShareDocument(game);
-        toast('Saved: one self-contained page with the story, the ending and the charts.');
+        // Shown on screen to screenshot or save, not downloaded behind the player's back.
+        closeModal();
+        showShareDocument(game, $('#share-view'));
       }
       break;
+    case 'autopilot-cancel': setAutopilot(false, 'Autopilot cancelled. Everything is back in your hands.'); break;
     case 'autopilot': setAutopilot(!app.autopilot, app.autopilot ? null : 'Autopilot on: quarters run by themselves, and you are asked only about new kinds of events.'); break;
     case 'speed':
       app.speedIndex = (app.speedIndex + 1) % SPEEDS.length;
@@ -848,6 +912,26 @@ function handleAction(action, target) {
 
 function bindInput() {
   document.addEventListener('click', (event) => {
+    if (event.target.closest('[data-share-close]')) {
+      $('#share-view').hidden = true;
+      $('#share-view').innerHTML = '';
+      if (app.game?.outcome) openModal('over', gameOverPanel(app.game), true);
+      return;
+    }
+    if (event.target.closest('[data-share-save]')) {
+      downloadShareDocument(app.game);
+      toast('Saved: one self-contained page with the story, the ending and the charts.');
+      return;
+    }
+    const dialogueOption = event.target.closest('[data-dialogue]');
+    if (dialogueOption) {
+      answerOfficeDialogue(dialogueOption.dataset.dialogue);
+      return;
+    }
+    if (event.target.closest('[data-dialogue-done]')) {
+      closeOfficeDialogue(true);
+      return;
+    }
     const actionTarget = event.target.closest('[data-action]');
     if (actionTarget) {
       handleAction(actionTarget.dataset.action, actionTarget);
@@ -868,6 +952,7 @@ function bindInput() {
     if (character) {
       app.pick.characterId = character.dataset.character;
       app.pick.faceStyle = null;
+      app.pick.adjust = {};
       $('#profile-body').innerHTML = characterProfile(app.pick.characterId);
       showScreen('profile');
       return;
@@ -875,7 +960,22 @@ function bindInput() {
     const faceStyle = event.target.closest('[data-face-style]');
     if (faceStyle) {
       app.pick.faceStyle = faceStyle.dataset.faceStyle;
-      $('#profile-body').innerHTML = characterProfile(app.pick.characterId, app.pick.faceStyle);
+      $('#profile-body').innerHTML = characterProfile(app.pick.characterId, app.pick.faceStyle, app.pick.adjust ?? {});
+      return;
+    }
+    const adjustButton = event.target.closest('[data-adjust]');
+    if (adjustButton && !adjustButton.disabled) {
+      const steps = { ...(app.pick.adjust ?? {}) };
+      const id = adjustButton.dataset.adjust;
+      steps[id] = (steps[id] ?? 0) + Number(adjustButton.dataset.dir);
+      if (validAdjustments(steps)) app.pick.adjust = steps;
+      $('#profile-body').innerHTML = characterProfile(app.pick.characterId, app.pick.faceStyle, app.pick.adjust ?? {});
+      $('#profile-body').querySelector('details.adjust').open = true;
+      return;
+    }
+    if (event.target.closest('[data-adjust-reset]')) {
+      app.pick.adjust = {};
+      $('#profile-body').innerHTML = characterProfile(app.pick.characterId, app.pick.faceStyle, {});
       return;
     }
     const industry = event.target.closest('[data-industry]');
@@ -888,7 +988,7 @@ function bindInput() {
     const employer = event.target.closest('[data-employer]');
     if (employer) {
       const tier = employer.dataset.employer === 'random' ? null : employer.dataset.employer;
-      startCareer(app.pick.characterId, app.pick.industryId, tier, app.pick.faceStyle);
+      startCareer(app.pick.characterId, app.pick.industryId, tier, app.pick.faceStyle, app.pick.adjust ?? null);
       return;
     }
     const project = event.target.closest('[data-project]');
@@ -993,26 +1093,14 @@ function boot() {
   office = createOffice($('#office'));
   // Click the floor: the character stands, walks over, and at a colleague, the pantry, the meeting room or the lounge
   // spends a moment that counts once a quarter.
-  office.setInteractHook((poi) => {
-    const game = app.game;
-    if (!game || !poi) return null;
-    const index = poi.id?.startsWith('peer') ? Number(poi.id.slice(4)) : -1;
-    const result = officeVisit(game, poi.kind, index >= 0 ? app.peerAgents?.[index] ?? null : null);
-    if (result.applied) {
-      toast(result.text);
-      updateHud(true);
-    }
-    updateOfficeHint();
-    return { text: result.applied ? poi.label : 'Already made time for people this quarter' };
-  });
+  office.setInteractHook((poi) => openOfficeDialogue(poi));
+  office.setCancelHook(() => closeOfficeDialogue(false));
   $('#office').addEventListener('click', (event) => {
     const game = app.game;
     if (!game || app.screen !== 'game' || app.modal || game.outcome) return;
     const rect = event.currentTarget.getBoundingClientRect();
     const outcome = office.click(event.clientX - rect.left, event.clientY - rect.top);
-    if (outcome.status === 'blocked') toast('You cannot walk there: something is in the way.');
-    else if (outcome.status === 'busy') toast('Hold on, you are already on your way.');
-    else if (!game.employment.employed) toast('No office to walk round while you are between jobs.');
+    if (outcome.status === 'blocked') toast('You cannot get there: something is in the way.');
     updateOfficeHint();
   });
   cutscenes = createCutscenePlayer($('#cutscene'));

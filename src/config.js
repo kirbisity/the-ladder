@@ -280,6 +280,7 @@ export const OFFICE_LIFE = {
   pairRelationship: 4, pairPerformance: 1.5, pairSkill: 0.4,
   meetingReadiness: 1.5, meetingRelationship: 3,
   loungeHealth: 2, loungeMotivation: 2.5,
+  chatRelationship: 4, intelReadiness: 0.5, adviceSkill: 0.5, pitchPolitical: 0.4, friendSocial: 4,
 };
 
 export const PERFORMANCE = {

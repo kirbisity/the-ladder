@@ -19,6 +19,7 @@ import {
 } from './org.js';
 import { drawEvent, drawLifeEvent, eventById, offerEvent, fireEvent, trackEvent } from './events.js';
 import { record } from './story.js';
+import { validAdjustments, applyAdjustments } from './adjust.js';
 import {
   closeLifeQuarter, lifeMoodTerms, childCostPerYear, partnerTakeHome, partnerCostPerYear, afterDivorce,
 } from './family.js';
@@ -40,17 +41,20 @@ const MARKET_TRANSITIONS = {
  * Returns:
  *   the game state, in the plan phase of the first quarter
  */
-export function createGame({ seed = Date.now() % 1e9, characterId = 'simon', industryId = 'tech', playerName = null, tierLock = null, startTier = null, faceStyle = null, misfortune = true } = {}) {
+export function createGame({ seed = Date.now() % 1e9, characterId = 'simon', industryId = 'tech', playerName = null, tierLock = null, startTier = null, faceStyle = null, misfortune = true, adjust = null } = {}) {
   const random = createRandom(seed);
   const character = CHARACTERS.find((entry) => entry.id === characterId) ?? CHARACTERS[0];
   const industry = INDUSTRIES[industryId] ?? INDUSTRIES.tech;
+  // Small, paid-for tweaks chosen on the character screen (see adjust.js).
+  const steps = adjust && validAdjustments(adjust) ? adjust : {};
+  const adjusted = applyAdjustments(character, steps);
   const player = createAgent({
     name: playerName || character.name,
     isPlayer: true,
     mbti: character.mbti,
-    iq: character.iq,
-    pol: character.pol,
-    traits: { ...character.traits },
+    iq: adjusted.iq,
+    pol: adjusted.pol,
+    traits: adjusted.traits,
     look: faceStyle ? { ...character.look, faceStyle } : character.look,
     characterId: character.id,
     level: 0,
@@ -78,6 +82,7 @@ export function createGame({ seed = Date.now() % 1e9, characterId = 'simon', ind
     married: false,
     // The life outside the office (see family.js): the circle of friends, a
     // partner and the marriage with them, the children, a past partner.
+    adjust: steps,
     social: SOCIAL.start,
     partner: null,
     family: null,

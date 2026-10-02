@@ -25,7 +25,7 @@ const PARTITION_H = 78;
 const WORLD = { width: 46, depth: 36 };
 const OFFSET = { x: 10, y: 9 };
 const WALK_SPEED = 3.4;
-const CHAT_SECONDS = 2.6;
+const IDLE_RETURN_SECONDS = 7;
 
 const shade = (color, amount) => (amount >= 0 ? mixColor(color, '#ffffff', amount) : mixColor(color, '#000000', -amount));
 
@@ -353,7 +353,7 @@ function addWings({ theme, rooms, walls, items, pois, W, D }) {
 // ── Navigation grid ────────────────────────────────────────────────────
 
 const FOOTPRINT = {
-  desk: (item) => [item.x - 0.1, item.y - 0.1, 3.1, 1.6],
+  desk: (item) => [item.x - 0.1, item.y - 0.1, 2.7, 1.5],
   chair: (item) => [item.x - 0.3, item.y - 0.3, 0.9, 0.9],
   table: (item) => [item.x, item.y, item.w, item.d],
   counter: (item) => [item.x, item.y, item.w, item.d],
@@ -469,7 +469,7 @@ export function reachableNear(grid, from, point) {
       queue.push({ x: nx, y: ny });
     }
   }
-  return best && bestDistance <= 4 ? best : null;
+  return best && bestDistance <= 10 ? best : null;
 }
 
 /** The nearest walkable cell to a point, by rings. */
@@ -500,7 +500,8 @@ export function createOfficeWorld(canvas) {
   let grid = null;
   let lastNow = null;
   const focus = { x: 6, y: 6 };
-  const state = { mode: 'seated', x: 0, y: 0, path: [], target: null, timer: 0, facing: 1, bubble: null, hasActed: false };
+  // mode: seated | walking | chat (a conversation is open) | idle (standing or sitting somewhere) | returning (to the desk)
+  const state = { mode: 'seated', x: 0, y: 0, path: [], target: null, idleTime: 0, facing: 1, sit: null };
   const npcs = [];
   let ambient = [];
   let seed = 11;
@@ -508,7 +509,7 @@ export function createOfficeWorld(canvas) {
     seed = (seed * 9301 + 49297) % 233280;
     return seed / 233280;
   };
-  const hooks = { onInteract: null };
+  const hooks = { onInteract: null, onCancel: null };
 
   function resize() {
     const ratio = window.devicePixelRatio || 1;
@@ -966,8 +967,8 @@ export function createOfficeWorld(canvas) {
 
   // ── People ─────────────────────────────────────────────────────────
 
-  function standingFigure(look, x, y, pose, time, facing) {
-    const p = iso(x, y, 0);
+  function standingFigure(look, x, y, pose, time, facing, z = 0) {
+    const p = iso(x, y, z);
     drawPerson(ctx, p.x, p.y, 8.4 * scale, look, { pose, expression: 'happy', time, facing });
   }
 
@@ -1021,6 +1022,74 @@ export function createOfficeWorld(canvas) {
     }
   }
 
+  /** The sofa within reach of a spot, if any: its seat is where a player who stops there sits. */
+  function couchNear(x, y) {
+    for (const entry of layout.items) {
+      if (entry.kind !== 'couch') continue;
+      if (x >= entry.x - 0.8 && x <= entry.x + entry.w + 0.8 && y >= entry.y - 0.8 && y <= entry.y + 2.4) {
+        return { entry, seat: { x: Math.max(entry.x + 0.6, Math.min(entry.x + entry.w - 0.6, x)), y: entry.y + 0.55 } };
+      }
+    }
+    return null;
+  }
+
+  /** Whether anyone is close enough to wave to or talk to. */
+  function peopleNear(x, y) {
+    const near = (px, py) => Math.hypot(px - x, py - y) < 3.4;
+    return npcs.some((npc) => near(npc.x, npc.y)) || layout.desks.some((desk) => !desk.player && near(desk.x + 1.6, desk.y + 0.8));
+  }
+
+  function arrive() {
+    if (state.mode === 'returning') {
+      state.mode = 'seated';
+      state.x = layout.player.seat.x;
+      state.y = layout.player.seat.y;
+      state.sit = null;
+      return;
+    }
+    if (state.target?.kind) {
+      state.mode = 'chat';
+      if (hooks.onInteract) hooks.onInteract(state.target);
+      return;
+    }
+    state.mode = 'idle';
+    state.idleTime = 0;
+    const couch = couchNear(state.x, state.y);
+    if (couch) {
+      state.sit = couch;
+      state.x = couch.seat.x;
+      state.y = couch.seat.y;
+    }
+  }
+
+  /** The conversation is over: stay where you are, or head back to the desk. */
+  function endChat(returnToDesk = false) {
+    if (state.mode !== 'chat') return;
+    state.mode = 'idle';
+    state.idleTime = 0;
+    state.target = null;
+    const couch = couchNear(state.x, state.y);
+    if (couch && !state.sit) {
+      state.sit = couch;
+      state.x = couch.seat.x;
+      state.y = couch.seat.y;
+    }
+    if (returnToDesk) goToDesk();
+  }
+
+  function goToDesk() {
+    if (state.mode === 'seated') return;
+    state.sit = null;
+    const path = findPath(grid, state, layout.player.seat);
+    state.path = path ? path.slice(1) : [];
+    state.target = null;
+    state.mode = state.path.length ? 'returning' : 'seated';
+    if (state.mode === 'seated') {
+      state.x = layout.player.seat.x;
+      state.y = layout.player.seat.y;
+    }
+  }
+
   function step(dt, scene) {
     // The player.
     if (state.mode === 'walking' || state.mode === 'returning') {
@@ -1042,26 +1111,11 @@ export function createOfficeWorld(canvas) {
         }
         state.facing = dx - dy >= 0 ? 1 : -1;
       }
-      if (state.path.length === 0) {
-        if (state.mode === 'returning') {
-          state.mode = 'seated';
-          state.x = layout.player.seat.x;
-          state.y = layout.player.seat.y;
-        } else {
-          state.mode = 'chat';
-          state.timer = CHAT_SECONDS;
-          const result = state.target && hooks.onInteract ? hooks.onInteract(state.target) : null;
-          state.bubble = result?.text ?? state.target?.label ?? '';
-        }
-      }
-    } else if (state.mode === 'chat') {
-      state.timer -= dt;
-      if (state.timer <= 0) {
-        state.bubble = null;
-        const path = findPath(grid, state, layout.player.seat);
-        state.path = path ? path.slice(1) : [];
-        state.mode = 'returning';
-      }
+      if (state.path.length === 0) arrive();
+    } else if (state.mode === 'idle') {
+      state.idleTime += dt;
+      // Back to work: the quarter is running and the player has been standing about.
+      if (scene.running && state.idleTime > IDLE_RETURN_SECONDS) goToDesk();
     }
     // Colleagues wandering to the pantry and back.
     for (const npc of npcs) {
@@ -1112,6 +1166,7 @@ export function createOfficeWorld(canvas) {
     const light = lightAt(scene.hour);
     // The camera follows the player, easing in.
     const follow = state.mode === 'seated' ? { x: layout.player.seat.x + 3, y: layout.player.seat.y + 1 } : state;
+    scene.running = Boolean(scene.running);
     focus.x += (follow.x - focus.x) * Math.min(1, dt * 3.2 + 0.02);
     focus.y += (follow.y - focus.y) * Math.min(1, dt * 3.2 + 0.02);
     clampFocus();
@@ -1160,9 +1215,12 @@ export function createOfficeWorld(canvas) {
     // People who move.
     for (const npc of npcs) add(npc.x + npc.y, () => standingFigure(npc.look, npc.x, npc.y, npc.path.length ? 'walking' : 'standing', scene.time * 2, npc.facing));
     if (state.mode !== 'seated') {
-      add(state.x + state.y + 0.05, () => {
-        standingFigure(scene.player.look, state.x, state.y, state.mode === 'chat' ? 'waving' : 'walking', scene.time * 2.4, state.facing);
-        if (state.bubble) bubble(state.x, state.y, state.bubble);
+      const sitting = state.mode === 'idle' && state.sit;
+      const key = sitting ? state.sit.entry.x + (state.sit.entry.w ?? 2.6) + state.sit.entry.y + 1.2 : state.x + state.y + 0.05;
+      add(key, () => {
+        const moving = state.mode === 'walking' || state.mode === 'returning';
+        const wave = state.mode === 'chat' && peopleNear(state.x, state.y);
+        standingFigure(scene.player.look, state.x, state.y, moving ? 'walking' : sitting ? 'sitting' : wave ? 'waving' : 'standing', scene.time * 2.4, state.facing, sitting ? 10 : 0);
       });
     }
     drawables.sort((a, b) => a.key - b.key);
@@ -1182,18 +1240,43 @@ export function createOfficeWorld(canvas) {
     }
   }
 
+  /** Set off for a goal from wherever the player is now (standing up from the desk, or turning round mid-walk). */
+  function setOff(goalPoint, target) {
+    const from = state.mode === 'seated' ? { x: layout.player.seat.x + 0.1, y: layout.player.seat.y + 0.4 } : { x: state.x, y: state.y };
+    const goal = reachableNear(grid, from, goalPoint);
+    if (!goal) return false;
+    const path = findPath(grid, from, goal);
+    if (!path) return false;
+    if (state.mode === 'chat' && hooks.onCancel) hooks.onCancel();
+    state.x = from.x;
+    state.y = from.y;
+    state.sit = null;
+    state.path = path.slice(1);
+    state.target = target;
+    state.idleTime = 0;
+    state.mode = state.path.length ? 'walking' : 'idle';
+    if (!state.path.length) arrive();
+    return true;
+  }
+
   /**
-   * A click at a canvas position: the player walks there, to the nearest
-   * point of interest if one is close. Returns what happened.
+   * A click at a canvas position: the player heads there, at once, from wherever they are (a second click
+   * simply changes the destination). A colleague, the pantry, the meeting room or the lounge close to the click
+   * becomes a conversation on arrival; a sofa becomes a seat; the desk sends them back to work.
    */
   function click(canvasX, canvasY) {
     if (!layout) return { status: 'none' };
-    if (state.mode === 'walking' || state.mode === 'chat') return { status: 'busy' };
     const at = worldAt(canvasX, canvasY);
     if (at.x < 0.5 || at.y < 0.5 || at.x > layout.width - 0.5 || at.y > layout.depth - 0.5) return { status: 'outside' };
-    // A point of interest within a couple of tiles takes the click.
+    const seat = layout.player.seat;
+    if (Math.hypot(seat.x + 0.6 - at.x, seat.y - at.y) < 1.8) {
+      if (state.mode === 'chat' && hooks.onCancel) hooks.onCancel();
+      if (state.mode === 'seated') return { status: 'seated' };
+      goToDesk();
+      return { status: 'returning' };
+    }
     let target = null;
-    let best = 2.4;
+    let best = 1.6;
     for (const poiEntry of layout.pois) {
       const distance = Math.hypot(poiEntry.x - at.x, poiEntry.y - at.y);
       if (distance < best) {
@@ -1201,40 +1284,16 @@ export function createOfficeWorld(canvas) {
         target = poiEntry;
       }
     }
-    const from = state.mode === 'seated' ? { x: layout.player.seat.x + 0.1, y: layout.player.seat.y + 0.4 } : state;
-    const goal = reachableNear(grid, from, target ? { x: target.x, y: target.y } : at);
-    if (!goal) return { status: 'blocked' };
-    const path = findPath(grid, from, goal);
-    if (!path) return { status: 'blocked' };
-    if (state.mode === 'seated') {
-      state.x = from.x;
-      state.y = from.y;
-    }
-    state.path = path.slice(1);
-    state.target = target;
-    state.mode = state.path.length ? 'walking' : 'chat';
-    if (state.mode === 'chat') {
-      state.timer = CHAT_SECONDS;
-      const result = target && hooks.onInteract ? hooks.onInteract(target) : null;
-      state.bubble = result?.text ?? target?.label ?? '';
-    }
-    return { status: 'walking', poi: target };
+    const couch = !target && layout.items.find((entry) => entry.kind === 'couch' && at.x >= entry.x - 0.3 && at.x <= entry.x + entry.w + 0.3 && at.y >= entry.y - 0.3 && at.y <= entry.y + 1.5);
+    const ok = couch ? setOff({ x: Math.max(couch.x + 0.6, Math.min(couch.x + couch.w - 0.6, at.x)), y: couch.y + 1.7 }, null) && (state.target = null, true)
+      : setOff(target ? { x: target.x, y: target.y } : at, target);
+    return ok ? { status: 'walking', poi: target } : { status: 'blocked' };
   }
 
-  /** Walk to a named point of interest (the page's own buttons and the tests use this; clicks go through `click`). */
+  /** Walk to a named point of interest (the tests use this; clicks go through `click`). */
   function walkTo(id) {
     const target = layout?.pois.find((entry) => entry.id === id);
-    if (!target || state.mode === 'walking' || state.mode === 'chat') return false;
-    const from = state.mode === 'seated' ? { x: layout.player.seat.x + 0.1, y: layout.player.seat.y + 0.4 } : state;
-    const goal = reachableNear(grid, from, target);
-    const path = goal && findPath(grid, from, goal);
-    if (!path) return false;
-    state.x = from.x;
-    state.y = from.y;
-    state.path = path.slice(1);
-    state.target = target;
-    state.mode = state.path.length ? 'walking' : 'chat';
-    return true;
+    return Boolean(target) && setOff({ x: target.x, y: target.y }, target);
   }
 
   function screenPoint(x, y, z = 0) {
@@ -1252,6 +1311,8 @@ export function createOfficeWorld(canvas) {
     mode: () => state.mode,
     setInteractHook: (hook) => { hooks.onInteract = hook; },
     isAway: () => state.mode !== 'seated',
+    endChat, goToDesk, sitting: () => Boolean(state.sit),
+    setCancelHook: (hook) => { hooks.onCancel = hook; },
     peerPoi: (index) => layout?.pois.find((entry) => entry.id === `peer${index}`) ?? null,
     layoutFor: () => layout,
   };

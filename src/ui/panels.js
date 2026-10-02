@@ -5,7 +5,8 @@
 import { RATING_LABELS, RATINGS, dailyCoreOutput, stagnationYears, projectSpec, projectsOpenTo, CORE, POLITICS } from '../sim/agent.js';
 import { employedAgents, agentsAtLevel, TEAM_COUNT } from '../sim/org.js';
 import { titleOf, formatMoney, netWorth, managerOf, teamHappiness, quarterlyExpenses, dryPowder, fmlaStatus, holidayStatus, employerIndustry, fireNumber, fireProgress, vitalsBreakdown } from '../sim/game.js';
-import { careerSummary } from '../sim/story.js';
+import { careerSummary, careerSoFar } from '../sim/story.js';
+import { SIM_RESULTS } from '../data/sim-results.js';
 import { drawPerson } from './figures.js';
 import { PROJECTS, READINESS, INDUSTRY_STATS, ORG, TIME, MOTIVATION, RELATIONSHIP, CHARACTERS, INDUSTRIES, HOLIDAY, COMPANY_TIERS, MONEY, TIER_MIX, FACE_STYLES, DIFFICULTY } from '../config.js';
 
@@ -516,6 +517,14 @@ function vitalsEvents(game, vitals) {
     <p class="explain">Bad news to your mood lands at <strong>${Math.round(vitals.resilience * 100)}%</strong> of its size at your age (100% until 30). Illness, accidents and a body that has aged hit health at full size.</p>`;
 }
 
+/** The age button: the career so far, told in plain sentences. */
+export function journeyPanel(game) {
+  const progress = fireProgress(game);
+  const { headline, paragraphs } = careerSoFar(game, { worth: progress.worth, fireShare: progress.share });
+  return `${head(`Age ${Math.floor(game.player.age)}`, headline)}
+    <div class="story-body">${paragraphs.map((text) => `<p>${escapeHtml(text)}</p>`).join('')}</div>`;
+}
+
 // ── Project picker ─────────────────────────────────────────────────────
 
 export function availableProjects(game) {
@@ -644,6 +653,23 @@ export function timeOffPanel(game) {
 
 // ── Settings ───────────────────────────────────────────────────────────
 
+/** The simulation behind every character's rating: difficulty, best ladder, and reach and ruin in each industry. */
+function simulationTable() {
+  const rows = charactersByDifficulty().map((character) => {
+    const result = SIM_RESULTS.characters[character.id];
+    if (!result) return '';
+    const cells = Object.keys(INDUSTRIES).map((industry) => {
+      const row = result.industries[industry];
+      const heat = Math.min(1, row.reach / 1.2);
+      return `<td style="background:rgba(70,185,107,${(0.08 + heat * 0.5).toFixed(2)})" title="Reach Director/VP ${Math.round(row.reach * 100)}% · management ${Math.round(row.management * 100)}% · expert ${Math.round(row.expert * 100)}% · ruin ${Math.round(row.ruin * 100)}% · retires early at ${row.fireAge ?? '-'}">${Math.round(row.reach * 100)}%${row.ruin >= 0.05 ? `<small class="ruin"> ✕${Math.round(row.ruin * 100)}%</small>` : ''}</td>`;
+    }).join('');
+    return `<tr><td><strong>${escapeHtml(character.name)}</strong><br>${difficultyBadge(character.difficulty)}</td><td>${result.index.toFixed(2)}</td><td>${TRACK_NAMES[result.fit.track].replace(' ladder', '')}</td>${cells}</tr>`;
+  }).join('');
+  return `<div class="modal-kicker">Character simulation · ${SIM_RESULTS.careers} careers per cell</div>
+    <div class="table-wrap"><table class="peer-table sim-table"><thead><tr><th>Character</th><th>Index</th><th>Best ladder</th>${Object.keys(INDUSTRIES).map((id) => `<th>${{ tech: 'Tech', consulting: 'Consulting', privateEquity: 'Private equity', academia: 'Academia' }[id] ?? id}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>
+    <p class="explain">Cells show the share of careers reaching Director or VP in that industry; ✕ marks the share ending in breakdown or homelessness when played at a fixed pace. Hover a cell for the management and expert ladders. Index is 0 (easy) to 1 (brutal).</p>`;
+}
+
 export function settingsPanel(settings, soundOn, endScenes, interimScenes) {
   const sceneButtons = (scenes) => Object.entries(scenes)
     .map(([id, label]) => `<button class="button small" data-scene="${id}">${escapeHtml(label)}</button>`).join('');
@@ -654,6 +680,7 @@ export function settingsPanel(settings, soundOn, endScenes, interimScenes) {
     </div>
     <details class="developer"><summary>Developer</summary>
       <div class="developer-body">
+        ${simulationTable()}
         <p class="explain">Replay any cut scene with the current character. Nothing in the career changes.</p>
         <div class="modal-kicker">Endings</div>
         <div class="scene-grid">${sceneButtons(endScenes)}</div>
@@ -730,16 +757,25 @@ export function gameOverPanel(game) {
 
 const DIFFICULTY_NOTES = {
   1: 'In our simulations this person reaches Director or higher in most careers, and often VP.',
-  2: 'Reaches Director or higher in about half of careers, if they play to their strengths and watch their health.',
-  3: 'Reaches Director in a good share of careers, but the VP chairs are a long shot and the strain shows.',
-  4: 'A real fight for every promotion: Director is possible, rarely more, and it takes careful play.',
-  5: 'Expect a good, steady career at a senior level; the top chairs are a long shot, and the strain is real.',
+  2: 'Reaches Director or higher in many careers, if they play to their strengths and watch their health.',
+  3: 'Director is possible in the right field with care; VP is rare, and the wrong field is a struggle.',
+  4: 'A steady, stable life almost anywhere. The top chairs are a long shot.',
+  5: 'The hardest climb: a few thrive in just the right role, but many careers end badly without careful rest.',
 };
 
 /** Five dots and a word: how hard this character\'s climb is, from simulation (1 easy to 5 brutal). */
 export function difficultyBadge(level) {
   const pips = [1, 2, 3, 4, 5].map((pip) => `<i class="${pip <= level ? 'on' : ''}"></i>`).join('');
   return `<span class="difficulty d${level}" title="${escapeHtml(DIFFICULTY_NOTES[level])}"><span class="pips">${pips}</span>${DIFFICULTY.labels[level]}</span>`;
+}
+
+const TRACK_NAMES = { management: 'Management ladder', expert: 'Expert ladder', hybrid: 'Either ladder' };
+
+/** Where a character does best, from the simulation: the ladder (management or expert) and the field. */
+function bestFit(characterId) {
+  const result = SIM_RESULTS.characters[characterId];
+  if (!result) return null;
+  return { track: TRACK_NAMES[result.fit.track], industry: INDUSTRIES[result.fit.bestIndustry]?.name ?? result.fit.bestIndustry, worst: INDUSTRIES[result.fit.worstIndustry]?.name ?? result.fit.worstIndustry };
 }
 
 /** The roster, easiest climb first. */
@@ -752,7 +788,7 @@ export function characterCards() {
   return charactersByDifficulty().map((character) => `<button class="pick-card character" data-character="${character.id}">
     ${portrait(character.look, 64)}
     <h3>${escapeHtml(character.name)}</h3>
-    <div class="tag-row"><span class="tag blue">${character.mbti}</span><span class="tag">IQ ${character.iq}</span><span class="tag">Pol ${character.pol}</span></div>
+    <div class="tag-row"><span class="tag blue">${character.mbti}</span><span class="tag">IQ ${character.iq}</span><span class="tag">Pol ${character.pol}</span>${bestFit(character.id) ? `<span class="tag good">${bestFit(character.id).track.replace(' ladder', '')}</span>` : ''}</div>
     <p class="archetype">${escapeHtml(character.archetype)}</p>
     ${difficultyBadge(character.difficulty)}
   </button>`).join('');
@@ -850,6 +886,7 @@ export function characterProfile(characterId, faceStyle = null) {
         <h2>${escapeHtml(character.name)}</h2>${difficultyBadge(character.difficulty)}</div>
     </div>
     <p class="profile-blurb">${escapeHtml(character.blurb)} <span class="muted">${escapeHtml(DIFFICULTY_NOTES[character.difficulty])}</span></p>
+    ${bestFit(character.id) ? `<p class="best-fit"><strong>Best fit:</strong> ${bestFit(character.id).track} · strongest in ${escapeHtml(bestFit(character.id).industry)} · hardest in ${escapeHtml(bestFit(character.id).worst)}</p>` : ''}
     <div class="face-picker"><span>Face</span>${Object.entries(FACE_STYLES).map(([id, entry]) => `<button class="face-chip ${id === (faceStyle ?? character.look.faceStyle) ? 'on' : ''}" data-face-style="${id}">${escapeHtml(entry.label)}</button>`).join('')}</div>
     <div class="profile-stats">${rows}</div>
     <ul class="quirks">${quirks.map((quirk) => `<li>${escapeHtml(quirk)}</li>`).join('')}</ul>`;

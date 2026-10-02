@@ -100,6 +100,9 @@ export const MOTIVATION = {
   burnoutDrag: 30,
   fullRecoveryShare: 0.4,
   restSpeedup: 2,
+  // Motivation per point of field fit above or below 1 (a 1.15 fit is +6): working in the field that
+  // suits you is a pleasure, and the wrong one is a grind.
+  fieldFitWeight: 40,
   // Motivation points per unit of (autonomy − 0.5) × autonomyNeed.
   autonomyWeight: 30,
   // Burned out with at least this much on Recovery counts as sick leave:
@@ -269,6 +272,14 @@ export const MISFORTUNE = {
   cancer: { fromAge: 30, perQuarterPerYear: 0.00012, treatmentQuarters: { aggressive: 6, standard: 8, wait: 10 }, healthTarget: 14, moodWhileIll: 10, careMood: 8, careFamily: 8 },
   // Odds of surviving, before stage: proper treatment helps.
   survival: { base: 0.88, perStage: 0.14, aggressive: 0.07, wait: -0.2, care: 0.05, floor: 0.12, ceiling: 0.97 },
+};
+
+// A moment away from the desk (see office-life.js), once a quarter.
+export const OFFICE_LIFE = {
+  coffeeRelationship: 6, coffeeMotivation: 3, coffeeSocial: 1.5,
+  pairRelationship: 4, pairPerformance: 1.5, pairSkill: 0.4,
+  meetingReadiness: 1.5, meetingRelationship: 3,
+  loungeHealth: 2, loungeMotivation: 2.5,
 };
 
 export const PERFORMANCE = {
@@ -738,7 +749,10 @@ export const INDUSTRY_STATS = {
 // ratings. Re-run the tool after changing a character and copy the new
 // index and rating onto their card.
 export const DIFFICULTY = {
-  weights: { climb: 0.45, peak: 0.25, freedom: 0.2, strain: 0.1 },
+  weights: { climb: 0.35, peak: 0.2, freedom: 0.15, strain: 0.1, ruin: 0.2 },
+  // Breakdown + homeless share of careers, played at a fixed nine-hour pace without adapting, at which
+  // ruin counts in full: how fragile the character is when the player is not careful.
+  ruinSpan: 0.3,
   // Director + VP reach at which the climb counts as easy (1 or more of every career).
   easyReach: 1.2,
   lowPeak: 3.5,
@@ -747,7 +761,7 @@ export const DIFFICULTY = {
   fireSpan: 15,
   strainSpan: 2,
   // Index cut-offs between ratings 1|2, 2|3, 3|4 and 4|5.
-  bands: [0.35, 0.5, 0.6, 0.75],
+  bands: [0.25, 0.4, 0.58, 0.78],
   labels: { 1: 'Easy', 2: 'Fair', 3: 'Tough', 4: 'Hard', 5: 'Brutal' },
 };
 
@@ -791,15 +805,15 @@ export const CHARACTERS = [
   {
     id: 'simon',
     gender: 'male',
-    difficulty: 2,
-    difficultyIndex: 0.44,
+    difficulty: 3,
+    difficultyIndex: 0.45,
     name: 'Simon C',
-    mbti: 'INTJ',
+    mbti: 'INTP',
     iq: 145,
     pol: 100,
     archetype: 'Systems Thinker',
     blurb: 'Brilliant at solitary technical work and takes long hours well, but every hour of networking costs him health and mood. Climbs on output, if he can stand the politics up top.',
-    traits: { coreBonus: 1.15, networkingDrain: 45, networkingHealthDrain: 10, strainResistance: 0.6, exhaustionResistance: 0.65 },
+    traits: { coreBonus: 1.1, leadership: 0.8, industryFit: { tech: 1.15, academia: 1, consulting: 0.9, privateEquity: 0.9 }, networkingDrain: 45, networkingHealthDrain: 10, strainResistance: 0.6, exhaustionResistance: 0.65 },
     look: {
       faceStyle: 'dots',
       skin: '#f1d2b0', hair: '#121212', suit: '#2f3a4a', shirt: '#ffffff',
@@ -810,14 +824,14 @@ export const CHARACTERS = [
     id: 'jennifer',
     gender: 'female',
     difficulty: 3,
-    difficultyIndex: 0.55,
+    difficultyIndex: 0.44,
     name: 'Jennifer B',
     mbti: 'ENFP',
     iq: 140,
     pol: 110,
     archetype: 'Charismatic Catalyst',
     blurb: 'Builds alliances fast and keeps going on long days, but long stretches of solo desk work sap her motivation. Climbs through people, if she keeps her spark.',
-    traits: { relationshipBonus: 1.5, politicsBonus: 1.2, deskWorkDrain: 50, deskWorkLimit: 0.45, strainResistance: 0.6, exhaustionResistance: 0.65 },
+    traits: { relationshipBonus: 1.5, politicsBonus: 1.2, deskWorkDrain: 50, deskWorkLimit: 0.45, strainResistance: 0.6, exhaustionResistance: 0.65, industryFit: { privateEquity: 1.25, consulting: 1, tech: 0.95, academia: 0.85 } },
     look: {
       faceStyle: 'glossy',
       skin: '#f4d6b8', hair: '#0e0e0e', suit: '#4a3260', shirt: '#f3e8ee',
@@ -827,8 +841,8 @@ export const CHARACTERS = [
   {
     id: 'chloe',
     gender: 'female',
-    difficulty: 4,
-    difficultyIndex: 0.61,
+    difficulty: 3,
+    difficultyIndex: 0.53,
     name: 'Chloe C',
     mbti: 'ENTP',
     iq: 150,
@@ -837,7 +851,7 @@ export const CHARACTERS = [
     blurb: 'Huge capability, but she needs freedom and fun: long hours and rigid cultures drain her fast. Thrives in academia; corporate works if she guards her happiness.',
     traits: {
       moonshotUnlocked: true, moonshotLanding: 1.25, rigidManagerClash: 0.25, strainResistance: 1.35, exhaustionResistance: 1.4,
-      autonomyNeed: 1, noveltyLift: 1.6,
+      autonomyNeed: 1, noveltyLift: 1.6, coreBonus: 1.05, industryFit: { academia: 1.35, tech: 0.9, consulting: 0.9, privateEquity: 0.85 },
     },
     look: {
       faceStyle: 'glossy',
@@ -848,8 +862,8 @@ export const CHARACTERS = [
   {
     id: 'joseph',
     gender: 'male',
-    difficulty: 5,
-    difficultyIndex: 0.85,
+    difficulty: 4,
+    difficultyIndex: 0.69,
     name: 'Joseph J',
     mbti: 'ISTJ',
     iq: 130,
@@ -866,18 +880,18 @@ export const CHARACTERS = [
   {
     id: 'richard',
     gender: 'male',
-    difficulty: 2,
-    difficultyIndex: 0.47,
+    difficulty: 3,
+    difficultyIndex: 0.49,
     name: 'Richard K',
     mbti: 'ENFJ',
     iq: 130,
     pol: 125,
     archetype: 'The Operator',
     blurb: 'Not the sharpest in the room, but he works the room: networking pays him back more than anyone, he plays office politics well, takes bad news in his stride, and works long hours like Simon.',
-    traits: { strainResistance: 0.6, exhaustionResistance: 0.65, politicsBonus: 1.15, eventSavvy: 1.35, steadiness: 0.25 },
+    traits: { strainResistance: 0.6, exhaustionResistance: 0.65, politicsBonus: 1.1, eventSavvy: 1.25, steadiness: 0.25 },
     look: {
       faceStyle: 'anime',
-      skin: '#e8c4a0', hair: '#1b1512', suit: '#1f3550', shirt: '#ffffff',
+      skin: '#f4d6b8', hair: '#d4a73a', suit: '#1f3550', shirt: '#ffffff',
       face: 'square', hairStyle: 'sideSwept', brows: 'straight', eyes: 'focused', nose: 'bridge', mouth: 'smileTeeth',
     },
   },
@@ -885,9 +899,9 @@ export const CHARACTERS = [
     id: 'christian',
     gender: 'male',
     difficulty: 2,
-    difficultyIndex: 0.42,
-    name: 'Christian W',
-    mbti: 'INTP',
+    difficultyIndex: 0.34,
+    name: 'Christopher C',
+    mbti: 'INTJ',
     iq: 150,
     pol: 80,
     archetype: 'The Machine',
@@ -903,14 +917,14 @@ export const CHARACTERS = [
     id: 'adam',
     gender: 'male',
     difficulty: 1,
-    difficultyIndex: 0.22,
+    difficultyIndex: 0.18,
     name: 'Adam W',
     mbti: 'ENTJ',
     iq: 145,
     pol: 145,
     archetype: 'The Natural Leader',
     blurb: 'Sharp, political, and made for leadership: people follow him and promotion committees like him. The best shot at the top chair, if he keeps his health.',
-    traits: { leadership: 1.3, politicsBonus: 1.15, relationshipBonus: 1.25, eventSavvy: 1.2 },
+    traits: { leadership: 1.2, politicsBonus: 1.15, relationshipBonus: 1.25, eventSavvy: 1.2, coreBonus: 1.3, industryFit: { privateEquity: 1.25, consulting: 1.1, tech: 0.9, academia: 0.9 } },
     look: {
       faceStyle: 'sleepy',
       skin: '#f2d1b3', hair: '#7a4a2a', suit: '#202a44', shirt: '#ffffff',
@@ -920,19 +934,55 @@ export const CHARACTERS = [
   {
     id: 'eve',
     gender: 'female',
-    difficulty: 5,
-    difficultyIndex: 0.92,
+    difficulty: 4,
+    difficultyIndex: 0.74,
     name: 'Eve M',
     mbti: 'ISFJ',
     iq: 125,
     pol: 100,
     archetype: 'The Steady Hand',
     blurb: 'Much like an average Joe, calm when things go wrong, but long hours wear her down quickly. A good career at a sane pace.',
-    traits: { steadiness: 0.3, strainResistance: 1.35, exhaustionResistance: 1.35 },
+    traits: { steadiness: 0.4, strainResistance: 1.35, exhaustionResistance: 1.35, industryFit: { academia: 1.1 } },
     look: {
       faceStyle: 'beans',
       skin: '#c99a76', hair: '#151515', suit: '#5a3f4e', shirt: '#fbf3f6',
       face: 'soft', hairStyle: 'long', brows: 'soft', eyes: 'innerDouble', nose: 'delicate', mouth: 'gentle',
+    },
+  },
+  {
+    id: 'chaitravi',
+    gender: 'female',
+    difficulty: 2,
+    difficultyIndex: 0.38,
+    name: 'Chaitravi D',
+    mbti: 'ESFJ',
+    iq: 140,
+    pol: 150,
+    archetype: 'The People Leader',
+    blurb: 'Warm, magnetic and very good at politics. She keeps sane hours and builds the relationships that carry a whole organisation. Her ladder is management: people follow her up it.',
+    traits: { politicsBonus: 1.08, relationshipBonus: 1.6, eventSavvy: 1.35, leadership: 1.15, coreBonus: 0.75, strainResistance: 0.7, exhaustionResistance: 0.8, industryFit: { consulting: 1.15, privateEquity: 1.1, tech: 1, academia: 0.95 } },
+    look: {
+      faceStyle: 'glossy',
+      skin: '#9a6a46', hair: '#1b1512', suit: '#5a2f55', shirt: '#fbf3f6',
+      face: 'round', hairStyle: 'ponytail', brows: 'soft', eyes: 'large', nose: 'delicate', mouth: 'smileTeeth',
+    },
+  },
+  {
+    id: 'bill',
+    gender: 'male',
+    difficulty: 5,
+    difficultyIndex: 0.9,
+    name: 'Bill M',
+    mbti: 'ISTP',
+    iq: 145,
+    pol: 70,
+    archetype: 'The Grumpy Nerd',
+    blurb: 'Blunt, honest and brilliant at the hard technical thing. A moonshot to principal engineer is within reach, but he will not play politics and cannot stand networking. Without rest and the right job, he burns out and loses everything.',
+    traits: { moonshotUnlocked: true, moonshotLanding: 1.35, coreBonus: 1.1, baseMood: -24, politicsBonus: 0.5, relationshipBonus: 0.4, eventSavvy: 0.5, networkingDrain: 70, networkingHealthDrain: 14, rigidManagerClash: 0.8, exhaustionResistance: 0.4, steadiness: -0.4, autonomyNeed: 1.3, industryFit: { tech: 1.05, academia: 0.95, consulting: 0.85, privateEquity: 0.8 } },
+    look: {
+      faceStyle: 'dots',
+      skin: '#f4d6b8', hair: '#6b4a2e', suit: '#4a4f58', shirt: '#e6eef8', glasses: 'thickBlack',
+      face: 'square', hairStyle: 'cleanShort', brows: 'thickCurved', eyes: 'focused', nose: 'bridge', mouth: 'composed',
     },
   },
 ];

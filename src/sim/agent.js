@@ -279,6 +279,7 @@ export function motivationTarget(agent, context, terms = null) {
   const burnoutDrag = agent.burnout.active
     ? MOTIVATION.burnoutDrag * (1 - Math.min(1, shares[RECOVERY] / MOTIVATION.fullRecoveryShare)) : 0;
   addTerm(terms, 'Baseline mood', MOTIVATION.baseTarget);
+  addTerm(terms, 'Disposition', traits.baseMood ?? 0);
   addTerm(terms, 'Long hours', -exhaustion);
   addTerm(terms, 'Long hours hit harder with age', -ageExhaustion);
   addTerm(terms, 'Rest', rest);
@@ -290,6 +291,8 @@ export function motivationTarget(agent, context, terms = null) {
   addTerm(terms, 'Freedom in the job', autonomy);
   addTerm(terms, 'Last review', agent.moodFromRating);
   addTerm(terms, 'Recent events', context.moodModifier ?? 0);
+  const fit = (fieldFit(agent, context) - 1) * MOTIVATION.fieldFitWeight;
+  addTerm(terms, 'Suited to this field', context.employed ? fit : 0);
   addTerm(terms, 'Burnout', -burnoutDrag);
   const life = context.lifeTerms ?? [];
   let lifeTotal = 0;
@@ -297,7 +300,7 @@ export function motivationTarget(agent, context, terms = null) {
     addTerm(terms, term.label, term.value);
     lifeTotal += term.value;
   }
-  return lifeTotal + MOTIVATION.baseTarget - exhaustion - ageExhaustion - fade + rest - stagnation - jobless - desk - networking
+  return lifeTotal + (context.employed ? fit : 0) + (traits.baseMood ?? 0) + MOTIVATION.baseTarget - exhaustion - ageExhaustion - fade + rest - stagnation - jobless - desk - networking
     + autonomy + agent.moodFromRating + (context.moodModifier ?? 0) - burnoutDrag;
 }
 
@@ -331,7 +334,12 @@ export function dailyCoreOutput(agent, context) {
   const openCost = 1 - JOBS.openFocusCost * agent.plan.openness;
   return core * (agent.iq / 100) * skillMultiplier(agent) * healthMultiplier(agent)
     * motivationMultiplier(agent) * (agent.traits.coreBonus ?? 1) * openCost * (context.outputModifier ?? 1)
-    * industryOutputBoost(agent);
+    * industryOutputBoost(agent) * fieldFit(agent, context);
+}
+
+/** How well the character suits this field: 1 is neutral (see `industryFit` on the character card). */
+export function fieldFit(agent, context) {
+  return agent.traits.industryFit?.[context.industry?.id] ?? 1;
 }
 
 /**

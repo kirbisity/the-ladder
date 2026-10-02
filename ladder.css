@@ -698,8 +698,8 @@ details.developer[open] summary { margin-bottom: 8px; }
     cursor: pointer;
   }
   .control-tab.active { background: #2f6ad8; border-color: #5f9bff; }
-  .controls > .panel { grid-area: panel; display: none; }
-  .controls > .panel.active { display: grid; }
+  .controls > .panel { grid-area: panel; display: grid; visibility: hidden; pointer-events: none; }
+  .controls > .panel.active { visibility: visible; pointer-events: auto; }
 }
 
 /* ── Phones (portrait) ─────────────────────────────────────── */
@@ -741,8 +741,8 @@ details.developer[open] summary { margin-bottom: 8px; }
     cursor: pointer;
   }
   .control-tab.active { background: #2f6ad8; border-color: #5f9bff; }
-  .controls > .panel { grid-area: panel; display: none; }
-  .controls > .panel.active { display: grid; }
+  .controls > .panel { grid-area: panel; display: grid; visibility: hidden; pointer-events: none; }
+  .controls > .panel.active { visibility: visible; pointer-events: auto; }
   .worklife-body { grid-template-columns: minmax(0, 1fr); gap: 4px; }
   .pick-grid { grid-template-columns: minmax(0, 1fr); align-content: start; gap: 8px; }
   .pick-card { grid-template-columns: auto minmax(0, 1fr); padding: 10px 12px; gap: 4px 12px; }
@@ -760,7 +760,7 @@ details.developer[open] summary { margin-bottom: 8px; }
   .pick-card.character .portrait { width: 40px; height: 40px; grid-row: span 3; }
   .pick-card.character h3 { font-size: 16px; }
   .pick-card.character .tag { font-size: 11px; padding: 1px 6px; }
-  .pick-card.character .archetype { display: none; }
+  .pick-card.character .archetype, .pick-card.character .tag.good { display: none; }
   .profile-stats { grid-template-columns: minmax(0, 1fr); gap: 6px; }
   .stat-row small { display: none; }
   .profile-head .portrait { width: 56px; height: 56px; }
@@ -856,8 +856,8 @@ details.developer[open] summary { margin-bottom: 8px; }
     cursor: pointer;
   }
   .control-tab.active { background: #2f6ad8; border-color: #5f9bff; }
-  .controls > .panel { grid-area: panel; display: none; min-height: 0; padding: 8px 12px; gap: 4px; }
-  .controls > .panel.active { display: grid; }
+  .controls > .panel { grid-area: panel; display: grid; visibility: hidden; pointer-events: none; min-height: 0; padding: 8px 12px; gap: 4px; }
+  .controls > .panel.active { visibility: visible; pointer-events: auto; }
   .worklife-body { grid-template-columns: minmax(0, 1fr); gap: 4px; }
   .arc { max-height: 70px; }
   .slider-row input { height: 18px; }
@@ -933,3 +933,27 @@ details.developer[open] summary { margin-bottom: 8px; }
 .stat-bar.wide i { top: -3px; height: 18px; }
 .stat-marks { position: relative; height: 14px; font-size: 11px; color: var(--ink-faint); }
 .stat-marks span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+
+/* The three control panels share one cell in the tabbed layouts, so the menu is as tall as the tallest and does not change height
+   (and stretch the office) when the tab changes. */
+.autopilot { padding: 2px 8px; min-height: 28px; font-size: 12px; letter-spacing: 0.02em; }
+.stat.age[data-action] { cursor: pointer; }
+.stat.age[data-action]:hover { border-color: #5f9bff; }
+.story-body { display: grid; gap: 10px; }
+.story-body p { color: var(--ink); font-size: 16px; line-height: 1.55; margin: 0; }
+
+.office { cursor: pointer; }
+.office-hint {
+  position: absolute; left: 12px; bottom: 10px; z-index: 2; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600;
+  background: rgba(20, 28, 44, 0.78); color: #dbe6f6; border: 1px solid rgba(255, 255, 255, 0.18); pointer-events: none; max-width: calc(100% - 150px);
+}
+.office-hint.used { color: #9fb0c8; }
+
+.best-fit { margin: 2px 0 8px; color: var(--ink-soft); font-size: 14px; }
+.best-fit strong { color: var(--gold); }
+.sim-table td, .sim-table th { padding: 4px 8px; font-size: 12px; text-align: left; white-space: nowrap; }
+.sim-table .ruin { color: #ff8a8d; }
+.sim-table .difficulty { font-size: 10px; }
+
+/* The best-fit tag is the first thing to go when the roster cards get short. */
+@media (max-height: 460px), (max-width: 760px) { .pick-card.character .tag.good { display: none; } }

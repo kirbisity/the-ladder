@@ -18,9 +18,10 @@ import { peerLook } from './figures.js';
 import { createAudio } from './audio.js';
 import {
   eventPanel, reviewPanel, moneyPanel, vitalsPanel, orgPanel, performancePanel, careerPanel, projectPanel, helpPanel, menuPanel,
-  gameOverPanel, storyPanel, timeOffPanel, settingsPanel, characterCards, characterProfile, industryCards, employerCards, industryMeter, projectedCompletion, escapeHtml,
+  gameOverPanel, storyPanel, journeyPanel, timeOffPanel, settingsPanel, characterCards, characterProfile, industryCards, employerCards, industryMeter, projectedCompletion, escapeHtml,
 } from './panels.js';
 import { socialPanel, partnerPanel } from './family-panels.js';
+import { officeVisit, officeVisitStatus } from '../sim/office-life.js';
 import { socialEquilibrium, familyTarget, dateNight, breakUp, partnerIncome } from '../sim/family.js';
 import { createIntro } from './intro.js';
 import { createCutscenePlayer, END_SCENES, INTERIM_SCENES, JOURNAL_SCENES, endingSceneFor, sceneData } from './cutscenes.js';
@@ -398,7 +399,9 @@ function drawOffice(seconds) {
     ? employedAgents(game.org).filter((agent) => agent !== player && agent.level === player.level && agent.teamId === player.teamId)
       .concat(employedAgents(game.org).filter((agent) => agent !== player && agent.level === player.level))
     : [];
-  const unique = [...new Set(peers)].slice(0, 3).map((agent, index) => ({
+  const chosen = [...new Set(peers)].slice(0, 3);
+  app.peerAgents = chosen;
+  const unique = chosen.map((agent, index) => ({
     look: peerLook(agent.id),
     typingRate: running ? (agent.burnout.active ? 0.4 : 0.9) : 0.05,
     posture: agent.burnout.active ? 'slumped' : 'upright',
@@ -424,16 +427,18 @@ function refreshLiveLabels() {
   const pace = livePace(game);
   const level = pace > 1.08 ? 'High' : pace > 0.92 ? 'Medium' : 'Low';
   const tier = officeTier(player.level, true);
-  const deskX = tier === 'open' ? 2.3 : 2.2;
-  addChip(`Productivity: ${level}`, level === 'High' ? 'green' : level === 'Low' ? 'red' : '', deskX + 1, 3.4, 150, true);
+  void tier;
+  const desk = office.deskAnchor();
+  const deskX = desk.x;
+  addChip(`Productivity: ${level}`, level === 'High' ? 'green' : level === 'Low' ? 'red' : '', deskX + 1, desk.y - 0.2, 150, true);
   const project = projectSpec(player.quarter.projectId, game.industry);
   if (project) {
     const progress = Math.min(1, player.quarter.projectProgress);
-    addChip(`<span class="ring" style="--progress:${Math.round(progress * 100)}%"></span>${escapeHtml(project.name)}: ${Math.round(progress * 100)}%`, '', deskX - 0.6, 5.6, 40, true);
+    addChip(`<span class="ring" style="--progress:${Math.round(progress * 100)}%"></span>${escapeHtml(project.name)}: ${Math.round(progress * 100)}%`, '', deskX - 0.6, desk.y + 2, 40, true);
   }
   if (player.plan.shares[2] >= 0.15 && game.day > 0 && game.day % 18 < 6) {
     const gain = Math.max(1, Math.round(player.plan.shares[2] * 10));
-    floatChip(`Peer networking: +${gain}`, '', 7.6, 1.6, 110);
+    floatChip(`Peer networking: +${gain}`, '', desk.x + 4, desk.y - 1.6, 110);
   }
 }
 
@@ -468,6 +473,16 @@ function floatChip(text, tone, x, y, z) {
   setTimeout(() => chip.remove(), 2300);
 }
 
+/** The small hint on the office: what a click does, and whether this quarter's visit is spent. */
+function updateOfficeHint() {
+  const hint = $('#office-hint');
+  if (!hint || !app.game) return;
+  const status = officeVisitStatus(app.game);
+  hint.hidden = !app.game.employment.employed;
+  hint.textContent = status.allowed ? 'Click the floor to walk: a colleague, the pantry, the meeting room or the lounge' : 'Time with people used this quarter';
+  hint.classList.toggle('used', !status.allowed);
+}
+
 function toast(text) {
   const element = document.createElement('div');
   element.className = 'toast';
@@ -488,6 +503,7 @@ function updateHud(full) {
   setBar('#vital-motivation', player.motivation, 'Motivation', game.weekDeltas.motivation, 'this week');
   $('#vital-motivation .battery-level').style.width = `${Math.max(0, Math.min(100, player.motivation)) * 0.92}%`;
   updateSocialBar(game);
+  updateOfficeHint();
   $('#age-value').textContent = `Age: ${Math.floor(player.age)}`;
   $('#wealth-value').textContent = formatMoney(netWorth(game));
   const householdIncome = (game.employment.employed ? player.salary : 0) + partnerIncome(game);
@@ -764,11 +780,12 @@ function handleAction(action, target) {
       break;
     }
     case 'panel-timeoff': openModal('timeoff', timeOffPanel(game)); break;
-    case 'settings': openModal('settings', settingsPanel(settings, audio.isEnabled(), END_SCENES, INTERIM_SCENES)); break;
+    case 'panel-journey': openModal('journey', journeyPanel(game), true); break;
+    case 'settings': openModal('settings', settingsPanel(settings, audio.isEnabled(), END_SCENES, INTERIM_SCENES), true); break;
     case 'toggle-cutscenes':
       settings.cutscenes = !settings.cutscenes;
       saveSettings();
-      openModal('settings', settingsPanel(settings, audio.isEnabled(), END_SCENES, INTERIM_SCENES));
+      openModal('settings', settingsPanel(settings, audio.isEnabled(), END_SCENES, INTERIM_SCENES), true);
       break;
     case 'skip-scene': cutscenes.skip(); break;
     case 'share-story':
@@ -806,7 +823,7 @@ function handleAction(action, target) {
       if (audio.isEnabled()) audio.disable();
       else audio.enable();
       $('#sound-button').textContent = audio.isEnabled() ? 'Sound on' : 'Sound off';
-      if (app.modal === 'settings') openModal('settings', settingsPanel(settings, audio.isEnabled(), END_SCENES, INTERIM_SCENES));
+      if (app.modal === 'settings') openModal('settings', settingsPanel(settings, audio.isEnabled(), END_SCENES, INTERIM_SCENES), true);
       if (game) audio.setState({ running: game.phase === 'running' && !app.paused, burnout: game.player.burnout.active, hours: game.player.plan.hours });
       break;
     }
@@ -974,6 +991,30 @@ function renderCharacterPick() {
 
 function boot() {
   office = createOffice($('#office'));
+  // Click the floor: the character stands, walks over, and at a colleague, the pantry, the meeting room or the lounge
+  // spends a moment that counts once a quarter.
+  office.setInteractHook((poi) => {
+    const game = app.game;
+    if (!game || !poi) return null;
+    const index = poi.id?.startsWith('peer') ? Number(poi.id.slice(4)) : -1;
+    const result = officeVisit(game, poi.kind, index >= 0 ? app.peerAgents?.[index] ?? null : null);
+    if (result.applied) {
+      toast(result.text);
+      updateHud(true);
+    }
+    updateOfficeHint();
+    return { text: result.applied ? poi.label : 'Already made time for people this quarter' };
+  });
+  $('#office').addEventListener('click', (event) => {
+    const game = app.game;
+    if (!game || app.screen !== 'game' || app.modal || game.outcome) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const outcome = office.click(event.clientX - rect.left, event.clientY - rect.top);
+    if (outcome.status === 'blocked') toast('You cannot walk there: something is in the way.');
+    else if (outcome.status === 'busy') toast('Hold on, you are already on your way.');
+    else if (!game.employment.employed) toast('No office to walk round while you are between jobs.');
+    updateOfficeHint();
+  });
   cutscenes = createCutscenePlayer($('#cutscene'));
   intro = createIntro($('#intro-canvas'), $('#intro-line'));
   renderCharacterPick();
@@ -999,6 +1040,7 @@ window.theLadder = {
     if (hour !== null) app.visualTime = Math.max(0, (hour - 7.5) / (app.game.player.plan.hours + 1)) * VISUAL_DAY_SECONDS;
     drawOffice(performance.now() / 1000);
   },
+  get office() { return office; },
   get cutscenes() { return cutscenes; },
   get settings() { return settings; },
   start(characterId = 'simon', industryId = 'tech') {

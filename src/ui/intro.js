@@ -25,7 +25,7 @@ export function createIntro(canvas, lineElement) {
 
   function play(game, onDone) {
     const character = game.character;
-    const year = new Date().getFullYear();
+    const year = game.startYear ?? new Date().getFullYear();
     lines = [
       `Class of ${year}. ${character.name} crosses the stage with a diploma, ${formatSavings(game.savings)} in the bank, and a plan.`,
       `${character.mbti}. IQ ${character.iq}. Political sense ${character.pol}. ${character.archetype}: ${character.blurb}`,

@@ -2,7 +2,8 @@
 // and the industry cards from the first build. Scope and timing are set in
 // events.js (work cards need a job; life cards land mid-quarter).
 
-import { ORG } from '../../config.js';
+import { ORG, ERA } from '../../config.js';
+import { sirWave } from '../era.js';
 import { agentsAtLevel } from '../org.js';
 import { managerOf } from '../game.js';
 import {
@@ -16,7 +17,7 @@ export const CORE_DECK = [
     id: 'layoffRumor',
     category: 'macro',
     title: 'Restructuring whispers',
-    weight: (game) => (employed(game) && game.flags.layoffAt === null ? (game.market === 'recession' ? 3 : 1) * (game.org.industry.layoffMultiplier ?? 1) : 0),
+    weight: (game) => (employed(game) && game.flags.layoffAt === null ? (game.market === 'recession' ? 3 : 1) * (game.org.industry.layoffMultiplier ?? 1) * (1 + ERA.layoffCardPerWave * sirWave(game)) : 0),
     text: (game) => (hasLoyalFriend(game)
       ? 'A friend pulls you aside: finance has a list, and it lands next quarter.'
       : 'The all-hands is cancelled. Calendars fill with "sync" meetings with HR.'),
@@ -47,7 +48,7 @@ export const CORE_DECK = [
     id: 'surpriseLayoffs',
     category: 'macro',
     title: 'Surprise cuts',
-    weight: (game) => (employed(game) && game.flags.layoffAt === null && !hasLoyalFriend(game) ? (game.market === 'recession' ? 1.5 : 0.3) * (game.org.industry.layoffMultiplier ?? 1) : 0),
+    weight: (game) => (employed(game) && game.flags.layoffAt === null && !hasLoyalFriend(game) ? (game.market === 'recession' ? 1.5 : 0.3) * (game.org.industry.layoffMultiplier ?? 1) * (1 + ERA.layoffCardPerWave * sirWave(game)) : 0),
     text: 'A calendar invite titled "Org update" lands for Friday at 4 PM. Nobody warned you.',
     onDraw: (game) => {
       game.flags.layoffAt = game.quarterIndex;

@@ -11,7 +11,7 @@ import { rememberAnswer, pickRemembered } from '../sim/autopilot.js';
 import { downloadShareDocument, showShareDocument } from './share.js';
 import { RATING_LABELS, totalBandwidth, effectiveHours, projectSpec, dailyCoreOutput, onBurnoutLeave } from '../sim/agent.js';
 import { agentsAtLevel, employedAgents } from '../sim/org.js';
-import { CHARACTERS, INDUSTRIES, TIME, BANDWIDTH, MOTIVATION, ORG } from '../config.js';
+import { CHARACTERS, INDUSTRIES, TIME, BANDWIDTH, MOTIVATION, ORG, ERA } from '../config.js';
 import { createOffice, officeTier } from './office.js';
 import { officeThemeFor } from './office-themes.js';
 import { peerLook } from './figures.js';
@@ -26,12 +26,14 @@ import { officeVisitStatus } from '../sim/office-life.js';
 import { dialogueFor, answerDialogue } from '../sim/office-dialogue.js';
 import { socialEquilibrium, familyTarget, dateNight, breakUp, partnerIncome } from '../sim/family.js';
 import { createIntro } from './intro.js';
+import { createMusic } from './music.js';
+import { calendarYear } from '../sim/era.js';
 import { createCutscenePlayer, END_SCENES, INTERIM_SCENES, JOURNAL_SCENES, endingSceneFor, sceneData } from './cutscenes.js';
 
 const SAVE_KEY = 'the-ladder-save';
 const SETTINGS_KEY = 'the-ladder-settings';
 // Which journal moment wins when several land at once.
-const SCENE_PRIORITY = ['carCrash', 'houseFire', 'diagnosis', 'farewell', 'lostJob', 'healthScare', 'burnout', 'promoted', 'newJob', 'house', 'married', 'divorce', 'breakup', 'newborn', 'child', 'dating', 'startupWin', 'fmla', 'holiday'];
+const SCENE_PRIORITY = ['sir', 'carCrash', 'houseFire', 'diagnosis', 'farewell', 'lostJob', 'healthScare', 'burnout', 'promoted', 'newJob', 'house', 'married', 'divorce', 'breakup', 'newborn', 'child', 'dating', 'startupWin', 'fmla', 'holiday'];
 const SPEEDS = [1, 2, 4, 8];
 // At 1× a quarter takes six seconds: ten workdays a second.
 const DAYS_PER_SECOND = 10;
@@ -52,7 +54,7 @@ const $$ = (selector) => [...document.querySelectorAll(selector)];
 const app = {
   screen: 'title',
   game: null,
-  pick: { characterId: null, industryId: null },
+  pick: { characterId: null, industryId: null, birthYear: ERA.defaultBirthYear },
   paused: false,
   speedIndex: 0,
   auto: false,
@@ -79,6 +81,7 @@ let office = null;
 let intro = null;
 let cutscenes = null;
 const settings = loadSettings();
+const music = createMusic();
 
 function loadSettings() {
   try {
@@ -160,9 +163,9 @@ function sampleSceneData() {
   return { look: character.look, name: character.name, firstName: character.name.split(' ')[0], age: 62, born: 1990, died: 2052, title: 'Director', company: 'Stackwell', seed: 7, netWorth: 1e6 };
 }
 
-function startCareer(characterId, industryId, startTier = null, faceStyle = null, adjust = null) {
+function startCareer(characterId, industryId, startTier = null, faceStyle = null, adjust = null, birthYear = ERA.defaultBirthYear) {
   const seed = Math.floor(Math.random() * 1e9);
-  app.game = createGame({ seed, characterId, industryId, startTier, faceStyle, adjust });
+  app.game = createGame({ seed, characterId, industryId, startTier, faceStyle, adjust, birthYear });
   app.paused = false;
   app.dayAccumulator = 0;
   app.readinessChimed = false;
@@ -567,13 +570,15 @@ function updateHud(full) {
   updateSocialBar(game);
   updateOfficeHint();
   $('#age-value').textContent = `Age: ${Math.floor(player.age)}`;
+  $('#age-value').title = `${calendarYear(game)}`;
   $('#wealth-value').textContent = formatMoney(netWorth(game));
   const householdIncome = (game.employment.employed ? player.salary : 0) + partnerIncome(game);
   $('#income-value').textContent = householdIncome > 0 ? `${formatMoney(householdIncome)} / yr${game.married && game.partner ? ' (household)' : ''}` : 'No income';
 
   const quarterOfYear = (game.quarterIndex % 4) + 1;
   const year = Math.floor(game.quarterIndex / 4) + 1;
-  $('#clock-quarter').textContent = `Q${quarterOfYear} · Year ${year}`;
+  $('#clock-quarter').textContent = `Q${quarterOfYear} · ${calendarYear(game)}${game.sir ? ' · AI era' : ''}`;
+  void year;
   $('#clock-title').textContent = game.employment.employed ? titleOf(game, player.level) : 'Between jobs';
   $('#day-fill').style.width = `${game.day / TIME.daysPerQuarter * 100}%`;
   const runButton = $('#run-button');
@@ -710,7 +715,10 @@ function updateArc() {
   $('#arc-knob').setAttribute('cy', (ARC.cy - ARC.ry * Math.sin(angle)).toFixed(1));
   $('#arc-label').textContent = hoursLabel(hours).toUpperCase();
   $('#arc').setAttribute('aria-valuenow', hours);
-  $('#hours-figure').textContent = `Daily hrs: ${hours % 1 ? hours.toFixed(1) : hours}`;
+  const weekends = Boolean(app.game.player.plan.weekends);
+  const weekly = hours * (weekends ? 7 : 5);
+  $('#hours-figure').textContent = `Daily hrs: ${hours % 1 ? hours.toFixed(1) : hours} · ${weekly % 1 ? weekly.toFixed(1) : weekly} h/week`;
+  $('#weekend-check').checked = weekends;
 }
 
 function setHoursFromPointer(event) {
@@ -844,6 +852,12 @@ function handleAction(action, target) {
     case 'panel-timeoff': openModal('timeoff', timeOffPanel(game)); break;
     case 'panel-journey': openModal('journey', journeyPanel(game), true); break;
     case 'settings': openModal('settings', settingsPanel(settings, audio.isEnabled(), END_SCENES, INTERIM_SCENES), true); break;
+    case 'toggle-music':
+      settings.music = settings.music === false;
+      music.setEnabled(settings.music);
+      saveSettings();
+      openModal('settings', settingsPanel(settings, audio.isEnabled(), END_SCENES, INTERIM_SCENES), true);
+      break;
     case 'toggle-cutscenes':
       settings.cutscenes = !settings.cutscenes;
       saveSettings();
@@ -953,14 +967,14 @@ function bindInput() {
       app.pick.characterId = character.dataset.character;
       app.pick.faceStyle = null;
       app.pick.adjust = {};
-      $('#profile-body').innerHTML = characterProfile(app.pick.characterId);
+      $('#profile-body').innerHTML = characterProfile(app.pick.characterId, null, {}, app.pick.birthYear);
       showScreen('profile');
       return;
     }
     const faceStyle = event.target.closest('[data-face-style]');
     if (faceStyle) {
       app.pick.faceStyle = faceStyle.dataset.faceStyle;
-      $('#profile-body').innerHTML = characterProfile(app.pick.characterId, app.pick.faceStyle, app.pick.adjust ?? {});
+      $('#profile-body').innerHTML = characterProfile(app.pick.characterId, app.pick.faceStyle, app.pick.adjust ?? {}, app.pick.birthYear);
       return;
     }
     const adjustButton = event.target.closest('[data-adjust]');
@@ -969,13 +983,13 @@ function bindInput() {
       const id = adjustButton.dataset.adjust;
       steps[id] = (steps[id] ?? 0) + Number(adjustButton.dataset.dir);
       if (validAdjustments(steps)) app.pick.adjust = steps;
-      $('#profile-body').innerHTML = characterProfile(app.pick.characterId, app.pick.faceStyle, app.pick.adjust ?? {});
+      $('#profile-body').innerHTML = characterProfile(app.pick.characterId, app.pick.faceStyle, app.pick.adjust ?? {}, app.pick.birthYear);
       $('#profile-body').querySelector('details.adjust').open = true;
       return;
     }
     if (event.target.closest('[data-adjust-reset]')) {
       app.pick.adjust = {};
-      $('#profile-body').innerHTML = characterProfile(app.pick.characterId, app.pick.faceStyle, {});
+      $('#profile-body').innerHTML = characterProfile(app.pick.characterId, app.pick.faceStyle, {}, app.pick.birthYear);
       return;
     }
     const industry = event.target.closest('[data-industry]');
@@ -988,7 +1002,7 @@ function bindInput() {
     const employer = event.target.closest('[data-employer]');
     if (employer) {
       const tier = employer.dataset.employer === 'random' ? null : employer.dataset.employer;
-      startCareer(app.pick.characterId, app.pick.industryId, tier, app.pick.faceStyle, app.pick.adjust ?? null);
+      startCareer(app.pick.characterId, app.pick.industryId, tier, app.pick.faceStyle, app.pick.adjust ?? null, app.pick.birthYear);
       return;
     }
     const project = event.target.closest('[data-project]');
@@ -1062,6 +1076,23 @@ function bindInput() {
   $('#auto-advance').addEventListener('change', (event) => {
     app.auto = event.target.checked;
   });
+  // The birth-year slider lives inside the profile, which is re-rendered: listen on the document.
+  document.addEventListener('input', (event) => {
+    if (event.target.id !== 'birth-year') return;
+    app.pick.birthYear = Number(event.target.value);
+    const picker = event.target.closest('.birth-year');
+    const fresh = document.createElement('div');
+    fresh.innerHTML = characterProfile(app.pick.characterId, app.pick.faceStyle, app.pick.adjust ?? {}, app.pick.birthYear);
+    const next = fresh.querySelector('.birth-year');
+    picker.querySelector('label').innerHTML = next.querySelector('label').innerHTML;
+    picker.querySelector('.sir-years').innerHTML = next.querySelector('.sir-years').innerHTML;
+  });
+  $('#weekend-check').addEventListener('change', (event) => {
+    if (!app.game) return;
+    setPlan(app.game, { weekends: event.target.checked });
+    updateArc();
+    updateHud(true);
+  });
   $('#openness-slider').addEventListener('input', (event) => {
     setPlan(app.game, { openness: Number(event.target.value) / 100 });
     updateHud(false);
@@ -1104,6 +1135,8 @@ function boot() {
     updateOfficeHint();
   });
   cutscenes = createCutscenePlayer($('#cutscene'));
+  music.setEnabled(settings.music !== false);
+  cutscenes.setOnPlay((id) => music.playForScene(id));
   intro = createIntro($('#intro-canvas'), $('#intro-line'));
   renderCharacterPick();
   $('#industry-grid').innerHTML = industryCards();

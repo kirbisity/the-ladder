@@ -5,96 +5,146 @@ export const SIM_RESULTS = {
   "careers": 30,
   "characters": {
     "simon": {
-      "index": 0.45,
+      "index": 0.48,
       "rating": 3,
       "parts": {
-        "climb": 0.58,
-        "peak": 0.43,
-        "freedom": 0.96,
-        "strain": 0.12,
-        "ruin": 0.03
+        "climb": 0.56,
+        "peak": 0.5,
+        "freedom": 0.95,
+        "strain": 0.23,
+        "ruin": 0.11
       },
       "fit": {
         "track": "expert",
-        "management": 0.49,
-        "expert": 0.66,
+        "management": 0.53,
+        "expert": 0.78,
         "bestIndustry": "tech",
         "worstIndustry": "consulting"
       },
       "industries": {
         "tech": {
-          "reach": 0.9,
-          "management": 0.9,
-          "expert": 1.13,
+          "reach": 1.1,
+          "management": 1.1,
+          "expert": 1.43,
           "ruin": 0,
           "peak": 6,
           "fire": 1,
-          "fireAge": 45,
+          "fireAge": 47,
           "burnouts": 0
         },
         "consulting": {
-          "reach": 0.23,
-          "management": 0.23,
+          "reach": 0.2,
+          "management": 0.2,
           "expert": 0.53,
-          "ruin": 0.03,
+          "ruin": 0.13,
           "peak": 5,
-          "fire": 0.97,
-          "fireAge": 48,
+          "fire": 1,
+          "fireAge": 43.25,
           "burnouts": 0
         },
         "privateEquity": {
-          "reach": 0.33,
-          "management": 0.33,
-          "expert": 0.4,
+          "reach": 0.43,
+          "management": 0.43,
+          "expert": 0.63,
           "ruin": 0,
           "peak": 5,
           "fire": 1,
-          "fireAge": 44.75,
+          "fireAge": 46.75,
           "burnouts": 0
         },
         "academia": {
-          "reach": 0.57,
-          "management": 0.57,
-          "expert": 0.63,
+          "reach": 0.4,
+          "management": 0.4,
+          "expert": 0.5,
           "ruin": 0,
-          "peak": 6,
-          "fire": 0.9,
-          "fireAge": 51.75,
+          "peak": 5,
+          "fire": 1,
+          "fireAge": 52,
           "burnouts": 0
         }
       }
     },
     "jennifer": {
-      "index": 0.44,
+      "index": 0.43,
       "rating": 3,
       "parts": {
-        "climb": 0.54,
+        "climb": 0.42,
         "peak": 0.43,
         "freedom": 1,
-        "strain": 0.11,
-        "ruin": 0
+        "strain": 0.26,
+        "ruin": 0.08
       },
       "fit": {
         "track": "management",
-        "management": 0.55,
-        "expert": 0.31,
+        "management": 0.69,
+        "expert": 0.4,
         "bestIndustry": "privateEquity",
         "worstIndustry": "academia"
       },
       "industries": {
         "tech": {
-          "reach": 0.6,
-          "management": 0.6,
+          "reach": 0.5,
+          "management": 0.5,
           "expert": 0.07,
           "ruin": 0,
-          "peak": 6,
+          "peak": 5,
           "fire": 1,
-          "fireAge": 46.75,
+          "fireAge": 44,
           "burnouts": 0
         },
         "consulting": {
-          "reach": 0.37,
-          "management": 0.37,
+          "reach": 0.63,
+          "management": 0.63,
+          "expert": 0.4,
+          "ruin": 0.07,
+          "peak": 5,
+          "fire": 1,
+          "fireAge": 49.75,
+          "burnouts": 0
+        },
+        "privateEquity": {
+          "reach": 1.4,
+          "management": 1.4,
+          "expert": 1.1,
+          "ruin": 0,
+          "peak": 7,
+          "fire": 1,
+          "fireAge": 48,
+          "burnouts": 0
+        },
+        "academia": {
+          "reach": 0.23,
+          "management": 0.23,
+          "expert": 0.03,
+          "ruin": 0.03,
+          "peak": 5,
+          "fire": 0.9,
+          "fireAge": 52.5,
+          "burnouts": 0
+        }
+      }
+    },
+    "chloe": {
+      "index": 0.5,
+      "rating": 3,
+      "parts": {
+        "climb": 0.56,
+        "peak": 0.5,
+        "freedom": 0.87,
+        "strain": 0.46,
+        "ruin": 0.14
+      },
+      "fit": {
+        "track": "expert",
+        "management": 0.41,
+        "expert": 0.53,
+        "bestIndustry": "academia",
+        "worstIndustry": "privateEquity"
+      },
+      "industries": {
+        "tech": {
+          "reach": 0.43,
+          "management": 0.3,
           "expert": 0.43,
           "ruin": 0,
           "peak": 5,
@@ -102,309 +152,199 @@ export const SIM_RESULTS = {
           "fireAge": 45,
           "burnouts": 0
         },
-        "privateEquity": {
-          "reach": 0.93,
-          "management": 0.93,
-          "expert": 0.73,
-          "ruin": 0,
-          "peak": 6,
+        "consulting": {
+          "reach": 0.6,
+          "management": 0.33,
+          "expert": 0.6,
+          "ruin": 0.17,
+          "peak": 5,
           "fire": 1,
-          "fireAge": 47.5,
+          "fireAge": 45,
           "burnouts": 0
         },
-        "academia": {
-          "reach": 0.3,
-          "management": 0.3,
-          "expert": 0,
-          "ruin": 0,
-          "peak": 5,
-          "fire": 0.87,
-          "fireAge": 54.75,
-          "burnouts": 0
-        }
-      }
-    },
-    "chloe": {
-      "index": 0.53,
-      "rating": 3,
-      "parts": {
-        "climb": 0.72,
-        "peak": 0.5,
-        "freedom": 0.96,
-        "strain": 0.31,
-        "ruin": 0.03
-      },
-      "fit": {
-        "track": "hybrid",
-        "management": 0.28,
-        "expert": 0.34,
-        "bestIndustry": "academia",
-        "worstIndustry": "privateEquity"
-      },
-      "industries": {
-        "tech": {
+        "privateEquity": {
           "reach": 0.23,
-          "management": 0.27,
+          "management": 0.13,
           "expert": 0.23,
           "ruin": 0,
           "peak": 5,
           "fire": 1,
-          "fireAge": 44.75,
-          "burnouts": 0
-        },
-        "consulting": {
-          "reach": 0.27,
-          "management": 0.1,
-          "expert": 0.27,
-          "ruin": 0.03,
-          "peak": 5,
-          "fire": 1,
-          "fireAge": 46.25,
-          "burnouts": 0
-        },
-        "privateEquity": {
-          "reach": 0.17,
-          "management": 0.07,
-          "expert": 0.17,
-          "ruin": 0,
-          "peak": 5,
-          "fire": 1,
-          "fireAge": 46.25,
-          "burnouts": 0.2
+          "fireAge": 44,
+          "burnouts": 0.23
         },
         "academia": {
-          "reach": 0.7,
-          "management": 0.67,
-          "expert": 0.7,
+          "reach": 0.87,
+          "management": 0.87,
+          "expert": 0.87,
           "ruin": 0,
           "peak": 6,
-          "fire": 0.93,
-          "fireAge": 52.25,
+          "fire": 0.9,
+          "fireAge": 50.25,
           "burnouts": 0
         }
       }
     },
     "joseph": {
-      "index": 0.69,
+      "index": 0.75,
       "rating": 4,
       "parts": {
         "climb": 0.96,
         "peak": 0.79,
-        "freedom": 1,
-        "strain": 0.27,
-        "ruin": 0.08
+        "freedom": 0.91,
+        "strain": 0.59,
+        "ruin": 0.31
       },
       "fit": {
         "track": "hybrid",
         "management": 0.06,
         "expert": 0.05,
-        "bestIndustry": "academia",
-        "worstIndustry": "consulting"
+        "bestIndustry": "consulting",
+        "worstIndustry": "tech"
       },
       "industries": {
         "tech": {
-          "reach": 0.03,
+          "reach": 0,
           "management": 0,
-          "expert": 0.03,
+          "expert": 0,
+          "ruin": 0,
+          "peak": 4,
+          "fire": 1,
+          "fireAge": 42.75,
+          "burnouts": 0
+        },
+        "consulting": {
+          "reach": 0.1,
+          "management": 0,
+          "expert": 0.1,
+          "ruin": 0.37,
+          "peak": 4,
+          "fire": 1,
+          "fireAge": 44.75,
+          "burnouts": 0
+        },
+        "privateEquity": {
+          "reach": 0.07,
+          "management": 0.13,
+          "expert": 0.07,
           "ruin": 0,
           "peak": 4,
           "fire": 1,
           "fireAge": 46,
           "burnouts": 0
         },
-        "consulting": {
-          "reach": 0,
-          "management": 0,
-          "expert": 0,
-          "ruin": 0.1,
-          "peak": 4,
-          "fire": 1,
-          "fireAge": 46.25,
-          "burnouts": 0
-        },
-        "privateEquity": {
-          "reach": 0.07,
-          "management": 0.03,
-          "expert": 0.07,
-          "ruin": 0,
-          "peak": 4,
-          "fire": 1,
-          "fireAge": 48.5,
-          "burnouts": 0
-        },
         "academia": {
-          "reach": 0.1,
-          "management": 0.2,
-          "expert": 0.1,
+          "reach": 0.03,
+          "management": 0.1,
+          "expert": 0.03,
           "ruin": 0,
           "peak": 5,
-          "fire": 0.8,
-          "fireAge": 55.5,
+          "fire": 0.77,
+          "fireAge": 53.25,
           "burnouts": 0
         }
       }
     },
     "richard": {
-      "index": 0.49,
+      "index": 0.48,
       "rating": 3,
       "parts": {
-        "climb": 0.6,
-        "peak": 0.5,
+        "climb": 0.48,
+        "peak": 0.43,
         "freedom": 1,
-        "strain": 0.15,
-        "ruin": 0.06
+        "strain": 0.37,
+        "ruin": 0.19
       },
       "fit": {
         "track": "management",
-        "management": 0.48,
-        "expert": 0.08,
-        "bestIndustry": "privateEquity",
-        "worstIndustry": "consulting"
-      },
-      "industries": {
-        "tech": {
-          "reach": 0.47,
-          "management": 0.47,
-          "expert": 0.03,
-          "ruin": 0,
-          "peak": 5,
-          "fire": 1,
-          "fireAge": 48.5,
-          "burnouts": 0
-        },
-        "consulting": {
-          "reach": 0.27,
-          "management": 0.27,
-          "expert": 0.1,
-          "ruin": 0.07,
-          "peak": 5,
-          "fire": 1,
-          "fireAge": 47.75,
-          "burnouts": 0
-        },
-        "privateEquity": {
-          "reach": 0.8,
-          "management": 0.8,
-          "expert": 0.1,
-          "ruin": 0,
-          "peak": 6,
-          "fire": 1,
-          "fireAge": 49.5,
-          "burnouts": 0
-        },
-        "academia": {
-          "reach": 0.4,
-          "management": 0.4,
-          "expert": 0.1,
-          "ruin": 0,
-          "peak": 5,
-          "fire": 0.93,
-          "fireAge": 53.75,
-          "burnouts": 0
-        }
-      }
-    },
-    "christian": {
-      "index": 0.34,
-      "rating": 2,
-      "parts": {
-        "climb": 0.31,
-        "peak": 0.36,
-        "freedom": 1,
-        "strain": 0.11,
-        "ruin": 0
-      },
-      "fit": {
-        "track": "expert",
-        "management": 0.52,
-        "expert": 0.83,
+        "management": 0.63,
+        "expert": 0.11,
         "bestIndustry": "tech",
         "worstIndustry": "consulting"
       },
       "industries": {
         "tech": {
-          "reach": 1.1,
-          "management": 0.6,
-          "expert": 1.1,
-          "ruin": 0,
-          "peak": 6,
-          "fire": 1,
-          "fireAge": 48,
-          "burnouts": 0
-        },
-        "consulting": {
-          "reach": 0.67,
-          "management": 0.23,
-          "expert": 0.67,
-          "ruin": 0,
-          "peak": 5,
-          "fire": 1,
-          "fireAge": 49.25,
-          "burnouts": 0
-        },
-        "privateEquity": {
-          "reach": 0.8,
-          "management": 0.63,
-          "expert": 0.8,
+          "reach": 0.87,
+          "management": 0.87,
+          "expert": 0.03,
           "ruin": 0,
           "peak": 6,
           "fire": 1,
           "fireAge": 47,
           "burnouts": 0
         },
-        "academia": {
-          "reach": 0.73,
-          "management": 0.63,
-          "expert": 0.73,
-          "ruin": 0,
-          "peak": 6,
-          "fire": 0.9,
-          "fireAge": 51.25,
-          "burnouts": 0
-        }
-      }
-    },
-    "adam": {
-      "index": 0.18,
-      "rating": 1,
-      "parts": {
-        "climb": 0,
-        "peak": 0.14,
-        "freedom": 1,
-        "strain": 0.04,
-        "ruin": 0
-      },
-      "fit": {
-        "track": "hybrid",
-        "management": 1.39,
-        "expert": 0.98,
-        "bestIndustry": "tech",
-        "worstIndustry": "privateEquity"
-      },
-      "industries": {
-        "tech": {
-          "reach": 1.73,
-          "management": 1.73,
-          "expert": 0.97,
-          "ruin": 0,
-          "peak": 7,
-          "fire": 1,
-          "fireAge": 50,
-          "burnouts": 0
-        },
         "consulting": {
-          "reach": 1.53,
-          "management": 1.53,
-          "expert": 1.2,
-          "ruin": 0,
-          "peak": 7,
+          "reach": 0.37,
+          "management": 0.37,
+          "expert": 0.1,
+          "ruin": 0.23,
+          "peak": 5,
           "fire": 1,
           "fireAge": 48,
           "burnouts": 0
         },
         "privateEquity": {
-          "reach": 1.03,
-          "management": 1.03,
+          "reach": 0.8,
+          "management": 0.8,
+          "expert": 0.2,
+          "ruin": 0,
+          "peak": 6,
+          "fire": 1,
+          "fireAge": 49,
+          "burnouts": 0
+        },
+        "academia": {
+          "reach": 0.47,
+          "management": 0.47,
+          "expert": 0.1,
+          "ruin": 0,
+          "peak": 5,
+          "fire": 0.97,
+          "fireAge": 53,
+          "burnouts": 0
+        }
+      }
+    },
+    "christian": {
+      "index": 0.27,
+      "rating": 2,
+      "parts": {
+        "climb": 0.16,
+        "peak": 0.29,
+        "freedom": 1,
+        "strain": 0.09,
+        "ruin": 0
+      },
+      "fit": {
+        "track": "expert",
+        "management": 0.66,
+        "expert": 1.01,
+        "bestIndustry": "tech",
+        "worstIndustry": "academia"
+      },
+      "industries": {
+        "tech": {
+          "reach": 1.3,
+          "management": 0.63,
+          "expert": 1.3,
+          "ruin": 0,
+          "peak": 6,
+          "fire": 1,
+          "fireAge": 46,
+          "burnouts": 0
+        },
+        "consulting": {
+          "reach": 1.1,
+          "management": 0.73,
+          "expert": 1.1,
+          "ruin": 0,
+          "peak": 6,
+          "fire": 1,
+          "fireAge": 47.5,
+          "burnouts": 0
+        },
+        "privateEquity": {
+          "reach": 0.93,
+          "management": 0.63,
           "expert": 0.93,
           "ruin": 0,
           "peak": 6,
@@ -413,193 +353,253 @@ export const SIM_RESULTS = {
           "burnouts": 0
         },
         "academia": {
-          "reach": 1.27,
-          "management": 1.27,
-          "expert": 0.8,
+          "reach": 0.7,
+          "management": 0.63,
+          "expert": 0.7,
           "ruin": 0,
           "peak": 6,
-          "fire": 1,
+          "fire": 0.83,
           "fireAge": 51.25,
           "burnouts": 0
         }
       }
     },
-    "eve": {
-      "index": 0.74,
-      "rating": 4,
+    "adam": {
+      "index": 0.17,
+      "rating": 1,
       "parts": {
-        "climb": 0.98,
-        "peak": 0.86,
+        "climb": 0,
+        "peak": 0.07,
         "freedom": 1,
-        "strain": 0.42,
-        "ruin": 0.17
+        "strain": 0.03,
+        "ruin": 0
       },
       "fit": {
         "track": "hybrid",
-        "management": 0.01,
-        "expert": 0.03,
-        "bestIndustry": "academia",
-        "worstIndustry": "consulting"
+        "management": 1.67,
+        "expert": 1.27,
+        "bestIndustry": "consulting",
+        "worstIndustry": "academia"
       },
       "industries": {
         "tech": {
-          "reach": 0,
-          "management": 0,
-          "expert": 0,
+          "reach": 1.77,
+          "management": 1.77,
+          "expert": 1.23,
           "ruin": 0,
-          "peak": 4,
+          "peak": 7,
           "fire": 1,
-          "fireAge": 49.5,
+          "fireAge": 46.25,
           "burnouts": 0
         },
         "consulting": {
-          "reach": 0,
-          "management": 0,
-          "expert": 0,
-          "ruin": 0.2,
-          "peak": 3,
-          "fire": 0.97,
-          "fireAge": 52,
-          "burnouts": 0
-        },
-        "privateEquity": {
-          "reach": 0,
-          "management": 0,
-          "expert": 0,
+          "reach": 1.9,
+          "management": 1.9,
+          "expert": 1.7,
           "ruin": 0,
-          "peak": 4,
+          "peak": 7,
           "fire": 1,
           "fireAge": 47,
           "burnouts": 0
         },
-        "academia": {
-          "reach": 0.1,
-          "management": 0.1,
-          "expert": 0.17,
-          "ruin": 0,
-          "peak": 5,
-          "fire": 0.77,
-          "fireAge": 54.25,
-          "burnouts": 0
-        }
-      }
-    },
-    "chaitravi": {
-      "index": 0.38,
-      "rating": 2,
-      "parts": {
-        "climb": 0.35,
-        "peak": 0.36,
-        "freedom": 1,
-        "strain": 0.25,
-        "ruin": 0.06
-      },
-      "fit": {
-        "track": "management",
-        "management": 0.78,
-        "expert": 0.04,
-        "bestIndustry": "privateEquity",
-        "worstIndustry": "consulting"
-      },
-      "industries": {
-        "tech": {
-          "reach": 0.97,
-          "management": 0.97,
-          "expert": 0,
-          "ruin": 0,
-          "peak": 6,
-          "fire": 1,
-          "fireAge": 50.5,
-          "burnouts": 0.13
-        },
-        "consulting": {
-          "reach": 0.4,
-          "management": 0.4,
-          "expert": 0.1,
-          "ruin": 0,
-          "peak": 5,
-          "fire": 1,
-          "fireAge": 49.25,
-          "burnouts": 0
-        },
         "privateEquity": {
-          "reach": 1.13,
-          "management": 1.13,
-          "expert": 0.07,
+          "reach": 1.73,
+          "management": 1.73,
+          "expert": 1.37,
           "ruin": 0,
-          "peak": 6,
+          "peak": 7,
           "fire": 1,
-          "fireAge": 48.5,
+          "fireAge": 50,
           "burnouts": 0
         },
         "academia": {
-          "reach": 0.6,
-          "management": 0.6,
-          "expert": 0,
-          "ruin": 0.07,
+          "reach": 1.27,
+          "management": 1.27,
+          "expert": 0.77,
+          "ruin": 0,
           "peak": 6,
-          "fire": 0.67,
-          "fireAge": 55.5,
+          "fire": 0.97,
+          "fireAge": 49.5,
           "burnouts": 0
         }
       }
     },
-    "bill": {
-      "index": 0.9,
-      "rating": 5,
+    "eve": {
+      "index": 0.76,
+      "rating": 4,
       "parts": {
-        "climb": 0.82,
-        "peak": 0.93,
-        "freedom": 1,
-        "strain": 1,
-        "ruin": 0.89
+        "climb": 0.95,
+        "peak": 0.79,
+        "freedom": 0.88,
+        "strain": 0.72,
+        "ruin": 0.33
       },
       "fit": {
-        "track": "expert",
-        "management": 0.06,
-        "expert": 0.15,
+        "track": "hybrid",
+        "management": 0.04,
+        "expert": 0.05,
         "bestIndustry": "academia",
         "worstIndustry": "privateEquity"
       },
       "industries": {
         "tech": {
-          "reach": 0.33,
-          "management": 0.17,
-          "expert": 0.33,
+          "reach": 0,
+          "management": 0,
+          "expert": 0,
+          "ruin": 0,
+          "peak": 4,
+          "fire": 1,
+          "fireAge": 42.75,
+          "burnouts": 0
+        },
+        "consulting": {
+          "reach": 0,
+          "management": 0,
+          "expert": 0,
+          "ruin": 0.4,
+          "peak": 4,
+          "fire": 1,
+          "fireAge": 44.75,
+          "burnouts": 0
+        },
+        "privateEquity": {
+          "reach": 0,
+          "management": 0,
+          "expert": 0,
+          "ruin": 0,
+          "peak": 4,
+          "fire": 1,
+          "fireAge": 44,
+          "burnouts": 0
+        },
+        "academia": {
+          "reach": 0.23,
+          "management": 0.23,
+          "expert": 0.27,
           "ruin": 0,
           "peak": 5,
+          "fire": 0.83,
+          "fireAge": 53,
+          "burnouts": 0
+        }
+      }
+    },
+    "chaitravi": {
+      "index": 0.32,
+      "rating": 2,
+      "parts": {
+        "climb": 0.12,
+        "peak": 0.29,
+        "freedom": 1,
+        "strain": 0.33,
+        "ruin": 0.19
+      },
+      "fit": {
+        "track": "management",
+        "management": 1.06,
+        "expert": 0.03,
+        "bestIndustry": "privateEquity",
+        "worstIndustry": "academia"
+      },
+      "industries": {
+        "tech": {
+          "reach": 1.17,
+          "management": 1.17,
+          "expert": 0,
+          "ruin": 0,
+          "peak": 6,
           "fire": 1,
-          "fireAge": 46.25,
+          "fireAge": 50,
+          "burnouts": 0.1
+        },
+        "consulting": {
+          "reach": 0.97,
+          "management": 0.97,
+          "expert": 0.13,
+          "ruin": 0.13,
+          "peak": 6,
+          "fire": 1,
+          "fireAge": 47.75,
+          "burnouts": 0
+        },
+        "privateEquity": {
+          "reach": 1.43,
+          "management": 1.43,
+          "expert": 0,
+          "ruin": 0,
+          "peak": 7,
+          "fire": 1,
+          "fireAge": 50.25,
+          "burnouts": 0
+        },
+        "academia": {
+          "reach": 0.67,
+          "management": 0.67,
+          "expert": 0,
+          "ruin": 0.1,
+          "peak": 5,
+          "fire": 0.87,
+          "fireAge": 54.25,
+          "burnouts": 0
+        }
+      }
+    },
+    "bill": {
+      "index": 0.88,
+      "rating": 5,
+      "parts": {
+        "climb": 0.79,
+        "peak": 0.86,
+        "freedom": 0.88,
+        "strain": 1,
+        "ruin": 1
+      },
+      "fit": {
+        "track": "expert",
+        "management": 0.1,
+        "expert": 0.23,
+        "bestIndustry": "tech",
+        "worstIndustry": "privateEquity"
+      },
+      "industries": {
+        "tech": {
+          "reach": 0.73,
+          "management": 0.2,
+          "expert": 0.73,
+          "ruin": 0,
+          "peak": 6,
+          "fire": 1,
+          "fireAge": 46.75,
           "burnouts": 0.03
         },
         "consulting": {
           "reach": 0,
           "management": 0,
           "expert": 0,
-          "ruin": 0.8,
+          "ruin": 0.93,
           "peak": 3,
-          "fire": 0.7,
-          "fireAge": 53,
-          "burnouts": 4.27
+          "fire": 0.63,
+          "fireAge": 43.75,
+          "burnouts": 2.93
         },
         "privateEquity": {
           "reach": 0,
           "management": 0,
           "expert": 0,
-          "ruin": 0.27,
+          "ruin": 0.33,
           "peak": 2,
-          "fire": 0.63,
-          "fireAge": 50,
-          "burnouts": 8.77
+          "fire": 0.8,
+          "fireAge": 42.75,
+          "burnouts": 6.87
         },
         "academia": {
-          "reach": 0.53,
-          "management": 0.33,
-          "expert": 0.53,
+          "reach": 0.27,
+          "management": 0.27,
+          "expert": 0.27,
           "ruin": 0,
           "peak": 5,
-          "fire": 0.87,
-          "fireAge": 52.25,
+          "fire": 0.9,
+          "fireAge": 51.25,
           "burnouts": 0
         }
       }

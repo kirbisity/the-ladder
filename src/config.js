@@ -8,7 +8,9 @@ export const TIME = {
   startAge: 22,
   // 40 years, 160 quarters: a whole career in roughly half an hour of play
   // at the default speed.
-  retirementAge: 62,
+  retirementAge: 60,
+  // From this age the player is offered an ordinary retirement, once; saying no carries on to retirementAge.
+  earlyRetirementAge: 50,
 };
 
 export const BANDWIDTH = {
@@ -281,6 +283,52 @@ export const OFFICE_LIFE = {
   meetingReadiness: 1.5, meetingRelationship: 3,
   loungeHealth: 2, loungeMotivation: 2.5,
   chatRelationship: 4, intelReadiness: 0.5, adviceSkill: 0.5, pitchPolitical: 0.4, friendSocial: 4,
+};
+
+// The calendar and the Super Intelligence Revolution (see era.js). A career
+// starts the year the player turns startAge; the birth year is chosen on the
+// character screen. Pay is in the money of the start year: later starters
+// earn a little more, and meet the revolution sooner.
+export const ERA = {
+  birthYears: [1980, 2010],
+  defaultBirthYear: 2004,
+  // Starting pay scales by this much per year of birth after 1995 (1980 is about 0.88, 2010 about 1.12).
+  payPerYear: 0.008,
+  payReferenceYear: 1995,
+  // When the revolution reaches each field; a career that starts after it meets it two quarters in.
+  sirYear: { tech: 2030, consulting: 2032, privateEquity: 2034, academia: 2038 },
+  lateStarterDelayQuarters: 2,
+  // Every this many years after it, the pressure steps up a wave.
+  waveYears: 5,
+  maxWave: 5,
+  // A round of layoffs every year after the revolution: this share of each level, more at the bottom.
+  layoffBase: 0.07,
+  layoffPerWave: 0.04,
+  // Lower levels are hit harder: the share is multiplied by (1 + lowLevelBias × levels below the middle).
+  lowLevelBias: 0.35,
+  middleLevel: 4,
+  // The bottom rating comes sooner: the PIP bar rises this much per wave at levels below the middle, a third of it above.
+  pipBarPerWave: 0.05,
+  // Searching for a job below the middle level gets this much harder per wave (a third of it above).
+  juniorHiringPerWave: 0.14,
+  // The ordinary layoff card comes this much more often per wave.
+  layoffCardPerWave: 0.6,
+  // Share of a quarter's work card that is one of the revolution's own (demos, workshops, pilots).
+  eraCardShare: 0.6,
+  // The quarter of the revolution itself: AI stocks soar.
+  savingsJump: 0.12,
+};
+
+// Working the weekend: more output than the weekday ceiling allows, at a steep
+// price in health and mood. Christopher's resistances make it bearable.
+export const WEEKEND = {
+  outputBoost: 1.3,
+  // The hours that tire are multiplied by this (seven days' work over five), and a flat cost sits on top.
+  strainFactor: 1.4,
+  healthCost: 6,
+  motivationCost: 8,
+  familyCost: 8,
+  socialShare: 0.5,
 };
 
 export const PERFORMANCE = {
@@ -807,7 +855,7 @@ export const CHARACTERS = [
     id: 'simon',
     gender: 'male',
     difficulty: 3,
-    difficultyIndex: 0.45,
+    difficultyIndex: 0.48,
     name: 'Simon C',
     mbti: 'INTP',
     iq: 145,
@@ -825,14 +873,14 @@ export const CHARACTERS = [
     id: 'jennifer',
     gender: 'female',
     difficulty: 3,
-    difficultyIndex: 0.44,
+    difficultyIndex: 0.43,
     name: 'Jennifer B',
     mbti: 'ENFP',
     iq: 140,
     pol: 110,
     archetype: 'Charismatic Catalyst',
     blurb: 'Builds alliances fast and keeps going on long days, but long stretches of solo desk work sap her motivation. Climbs through people, if she keeps her spark.',
-    traits: { relationshipBonus: 1.5, politicsBonus: 1.2, deskWorkDrain: 50, deskWorkLimit: 0.45, strainResistance: 0.6, exhaustionResistance: 0.65, industryFit: { privateEquity: 1.25, consulting: 1, tech: 0.95, academia: 0.85 } },
+    traits: { relationshipBonus: 1.5, politicsBonus: 1.1, deskWorkDrain: 50, deskWorkLimit: 0.45, strainResistance: 0.6, exhaustionResistance: 0.65, industryFit: { privateEquity: 1.25, consulting: 1, tech: 0.95, academia: 0.85 } },
     look: {
       faceStyle: 'glossy',
       skin: '#f4d6b8', hair: '#0e0e0e', suit: '#4a3260', shirt: '#f3e8ee',
@@ -843,7 +891,7 @@ export const CHARACTERS = [
     id: 'chloe',
     gender: 'female',
     difficulty: 3,
-    difficultyIndex: 0.53,
+    difficultyIndex: 0.5,
     name: 'Chloe C',
     mbti: 'ENTP',
     iq: 150,
@@ -864,7 +912,7 @@ export const CHARACTERS = [
     id: 'joseph',
     gender: 'male',
     difficulty: 4,
-    difficultyIndex: 0.69,
+    difficultyIndex: 0.75,
     name: 'Joseph J',
     mbti: 'ISTJ',
     iq: 130,
@@ -882,7 +930,7 @@ export const CHARACTERS = [
     id: 'richard',
     gender: 'male',
     difficulty: 3,
-    difficultyIndex: 0.49,
+    difficultyIndex: 0.48,
     name: 'Richard K',
     mbti: 'ENFJ',
     iq: 130,
@@ -900,7 +948,7 @@ export const CHARACTERS = [
     id: 'christian',
     gender: 'male',
     difficulty: 2,
-    difficultyIndex: 0.34,
+    difficultyIndex: 0.27,
     name: 'Christopher C',
     mbti: 'INTJ',
     iq: 150,
@@ -918,7 +966,7 @@ export const CHARACTERS = [
     id: 'adam',
     gender: 'male',
     difficulty: 1,
-    difficultyIndex: 0.18,
+    difficultyIndex: 0.17,
     name: 'Adam W',
     mbti: 'ENTJ',
     iq: 145,
@@ -936,14 +984,14 @@ export const CHARACTERS = [
     id: 'eve',
     gender: 'female',
     difficulty: 4,
-    difficultyIndex: 0.74,
+    difficultyIndex: 0.76,
     name: 'Eve M',
     mbti: 'ISFJ',
     iq: 125,
     pol: 100,
     archetype: 'The Steady Hand',
     blurb: 'Much like an average Joe, calm when things go wrong, but long hours wear her down quickly. A good career at a sane pace.',
-    traits: { steadiness: 0.4, strainResistance: 1.35, exhaustionResistance: 1.35, industryFit: { academia: 1.1 } },
+    traits: { steadiness: 0.45, strainResistance: 1.35, exhaustionResistance: 1.35, industryFit: { academia: 1.15, consulting: 1.05 } },
     look: {
       faceStyle: 'beans',
       skin: '#c99a76', hair: '#151515', suit: '#5a3f4e', shirt: '#fbf3f6',
@@ -954,7 +1002,7 @@ export const CHARACTERS = [
     id: 'chaitravi',
     gender: 'female',
     difficulty: 2,
-    difficultyIndex: 0.38,
+    difficultyIndex: 0.32,
     name: 'Chaitravi D',
     mbti: 'ESFJ',
     iq: 140,
@@ -972,7 +1020,7 @@ export const CHARACTERS = [
     id: 'bill',
     gender: 'male',
     difficulty: 5,
-    difficultyIndex: 0.9,
+    difficultyIndex: 0.88,
     name: 'Bill M',
     mbti: 'ISTP',
     iq: 145,

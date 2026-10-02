@@ -2,7 +2,8 @@
 // random source, the industry and character (kept by id) and queued events
 // (kept by id and rebuilt from the deck).
 
-import { INDUSTRIES, CHARACTERS, SOCIAL } from '../config.js';
+import { industryForEra } from './era.js';
+import { INDUSTRIES, CHARACTERS, SOCIAL, ERA } from '../config.js';
 import { createRandom } from './random.js';
 import { reserveAgentIds } from './agent.js';
 import { eventById, offerEvent } from './events.js';
@@ -58,7 +59,8 @@ export function deserializeGame(text) {
   if (!plain || plain.version !== SAVE_VERSION) return null;
   const random = createRandom(plain.seed);
   random.setState(plain.randomState);
-  const industry = INDUSTRIES[plain.industryId] ?? INDUSTRIES.tech;
+  // Salaries are scaled to the birth year, as when the career began (see era.js).
+  const industry = industryForEra(INDUSTRIES[plain.industryId] ?? INDUSTRIES.tech, plain.birthYear ?? ERA.defaultBirthYear);
   const character = CHARACTERS.find((entry) => entry.id === plain.characterId) ?? CHARACTERS[0];
   const game = {
     ...plain,

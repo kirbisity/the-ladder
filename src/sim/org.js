@@ -3,6 +3,7 @@
 // player. The rest of the company is summarised, not simulated.
 
 import { TIME, PERFORMANCE, READINESS, ORG, PEERS, SKILL, RELATIONSHIP, PROJECTS, MOTIVATION, MONEY, TRACKS, COMPANY_TIERS, TIER_MIX, INDUSTRY_STATS, BANDWIDTH } from '../config.js';
+import { sirPipFactor } from './era.js';
 import {
   createAgent, freshQuarter, clamp, clampVitals, onBurnoutLeave, payInBand, effectiveHours, strainOf, projectSpec, projectsOpenTo, stagnationYears,
   defaultTrack, managementMix,
@@ -311,7 +312,7 @@ export function rateLevels(org, levelCount) {
       if (fromTop <= PERFORMANCE.greatlyExceedsTop) rating = 'greatlyExceeds';
       else if (fromTop <= PERFORMANCE.exceedsTop) rating = 'exceeds';
       else if (fromTop <= PERFORMANCE.meetAllTop) rating = 'meetAll';
-      else if (fromTop > 1 - PERFORMANCE.meetSomeBottom && agent.quarter.performance < pipBar * median) {
+      else if (fromTop > 1 - PERFORMANCE.meetSomeBottom && agent.quarter.performance < pipBar * sirPipFactor(org.sirWave ?? 0, level) * median) {
         rating = 'meetSome';
       }
       agent.quarter.rating = rating;
@@ -620,7 +621,8 @@ export function runLayoffs(org, industry, share, random) {
     const median = salaries[Math.floor(salaries.length / 2)];
     const scored = pool.map((agent) => ({ agent, score: layoffScore(agent, median, random, industry) }));
     scored.sort((a, b) => b.score - a.score);
-    const count = Math.floor(pool.length * share + random.next());
+    const levelShare = typeof share === 'function' ? share(level) : share;
+    const count = Math.min(pool.length, Math.floor(pool.length * levelShare + random.next()));
     for (let index = 0; index < count; index += 1) {
       scored[index].agent.quarter.terminated = 'laid off';
       cut.push(scored[index].agent);

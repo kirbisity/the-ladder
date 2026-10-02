@@ -4,7 +4,7 @@
 
 import {
   BANDWIDTH, HEALTH, MOTIVATION, PERFORMANCE, SKILL, READINESS, ORG, JOBS,
-  PROJECTS, INDUSTRY_STATS, TIME, MONEY, FMLA, TRACKS, AGING,
+  PROJECTS, INDUSTRY_STATS, TIME, MONEY, FMLA, TRACKS, AGING, WEEKEND,
 } from '../config.js';
 
 export const CORE = 0;
@@ -169,10 +169,15 @@ export function effectiveHours(hours) {
   return Math.min(hours, standard) + BANDWIDTH.overtimeHourValue * Math.max(0, hours - standard);
 }
 
+/** The hours that tire: a week of weekends too is seven days of work in five days' worth of rest. */
+export function strainHours(plan) {
+  return plan.weekends ? plan.hours * WEEKEND.strainFactor : plan.hours;
+}
+
 /** Share of the way from a standard day to the longest one, 0..1. */
 export function strainOf(hours) {
   const standard = BANDWIDTH.standardHours;
-  return clamp((hours - standard) / (BANDWIDTH.maxHours - standard), 0, 1);
+  return clamp((hours - standard) / (BANDWIDTH.maxHours - standard), 0, 1.4);
 }
 
 /** BW_total from the design: hours × IQ × √health × motivation^0.3. */
@@ -181,6 +186,8 @@ export function totalBandwidth(agent) {
   const health = clamp(agent.health, 0, 100) / 100;
   const motivation = clamp(agent.motivation, 0, 100) / 100;
   let total = effectiveHours(agent.plan.hours) * iqFactor * Math.sqrt(health) * Math.pow(motivation, 0.3);
+  // Saturdays and Sundays too: more output than a weekday ceiling allows.
+  if (agent.plan.weekends) total *= WEEKEND.outputBoost;
   if (agent.burnout.active) total *= BANDWIDTH.burnoutSpeed;
   return total;
 }
@@ -229,7 +236,7 @@ export function healthTarget(agent, context, terms = null) {
   const plan = agent.plan;
   const traits = agent.traits;
   const sensitivity = context.ageSensitivity ?? 1;
-  const strain = strainOf(plan.hours);
+  const strain = strainOf(strainHours(plan));
   const resistance = traits.strainResistance ?? 1;
   const hoursCost = HEALTH.strainDamage * strain * strain * resistance;
   const ageHoursCost = hoursCost * (strainAgeFactor(agent, sensitivity) - 1);
@@ -248,7 +255,9 @@ export function healthTarget(agent, context, terms = null) {
   addTerm(terms, 'Out-of-work stress', -stress);
   const illness = context.illness ?? 0;
   addTerm(terms, 'Cancer treatment', -illness);
-  return HEALTH.baseTarget - hoursCost - ageHoursCost + rest - wear - networking - stress - travel - illness;
+  const weekends = plan.weekends ? WEEKEND.healthCost * resistance : 0; // on top of the extra strain
+  addTerm(terms, 'Working weekends', -weekends);
+  return HEALTH.baseTarget - hoursCost - ageHoursCost + rest - wear - networking - stress - travel - illness - weekends;
 }
 
 export function stagnationYears(agent) {
@@ -265,7 +274,7 @@ export function motivationTarget(agent, context, terms = null) {
   const shares = plan.shares;
   const traits = agent.traits;
   const sensitivity = context.ageSensitivity ?? 1;
-  const strain = strainOf(plan.hours);
+  const strain = strainOf(strainHours(plan));
   const exhaustion = MOTIVATION.exhaustionDrain * strain * strain * (traits.exhaustionResistance ?? 1);
   const ageExhaustion = exhaustion * (strainAgeFactor(agent, sensitivity) - 1);
   const fade = AGING.motivationFadePerYear * agedYears(agent, sensitivity);
@@ -291,6 +300,8 @@ export function motivationTarget(agent, context, terms = null) {
   addTerm(terms, 'Freedom in the job', autonomy);
   addTerm(terms, 'Last review', agent.moodFromRating);
   addTerm(terms, 'Recent events', context.moodModifier ?? 0);
+  const weekendDrain = plan.weekends ? WEEKEND.motivationCost * (traits.exhaustionResistance ?? 1) : 0;
+  addTerm(terms, 'Working weekends', -weekendDrain);
   const fit = (fieldFit(agent, context) - 1) * MOTIVATION.fieldFitWeight;
   addTerm(terms, 'Suited to this field', context.employed ? fit : 0);
   addTerm(terms, 'Burnout', -burnoutDrag);
@@ -300,7 +311,7 @@ export function motivationTarget(agent, context, terms = null) {
     addTerm(terms, term.label, term.value);
     lifeTotal += term.value;
   }
-  return lifeTotal + (context.employed ? fit : 0) + (traits.baseMood ?? 0) + MOTIVATION.baseTarget - exhaustion - ageExhaustion - fade + rest - stagnation - jobless - desk - networking
+  return lifeTotal - weekendDrain + (context.employed ? fit : 0) + (traits.baseMood ?? 0) + MOTIVATION.baseTarget - exhaustion - ageExhaustion - fade + rest - stagnation - jobless - desk - networking
     + autonomy + agent.moodFromRating + (context.moodModifier ?? 0) - burnoutDrag;
 }
 
@@ -322,7 +333,7 @@ export function onBurnoutLeave(agent) {
 }
 
 // What a day of leave looks like to the body: no work, all rest.
-const LEAVE_PLAN = { hours: 6, shares: [0, 0, 0, 1], openness: 0 };
+const LEAVE_PLAN = { hours: 6, shares: [0, 0, 0, 1], openness: 0, weekends: false };
 
 export function utilizationOf(plan) {
   return plan.shares[CORE] * plan.hours / BANDWIDTH.standardHours;

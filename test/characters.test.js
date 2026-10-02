@@ -17,7 +17,9 @@ test('Joseph, the average Joe, retires at a senior level with little drama', () 
   assert.ok(joseph.retired >= 0.9);
   assert.ok(joseph.senior >= 0.85);
   assert.ok(joseph.director <= 0.2, `director+ ${joseph.director}`);
-  assert.ok(joseph.lostJobs <= 2.5);
+  // Born in the default year, Joseph meets the Super Intelligence Revolution at 26, and its yearly layoffs fall on the
+  // levels he spends his career at: more lost jobs than before the AI era, but he still retires.
+  assert.ok(joseph.lostJobs <= 4);
   assert.ok(joseph.burnouts < 0.5);
 });
 

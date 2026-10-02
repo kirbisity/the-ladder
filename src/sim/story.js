@@ -64,7 +64,7 @@ export function careerSummary(game) {
   // Opening.
   const joined = first(journal, 'joined');
   paragraphs.push(`${player.name}, ${game.character.mbti} and ${game.character.archetype.toLowerCase()}, `
-    + `${pick(game, 1, ['walked off the graduation stage', 'left university', 'threw the cap and kept walking'])} into ${industry.name.toLowerCase()}`
+    + `${pick(game, 1, ['walked off the graduation stage', 'left university', 'threw the cap and kept walking'])}${game.startYear ? ` in ${game.startYear}` : ''} into ${industry.name.toLowerCase()}`
     + `${joined ? `, starting as ${joined.title} at ${joined.company}` : ''}.`);
 
   // The climb.
@@ -169,6 +169,14 @@ export function careerSummary(game) {
   }
   if (life.length) paragraphs.push(`Outside the office, ${player.name.split(' ')[0]} ${life.join(', ')}.`);
 
+  // The revolution.
+  const sir = first(journal, 'sir');
+  if (sir) {
+    const aiLayoffs = journal.filter((entry) => entry.kind === 'lostJob' && entry.quarter >= sir.quarter).length;
+    paragraphs.push(`In ${sir.year}, at ${Math.floor(sir.age)}, the Super Intelligence Revolution reached ${industry.name.toLowerCase()}. `
+      + (aiLayoffs ? `The agents took ${plural(aiLayoffs, 'job')} from under ${player.name.split(' ')[0]} in the years after.` : `${player.name.split(' ')[0]} kept a seat through every round of cuts that followed.`));
+  }
+
   // Industry colour.
   const state = player.industry;
   if (industry.subStat === 'citations' && state.papers) {
@@ -198,7 +206,7 @@ export function careerSummary(game) {
   // The ending.
   const age = Math.floor(outcome?.age ?? player.age);
   paragraphs.push({
-    retired: pick(game, 6, [`At ${age}, the badge went back in a drawer for good.`, `Retirement came at ${age}, with a cake in the break room.`]),
+    retired: outcome?.early ? `At ${age}, offered the early package, ${player.name.split(' ')[0]} took it, and did not look back.` : pick(game, 6, [`At ${age}, the badge went back in a drawer for good.`, `Retirement came at ${age}, with a cake in the break room.`]),
     death: outcome?.cause === 'cancer' ? `It ended at ${age}, after a long fight with cancer, in a room with the people who mattered.` : `It ended at ${age}, in a hospital, the job still on the phone. The hours had been too long for too long.`,
     homeless: `It ended at ${age} with the savings gone and the apartment lost, the job search still running.`,
     breakdown: `It ended at ${age}: months of burnout with no rest, until there was nothing left to give, and ${player.name.split(' ')[0]} could not go on.`,

@@ -1135,7 +1135,15 @@ function renderCharacterPick() {
 
 // ── Boot ───────────────────────────────────────────────────────────────
 
+/** No pinch- or gesture-zoom on touch screens (iOS ignores the viewport's user-scalable, so stop its gesture events too). */
+function preventZoom() {
+  for (const type of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(type, (event) => event.preventDefault(), { passive: false });
+  document.addEventListener('touchmove', (event) => { if (event.touches.length > 1) event.preventDefault(); }, { passive: false });
+  document.addEventListener('dblclick', (event) => event.preventDefault());
+}
+
 function boot() {
+  preventZoom();
   office = createOffice($('#office'));
   // Click the floor: the character stands, walks over, and at a colleague, the pantry, the meeting room or the lounge
   // spends a moment that counts once a quarter.

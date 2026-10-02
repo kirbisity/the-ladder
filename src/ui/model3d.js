@@ -613,7 +613,8 @@ function pose(model, options, yawDefault) {
   applyPose(model, poseName, phase, posture);
   applyFace(model, expression, phase, time);
   // A three-quarter turn gives depth; from the back, a desk worker.
-  const yaw = view === 'back' ? Math.PI - 0.45 : poseName === 'lying' ? 0 : yawDefault;
+  // A caller can turn the figure to any heading (a walker faces where it goes).
+  const yaw = options.yaw !== undefined ? options.yaw : view === 'back' ? Math.PI - 0.45 : poseName === 'lying' ? 0 : yawDefault;
   model.root.angles[1] = yaw;
 }
 

@@ -93,3 +93,25 @@ test('each kind of visit does its own small thing', () => {
   const meeting = run('meeting');
   assert.ok(meeting.player.readiness > meeting.snapshot.readiness);
 });
+
+test('walking is smooth: paths become a few straight legs at any angle, and walkers curve and face their way', async () => {
+  const { smoothPath, stepWalker, clearLine } = await import('../src/ui/office-world.js');
+  const open = Array.from({ length: 12 }, () => Array.from({ length: 12 }, () => true));
+  const diagonal = findPath(open, { x: 1, y: 1 }, { x: 9, y: 6 });
+  const legs = smoothPath(open, diagonal);
+  assert.equal(legs.length, 2, 'open floor: one straight leg, at whatever angle');
+  const walled = open.map((row) => [...row]);
+  for (let y = 0; y < 9; y += 1) walled[y][5] = false;
+  const around = smoothPath(walled, findPath(walled, { x: 1, y: 1 }, { x: 9, y: 1 }));
+  assert.ok(around.length >= 3 && around.length < 10, 'round a wall: a few legs, not a staircase of cells');
+  for (let index = 1; index < around.length; index += 1) assert.ok(clearLine(walled, around[index - 1], around[index]), 'every leg stays on the floor');
+  const walker = { x: 1.5, y: 1.5, path: around.slice(1), heading: 0 };
+  const headings = new Set();
+  for (let frame = 0; frame < 600 && walker.path.length; frame += 1) {
+    stepWalker(walker, 1 / 60, 3.4, walled);
+    assert.ok(walled[Math.floor(walker.y)][Math.floor(walker.x)], 'never inside a wall');
+    headings.add(Math.round(walker.heading * 10));
+  }
+  assert.equal(walker.path.length, 0, 'it arrives');
+  assert.ok(headings.size > 6, 'the heading turns gradually, through many angles');
+});

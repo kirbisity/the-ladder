@@ -734,6 +734,23 @@ export const INDUSTRY_STATS = {
   },
 };
 
+// How the difficulty index (see tools/difficulty.js) is built and cut into
+// ratings. Re-run the tool after changing a character and copy the new
+// index and rating onto their card.
+export const DIFFICULTY = {
+  weights: { climb: 0.45, peak: 0.25, freedom: 0.2, strain: 0.1 },
+  // Director + VP reach at which the climb counts as easy (1 or more of every career).
+  easyReach: 1.2,
+  lowPeak: 3.5,
+  peakSpan: 3.5,
+  earlyFire: 33,
+  fireSpan: 15,
+  strainSpan: 2,
+  // Index cut-offs between ratings 1|2, 2|3, 3|4 and 4|5.
+  bands: [0.35, 0.5, 0.6, 0.75],
+  labels: { 1: 'Easy', 2: 'Fair', 3: 'Tough', 4: 'Hard', 5: 'Brutal' },
+};
+
 // The characters. Everyone in the game goes by first name and last
 // initial. They differ only in these numbers; every mechanic is shared.
 //   iq, pol              — the design's two stats
@@ -746,7 +763,10 @@ export const INDUSTRY_STATS = {
 //   noveltyLift          — multiplier on the lift from landing a high-impact project
 //   coreBonus, politicsBonus, relationshipBonus, networkingDrain,
 //   networkingHealthDrain, deskWorkDrain/Limit, moonshot*, rigidManagerClash
-//   difficulty           — 1 to 3: how hard the climb is on average, set from the
+//   difficulty           — 1 (easiest) to 5 (hardest) and difficultyIndex (0 to 1): from the
+//                           simulation in tools/difficulty.js, which folds how rarely they reach
+//                           Director/VP, how high they peak, how late they could retire and how
+//                           much strain they take. Older note, the first measure: set from the
 //                           outcome report's Director-or-higher rates across all
 //                           industries (1 above ~55%, 2 around 35-45%, 3 under 10%)
 //   gender               — 'female' or 'male': a few event cards speak to one or the other
@@ -772,10 +792,11 @@ export const CHARACTERS = [
     id: 'simon',
     gender: 'male',
     difficulty: 2,
+    difficultyIndex: 0.44,
     name: 'Simon C',
     mbti: 'INTJ',
     iq: 145,
-    pol: 68,
+    pol: 100,
     archetype: 'Systems Thinker',
     blurb: 'Brilliant at solitary technical work and takes long hours well, but every hour of networking costs him health and mood. Climbs on output, if he can stand the politics up top.',
     traits: { coreBonus: 1.15, networkingDrain: 45, networkingHealthDrain: 10, strainResistance: 0.6, exhaustionResistance: 0.65 },
@@ -788,7 +809,8 @@ export const CHARACTERS = [
   {
     id: 'jennifer',
     gender: 'female',
-    difficulty: 2,
+    difficulty: 3,
+    difficultyIndex: 0.55,
     name: 'Jennifer B',
     mbti: 'ENFP',
     iq: 140,
@@ -805,11 +827,12 @@ export const CHARACTERS = [
   {
     id: 'chloe',
     gender: 'female',
-    difficulty: 2,
+    difficulty: 4,
+    difficultyIndex: 0.61,
     name: 'Chloe C',
     mbti: 'ENTP',
     iq: 150,
-    pol: 95,
+    pol: 90,
     archetype: 'Disruptive Innovator',
     blurb: 'Huge capability, but she needs freedom and fun: long hours and rigid cultures drain her fast. Thrives in academia; corporate works if she guards her happiness.',
     traits: {
@@ -825,17 +848,18 @@ export const CHARACTERS = [
   {
     id: 'joseph',
     gender: 'male',
-    difficulty: 3,
+    difficulty: 5,
+    difficultyIndex: 0.85,
     name: 'Joseph J',
     mbti: 'ISTJ',
     iq: 130,
-    pol: 105,
+    pol: 95,
     archetype: 'The Average Joe',
     blurb: 'No special talents and no special weaknesses, but an even temper: setbacks sting him less than most. A steady, drama-free career is his to lose.',
     traits: { steadiness: 0.35 },
     look: {
       faceStyle: 'dots',
-      skin: '#e2b893', hair: '#3a2a1e', suit: '#3b3b3b', shirt: '#dfe7f0',
+      skin: '#e2b893', hair: '#0e0e0e', suit: '#3b3b3b', shirt: '#dfe7f0',
       face: 'square', hairStyle: 'cleanShort', brows: 'straight', eyes: 'focused', nose: 'bridge', mouth: 'composed', glasses: 'aviator', stubble: true,
     },
   },
@@ -843,6 +867,7 @@ export const CHARACTERS = [
     id: 'richard',
     gender: 'male',
     difficulty: 2,
+    difficultyIndex: 0.47,
     name: 'Richard K',
     mbti: 'ENFJ',
     iq: 130,
@@ -852,24 +877,25 @@ export const CHARACTERS = [
     traits: { strainResistance: 0.6, exhaustionResistance: 0.65, politicsBonus: 1.15, eventSavvy: 1.35, steadiness: 0.25 },
     look: {
       faceStyle: 'anime',
-      skin: '#e8c4a0', hair: '#6b4a2e', suit: '#1f3550', shirt: '#ffffff',
+      skin: '#e8c4a0', hair: '#1b1512', suit: '#1f3550', shirt: '#ffffff',
       face: 'square', hairStyle: 'sideSwept', brows: 'straight', eyes: 'focused', nose: 'bridge', mouth: 'smileTeeth',
     },
   },
   {
     id: 'christian',
     gender: 'male',
-    difficulty: 1,
+    difficulty: 2,
+    difficultyIndex: 0.42,
     name: 'Christian W',
     mbti: 'INTP',
     iq: 150,
-    pol: 70,
+    pol: 80,
     archetype: 'The Machine',
     blurb: 'Can work brutal hours for years without burning out, and out-produces everyone. But output is not leadership: management doors open for him no faster than for anyone.',
     traits: { strainResistance: 0.3, exhaustionResistance: 0.3, coreBonus: 1.1, leadership: 0.6 },
     look: {
-      faceStyle: 'anime',
-      skin: '#d9a77c', hair: '#2a1d14', suit: '#2e3a2e', shirt: '#e6eef8',
+      faceStyle: 'dots',
+      skin: '#f4d1b8', hair: '#2a1d14', suit: '#2e3a2e', shirt: '#e6eef8',
       face: 'narrow', build: 'thin', hairStyle: 'long', brows: 'thickCurved', eyes: 'focused', nose: 'soft', mouth: 'composed',
     },
   },
@@ -877,7 +903,8 @@ export const CHARACTERS = [
     id: 'adam',
     gender: 'male',
     difficulty: 1,
-    name: 'Adam R',
+    difficultyIndex: 0.22,
+    name: 'Adam W',
     mbti: 'ENTJ',
     iq: 145,
     pol: 145,
@@ -886,14 +913,15 @@ export const CHARACTERS = [
     traits: { leadership: 1.3, politicsBonus: 1.15, relationshipBonus: 1.25, eventSavvy: 1.2 },
     look: {
       faceStyle: 'sleepy',
-      skin: '#c99a76', hair: '#151515', suit: '#202a44', shirt: '#ffffff',
+      skin: '#f2d1b3', hair: '#7a4a2a', suit: '#202a44', shirt: '#ffffff',
       face: 'structured', hairStyle: 'cleanShort', brows: 'thickCurved', eyes: 'large', nose: 'bridge', mouth: 'gentle',
     },
   },
   {
     id: 'eve',
     gender: 'female',
-    difficulty: 3,
+    difficulty: 5,
+    difficultyIndex: 0.92,
     name: 'Eve M',
     mbti: 'ISFJ',
     iq: 125,
@@ -903,7 +931,7 @@ export const CHARACTERS = [
     traits: { steadiness: 0.3, strainResistance: 1.35, exhaustionResistance: 1.35 },
     look: {
       faceStyle: 'beans',
-      skin: '#f2d1b3', hair: '#7a4a2a', suit: '#5a3f4e', shirt: '#fbf3f6',
+      skin: '#c99a76', hair: '#151515', suit: '#5a3f4e', shirt: '#fbf3f6',
       face: 'soft', hairStyle: 'long', brows: 'soft', eyes: 'innerDouble', nose: 'delicate', mouth: 'gentle',
     },
   },

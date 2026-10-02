@@ -7,7 +7,7 @@ import { employedAgents, agentsAtLevel, TEAM_COUNT } from '../sim/org.js';
 import { titleOf, formatMoney, netWorth, managerOf, teamHappiness, quarterlyExpenses, dryPowder, fmlaStatus, holidayStatus, employerIndustry, fireNumber, fireProgress, vitalsBreakdown } from '../sim/game.js';
 import { careerSummary } from '../sim/story.js';
 import { drawPerson } from './figures.js';
-import { PROJECTS, READINESS, INDUSTRY_STATS, ORG, TIME, MOTIVATION, RELATIONSHIP, CHARACTERS, INDUSTRIES, HOLIDAY, COMPANY_TIERS, MONEY, TIER_MIX, FACE_STYLES } from '../config.js';
+import { PROJECTS, READINESS, INDUSTRY_STATS, ORG, TIME, MOTIVATION, RELATIONSHIP, CHARACTERS, INDUSTRIES, HOLIDAY, COMPANY_TIERS, MONEY, TIER_MIX, FACE_STYLES, DIFFICULTY } from '../config.js';
 
 export function escapeHtml(text) {
   return String(text).replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
@@ -728,22 +728,28 @@ export function gameOverPanel(game) {
       <button class="button" data-action="same-again">Same person again</button><button class="button" data-action="new-career">New career</button></div>`;
 }
 
-const DIFFICULTY_LABELS = { 1: 'Easier climb', 2: 'Moderate climb', 3: 'Hard climb' };
 const DIFFICULTY_NOTES = {
-  1: 'In our simulations this person reaches Director or higher in more than half of careers.',
-  2: 'Reaches Director or higher in a good share of careers, if they play to their strengths and watch their health.',
-  3: 'Expect a good, steady career at a senior level; the top chairs are a long shot.',
+  1: 'In our simulations this person reaches Director or higher in most careers, and often VP.',
+  2: 'Reaches Director or higher in about half of careers, if they play to their strengths and watch their health.',
+  3: 'Reaches Director in a good share of careers, but the VP chairs are a long shot and the strain shows.',
+  4: 'A real fight for every promotion: Director is possible, rarely more, and it takes careful play.',
+  5: 'Expect a good, steady career at a senior level; the top chairs are a long shot, and the strain is real.',
 };
 
-/** Three pips and a word: how hard this character's climb is on average. */
+/** Five dots and a word: how hard this character\'s climb is, from simulation (1 easy to 5 brutal). */
 export function difficultyBadge(level) {
-  const pips = [1, 2, 3].map((pip) => `<i class="${pip <= level ? 'on' : ''}"></i>`).join('');
-  return `<span class="difficulty d${level}" title="${escapeHtml(DIFFICULTY_NOTES[level])}"><span class="pips">${pips}</span>${DIFFICULTY_LABELS[level]}</span>`;
+  const pips = [1, 2, 3, 4, 5].map((pip) => `<i class="${pip <= level ? 'on' : ''}"></i>`).join('');
+  return `<span class="difficulty d${level}" title="${escapeHtml(DIFFICULTY_NOTES[level])}"><span class="pips">${pips}</span>${DIFFICULTY.labels[level]}</span>`;
+}
+
+/** The roster, easiest climb first. */
+export function charactersByDifficulty() {
+  return [...CHARACTERS].sort((a, b) => (a.difficultyIndex ?? a.difficulty / 5) - (b.difficultyIndex ?? b.difficulty / 5));
 }
 
 /** Compact cards for the roster; clicking one opens that character's stats page. */
 export function characterCards() {
-  return CHARACTERS.map((character) => `<button class="pick-card character" data-character="${character.id}">
+  return charactersByDifficulty().map((character) => `<button class="pick-card character" data-character="${character.id}">
     ${portrait(character.look, 64)}
     <h3>${escapeHtml(character.name)}</h3>
     <div class="tag-row"><span class="tag blue">${character.mbti}</span><span class="tag">IQ ${character.iq}</span><span class="tag">Pol ${character.pol}</span></div>
@@ -767,6 +773,49 @@ function statRow(label, ratio, detail = '') {
     <div class="stat-bar"><div style="width:${width}%"></div><i style="left:${1 / 2.5 * 100}%"></i></div>${detail ? `<small>${detail}</small>` : ''}</div>`;
 }
 
+// Intelligence and political skill, drawn on a wide scale so the differences between the cast are
+// visible: the bar runs from an ordinary person to the far end of the cast, and the ticks mark the
+// average person and the typical colleague at work.
+const WIDE_SCALES = {
+  iq: { low: 100, high: 155, marks: [[100, 'average person'], [130, 'typical colleague']] },
+  pol: { low: 50, high: 150, marks: [[100, 'typical colleague']] },
+};
+
+function iqWord(iq) {
+  if (iq >= 148) return 'exceptional';
+  if (iq >= 140) return 'far above average';
+  if (iq >= 130) return 'well above average';
+  return 'above average';
+}
+
+function polWord(pol) {
+  if (pol >= 135) return 'exceptional';
+  if (pol >= 115) return 'far above average';
+  if (pol >= 100) return 'above average';
+  if (pol >= 85) return 'a little below a typical colleague';
+  return 'well below a typical colleague';
+}
+
+/** Share of ordinary people at or above this IQ, from a normal curve of mean 100 and spread 15. */
+function iqTopShare(iq) {
+  const z = (iq - 100) / 15;
+  const t = 1 / (1 + 0.2316419 * Math.abs(z));
+  const tail = 0.3989423 * Math.exp(-z * z / 2) * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274))));
+  const share = z >= 0 ? tail : 1 - tail;
+  return share < 0.001 ? `1 in ${Math.round(1 / share).toLocaleString('en-US')}` : `top ${(share * 100).toFixed(share < 0.01 ? 1 : 0)}%`;
+}
+
+function wideRow(label, value, scale, word, detail) {
+  const width = Math.max(3, Math.min(100, (value - scale.low) / (scale.high - scale.low) * 100));
+  const ticks = scale.marks.map(([at, name]) => `<i style="left:${(at - scale.low) / (scale.high - scale.low) * 100}%" title="${name}"></i>`).join('');
+  const marks = scale.marks.map(([at, name]) => {
+    const left = (at - scale.low) / (scale.high - scale.low) * 100;
+    return `<span style="left:${left}%${left < 8 ? ';transform:none' : ''}">${name}</span>`;
+  }).join('');
+  return `<div class="stat-row wide"><div class="stat-top"><span>${label}</span><strong>${value} · ${word}</strong></div>
+    <div class="stat-bar wide"><div style="width:${width}%"></div>${ticks}</div><div class="stat-marks">${marks}</div><small>${detail}</small></div>`;
+}
+
 /** Everything about a character: stats, traits, quirks, difficulty, and the button that begins. */
 export function characterProfile(characterId, faceStyle = null) {
   const character = CHARACTERS.find((entry) => entry.id === characterId);
@@ -775,8 +824,8 @@ export function characterProfile(characterId, faceStyle = null) {
   const hoursBody = 1 / (t.strainResistance ?? 1);
   const hoursMood = 1 / (t.exhaustionResistance ?? 1);
   const rows = [
-    statRow('Intelligence', character.iq / 130, `IQ ${character.iq}: more output from every hour of focus.`),
-    statRow('Political skill', character.pol / 100, `${character.pol}: how far networking, calibration and gambles in events pay off.`),
+    wideRow('Intelligence', character.iq, WIDE_SCALES.iq, iqWord(character.iq), `${iqTopShare(character.iq)} of people: more output from every hour of focus.`),
+    wideRow('Political skill', character.pol, WIDE_SCALES.pol, polWord(character.pol), 'How far networking, calibration and gambles in events pay off.'),
     statRow('Body under long hours', hoursBody, 'How well health holds when the days get long.'),
     statRow('Mood under long hours', hoursMood, 'How well motivation holds when the days get long.'),
     statRow('Shrugs off bad news', 1 + (t.steadiness ?? 0) * 2, t.steadiness ? `Takes ${Math.round((1 - t.steadiness) * 100)}% of every blow to mood.` : 'Takes blows to mood in full.'),

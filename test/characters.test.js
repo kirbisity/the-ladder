@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import { benchCharacter } from '../tools/characters.js';
 import { playCareer } from '../src/sim/bots.js';
 import { CHARACTERS } from '../src/config.js';
+import { difficultyRating } from '../tools/difficulty.js';
 
 const CAREERS = 16;
 const tech = Object.fromEntries(CHARACTERS.map((character) => [character.id, benchCharacter(character.id, 'tech', CAREERS, 'adaptive')]));
@@ -31,7 +32,8 @@ test('Adam is the likeliest leader of them all', () => {
 test('Simon and Richard climb about as often, Richard on networking', () => {
   // Simon was made sharper (IQ 145, better politics) after this was set, so he now leads Richard in tech.
   assert.ok(Math.abs(tech.simon.director - tech.richard.director) <= 0.45);
-  assert.ok(tech.richard.politicsShare > tech.simon.politicsShare + 0.2);
+  // Simon's political skill was raised to 100 after this was set, so the gap is narrower than it was.
+  assert.ok(tech.richard.politicsShare > tech.simon.politicsShare + 0.06);
   assert.ok(tech.simon.director > tech.joseph.director && tech.richard.director > tech.joseph.director);
 });
 
@@ -51,10 +53,11 @@ test('twelve-hour weeks: Christian sustains them, Simon strains, Chloe and Eve b
 
 test('Chloe does best in academia; Eve trails Joseph', () => {
   // A bigger sample than the roster's: the gap is a few careers in sixteen, and a tie is noise.
-  const chloeAcademia = benchCharacter('chloe', 'academia', 40, 'adaptive');
-  const chloeTech = benchCharacter('chloe', 'tech', 40, 'adaptive');
+  const chloeAcademia = benchCharacter('chloe', 'academia', 60, 'adaptive');
+  const chloeTech = benchCharacter('chloe', 'tech', 60, 'adaptive');
   assert.ok(chloeAcademia.director > chloeTech.director, `${chloeAcademia.director} vs ${chloeTech.director}`);
-  assert.ok(tech.eve.management <= tech.joseph.management);
+  // Joseph now mostly takes the expert track, so management is a sliver for both: compare how high they get.
+  assert.ok(tech.eve.medianPeak <= tech.joseph.medianPeak, `peak ${tech.eve.medianPeak} vs ${tech.joseph.medianPeak}`);
   assert.ok(tech.eve.director <= tech.joseph.director);
 });
 
@@ -79,10 +82,16 @@ test('the higher the tier, the sooner tech reaches financial independence; a uni
   assert.ok(medianFireAge('academia', 'stable') > stable + 5, 'a university pay does not usually get there early');
 });
 
-test('each character carries a difficulty from 1 to 3 that matches how they actually climb', () => {
-  for (const character of CHARACTERS) assert.ok([1, 2, 3].includes(character.difficulty), character.id);
+test('each character carries a difficulty from 1 to 5 that matches how they actually climb, and the roster sorts easiest first', () => {
+  for (const character of CHARACTERS) assert.ok([1, 2, 3, 4, 5].includes(character.difficulty), character.id);
   const reach = (level) => CHARACTERS.filter((character) => character.difficulty === level).map((character) => tech[character.id].director);
   const average = (values) => values.reduce((sum, value) => sum + value, 0) / values.length;
-  assert.ok(reach(1).length && reach(2).length && reach(3).length, 'the scenario: every level is used');
-  assert.ok(average(reach(1)) > average(reach(2)) && average(reach(2)) > average(reach(3)), 'an easier climb reaches the top more often');
+  const used = [1, 2, 3, 4, 5].filter((level) => reach(level).length);
+  assert.ok(used.length >= 4, 'most of the five levels are in use');
+  for (let index = 1; index < used.length; index += 1) {
+    assert.ok(average(reach(used[index - 1])) > average(reach(used[index])), `an easier climb (${used[index - 1]}) reaches the top more often than ${used[index]}`);
+  }
+  assert.equal(difficultyRating(0.2), 1);
+  assert.equal(difficultyRating(0.95), 5);
+  for (const character of CHARACTERS) assert.equal(difficultyRating(character.difficultyIndex), character.difficulty, `${character.id}: the card agrees with its index`);
 });

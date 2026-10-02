@@ -7,6 +7,7 @@ import { employedAgents, agentsAtLevel, TEAM_COUNT } from '../sim/org.js';
 import { titleOf, formatMoney, netWorth, managerOf, teamHappiness, quarterlyExpenses, dryPowder, fmlaStatus, holidayStatus, employerIndustry, fireNumber, fireProgress, vitalsBreakdown } from '../sim/game.js';
 import { careerSummary, careerSoFar } from '../sim/story.js';
 import { SIM_RESULTS } from '../data/sim-results.js';
+import { ADJUSTABLE, MAX_STEPS, adjustmentPoints, applyAdjustments } from '../sim/adjust.js';
 import { drawPerson } from './figures.js';
 import { PROJECTS, READINESS, INDUSTRY_STATS, ORG, TIME, MOTIVATION, RELATIONSHIP, CHARACTERS, INDUSTRIES, HOLIDAY, COMPANY_TIERS, MONEY, TIER_MIX, FACE_STYLES, DIFFICULTY } from '../config.js';
 
@@ -751,7 +752,7 @@ export function gameOverPanel(game) {
     ${historyChart(game)}
     ${support}
     <div class="actions"><button class="button primary" data-story="0">Read your story: ${escapeHtml(verdict)}</button>
-      <button class="button" data-action="share-story">Save a shareable page</button>
+      <button class="button" data-action="share-story">Show my shareable page</button>
       <button class="button" data-action="same-again">Same person again</button><button class="button" data-action="new-career">New career</button></div>`;
 }
 
@@ -778,6 +779,9 @@ function bestFit(characterId) {
   return { track: TRACK_NAMES[result.fit.track], industry: INDUSTRIES[result.fit.bestIndustry]?.name ?? result.fit.bestIndustry, worst: INDUSTRIES[result.fit.worstIndustry]?.name ?? result.fit.worstIndustry };
 }
 
+/** The selection screens go by first name only; the surname initial is for the story. */
+const firstNameOf = (character) => character.name.split(' ')[0];
+
 /** The roster, easiest climb first. */
 export function charactersByDifficulty() {
   return [...CHARACTERS].sort((a, b) => (a.difficultyIndex ?? a.difficulty / 5) - (b.difficultyIndex ?? b.difficulty / 5));
@@ -787,7 +791,7 @@ export function charactersByDifficulty() {
 export function characterCards() {
   return charactersByDifficulty().map((character) => `<button class="pick-card character" data-character="${character.id}">
     ${portrait(character.look, 64)}
-    <h3>${escapeHtml(character.name)}</h3>
+    <h3>${escapeHtml(firstNameOf(character))}</h3>
     <div class="tag-row"><span class="tag blue">${character.mbti}</span><span class="tag">IQ ${character.iq}</span><span class="tag">Pol ${character.pol}</span>${bestFit(character.id) ? `<span class="tag good">${bestFit(character.id).track.replace(' ladder', '')}</span>` : ''}</div>
     <p class="archetype">${escapeHtml(character.archetype)}</p>
     ${difficultyBadge(character.difficulty)}
@@ -853,10 +857,13 @@ function wideRow(label, value, scale, word, detail) {
 }
 
 /** Everything about a character: stats, traits, quirks, difficulty, and the button that begins. */
-export function characterProfile(characterId, faceStyle = null) {
-  const character = CHARACTERS.find((entry) => entry.id === characterId);
-  if (!character) return '';
-  const t = character.traits;
+export function characterProfile(characterId, faceStyle = null, adjust = {}) {
+  const base = CHARACTERS.find((entry) => entry.id === characterId);
+  if (!base) return '';
+  // The numbers shown are the character's with the player's small adjustments applied.
+  const adjusted = applyAdjustments(base, adjust);
+  const character = { ...base, iq: adjusted.iq, pol: adjusted.pol };
+  const t = adjusted.traits;
   const hoursBody = 1 / (t.strainResistance ?? 1);
   const hoursMood = 1 / (t.exhaustionResistance ?? 1);
   const rows = [
@@ -883,13 +890,28 @@ export function characterProfile(characterId, faceStyle = null) {
   return `<div class="profile-head">
       ${portrait({ ...character.look, faceStyle: faceStyle ?? character.look.faceStyle }, 96)}
       <div class="profile-title"><div class="modal-kicker">${character.mbti} · ${escapeHtml(character.archetype)}</div>
-        <h2>${escapeHtml(character.name)}</h2>${difficultyBadge(character.difficulty)}</div>
+        <h2>${escapeHtml(firstNameOf(character))}</h2>${difficultyBadge(character.difficulty)}</div>
     </div>
     <p class="profile-blurb">${escapeHtml(character.blurb)} <span class="muted">${escapeHtml(DIFFICULTY_NOTES[character.difficulty])}</span></p>
     ${bestFit(character.id) ? `<p class="best-fit"><strong>Best fit:</strong> ${bestFit(character.id).track} · strongest in ${escapeHtml(bestFit(character.id).industry)} · hardest in ${escapeHtml(bestFit(character.id).worst)}</p>` : ''}
     <div class="face-picker"><span>Face</span>${Object.entries(FACE_STYLES).map(([id, entry]) => `<button class="face-chip ${id === (faceStyle ?? character.look.faceStyle) ? 'on' : ''}" data-face-style="${id}">${escapeHtml(entry.label)}</button>`).join('')}</div>
     <div class="profile-stats">${rows}</div>
-    <ul class="quirks">${quirks.map((quirk) => `<li>${escapeHtml(quirk)}</li>`).join('')}</ul>`;
+    <ul class="quirks">${quirks.map((quirk) => `<li>${escapeHtml(quirk)}</li>`).join('')}</ul>
+    ${adjustPanel(adjust)}`;
+}
+
+/** The trade-off controls: up to two small steps on each skill, every step up paid for by a step down. */
+function adjustPanel(adjust) {
+  const points = adjustmentPoints(adjust);
+  const rows = ADJUSTABLE.map((entry) => {
+    const steps = adjust[entry.id] ?? 0;
+    const label = entry.field ? `${steps > 0 ? '+' : ''}${steps * entry.step} ${entry.unit}` : `${steps > 0 ? '+' : ''}${Math.round(steps * entry.step * 100)}%`;
+    return `<div class="adjust-row"><span>${entry.label}</span><button class="button small" data-adjust="${entry.id}" data-dir="-1" ${steps <= -MAX_STEPS ? 'disabled' : ''}>−</button><strong class="${steps > 0 ? 'up' : steps < 0 ? 'down' : ''}">${steps ? label : '0'}</strong><button class="button small" data-adjust="${entry.id}" data-dir="1" ${steps >= MAX_STEPS || points <= 0 ? 'disabled' : ''}>+</button></div>`;
+  }).join('');
+  return `<details class="adjust" ${Object.keys(adjust).length ? 'open' : ''}><summary>Tune the skills <small>${points ? `${points} point${points > 1 ? 's' : ''} to spend` : 'balanced'}</small></summary>
+    <p class="explain">Small trade-offs. Every step up on one skill is paid for by a step down on another, two steps at most on any, and the changes are tiny: they sharpen who this person is, they do not change it.</p>
+    <div class="adjust-grid">${rows}</div>
+    <button class="button ghost small" data-adjust-reset>Reset</button></details>`;
 }
 
 const INDUSTRY_BLURBS = {

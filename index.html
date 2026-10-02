@@ -137,6 +137,7 @@
     <main class="stage" id="stage">
       <canvas id="office" class="office" aria-label="Your workplace"></canvas>
       <div class="office-hint" id="office-hint"></div>
+      <div class="office-dialog" id="office-dialog" hidden></div>
       <div class="labels" id="labels" aria-hidden="true"></div>
       <div class="banner burnout-banner" id="burnout-banner" hidden>
         <span><strong>Burnout.</strong> Put 35% or more into Recovery: it counts as sick leave, and the more you rest the faster it lifts.</span>
@@ -219,6 +220,8 @@
     <div class="modal-card" id="modal-card" role="dialog" aria-modal="true"></div>
   </div>
   <div class="toasts" id="toasts" aria-live="polite"></div>
+  <div class="share-view" id="share-view" hidden></div>
+  <button class="autopilot-cancel" id="autopilot-cancel" data-action="autopilot-cancel" hidden>Cancel Autopilot</button>
 </div>
 <script type="module" src="src/ui/main.js"></script>
 </body>

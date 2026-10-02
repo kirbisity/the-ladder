@@ -29,9 +29,9 @@ const median = (values) => {
 };
 const avg = (list, pick) => list.reduce((sum, entry) => sum + pick(entry), 0) / list.length;
 
-export function benchCharacter(characterId, industryId, count = careers, policy = policyName, seedBase = 9000, tierLock = tierArg) {
+export function benchCharacter(characterId, industryId, count = careers, policy = policyName, seedBase = 9000, tierLock = tierArg, track = null) {
   const results = [];
-  for (let index = 0; index < count; index += 1) results.push(playCareer({ seed: seedBase + index, characterId, industryId, policyName: policy, tierLock }));
+  for (let index = 0; index < count; index += 1) results.push(playCareer({ seed: seedBase + index, characterId, industryId, policyName: policy, tierLock, track }));
   const share = (predicate) => results.filter(predicate).length / results.length;
   const sorted = results.map((entry) => entry.peakLevel).sort((a, b) => a - b);
   return {

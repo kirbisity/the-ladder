@@ -86,12 +86,56 @@ test('each character carries a difficulty from 1 to 5 that matches how they actu
   for (const character of CHARACTERS) assert.ok([1, 2, 3, 4, 5].includes(character.difficulty), character.id);
   const reach = (level) => CHARACTERS.filter((character) => character.difficulty === level).map((character) => tech[character.id].director);
   const average = (values) => values.reduce((sum, value) => sum + value, 0) / values.length;
-  const used = [1, 2, 3, 4, 5].filter((level) => reach(level).length);
-  assert.ok(used.length >= 4, 'most of the five levels are in use');
+  // Brutal (5) is the ruin-prone character, not the one who climbs least (Bill is strong where he fits), so the
+  // climb comparison runs over the first four levels.
+  const used = [1, 2, 3, 4].filter((level) => reach(level).length);
+  assert.ok(used.length >= 4, 'the four climbing levels are in use');
+  assert.ok(CHARACTERS.some((character) => character.difficulty === 5), 'and one is brutal');
   for (let index = 1; index < used.length; index += 1) {
     assert.ok(average(reach(used[index - 1])) > average(reach(used[index])), `an easier climb (${used[index - 1]}) reaches the top more often than ${used[index]}`);
   }
   assert.equal(difficultyRating(0.2), 1);
   assert.equal(difficultyRating(0.95), 5);
   for (const character of CHARACTERS) assert.equal(difficultyRating(character.difficultyIndex), character.difficulty, `${character.id}: the card agrees with its index`);
+});
+
+test('the roster: ten characters, the new ones as briefed, and every card matches the simulation behind it', async () => {
+  const { SIM_RESULTS } = await import('../src/data/sim-results.js');
+  assert.equal(CHARACTERS.length, 10);
+  const byId = Object.fromEntries(CHARACTERS.map((character) => [character.id, character]));
+  assert.equal(byId.christian.name, 'Christopher C');
+  assert.equal(byId.christian.mbti, 'INTJ');
+  assert.equal(byId.simon.mbti, 'INTP');
+  assert.equal(byId.chaitravi.gender, 'female');
+  assert.equal(byId.chaitravi.iq, 140);
+  assert.ok(byId.chaitravi.pol >= 145, 'extremely high political skill');
+  assert.equal(byId.chaitravi.look.glasses, undefined, 'Chloe\'s look, without the glasses');
+  assert.equal(byId.bill.iq, 145);
+  assert.equal(byId.bill.pol, 70);
+  assert.equal(byId.bill.look.face, 'square');
+  assert.equal(byId.bill.look.faceStyle, 'dots');
+  assert.equal(byId.richard.look.hair, '#d4a73a', 'golden hair');
+  // The target ladder of difficulty, the user's brief.
+  const targets = { adam: 1, chaitravi: 2, christian: 2, simon: 3, richard: 3, jennifer: 3, chloe: 3, joseph: 4, eve: 4, bill: 5 };
+  for (const [id, rating] of Object.entries(targets)) assert.equal(byId[id].difficulty, rating, `${id} is a ${rating}`);
+  for (const character of CHARACTERS) {
+    const result = SIM_RESULTS.characters[character.id];
+    assert.ok(result, `${character.id} has simulation results`);
+    assert.equal(result.rating, character.difficulty, `${character.id}: the card agrees with the simulation`);
+    assert.ok(Math.abs(result.index - character.difficultyIndex) < 0.03, `${character.id}: index ${result.index} vs card ${character.difficultyIndex}`);
+    assert.ok(['management', 'expert', 'hybrid'].includes(result.fit.track));
+  }
+  // Where each one does best.
+  const fit = (id) => SIM_RESULTS.characters[id].fit;
+  assert.equal(fit('chaitravi').track, 'management', 'Chaitravi rises through management alone');
+  assert.equal(fit('adam').track, 'hybrid', 'Adam can take either ladder');
+  assert.equal(fit('christian').track, 'expert');
+  assert.equal(fit('simon').track, 'expert');
+  assert.equal(fit('richard').track, 'management');
+  assert.equal(fit('bill').track, 'expert');
+  assert.equal(fit('jennifer').bestIndustry, 'privateEquity', 'Jennifer: high-stakes finance');
+  assert.equal(fit('chloe').bestIndustry, 'academia', 'Chloe: education');
+  assert.equal(fit('christian').bestIndustry, 'tech');
+  const ruin = (id) => Object.values(SIM_RESULTS.characters[id].industries).reduce((sum, row) => sum + row.ruin, 0) / 4;
+  for (const character of CHARACTERS) if (character.id !== 'bill') assert.ok(ruin('bill') > ruin(character.id), `Bill ends in ruin more often than ${character.id}`);
 });

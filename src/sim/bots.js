@@ -110,7 +110,10 @@ const BOT_MAX_HOURS = 13;
 function adaptiveChoose(game, choices) {
   const player = game.player;
   // The fork: the character card's political sense says which track suits.
-  if (game.currentEvent?.event.id === 'trackChoice') return player.pol >= 100 ? 0 : 1;
+  if (game.currentEvent?.event.id === 'trackChoice') {
+    if (game.botForceTrack) return game.botForceTrack === 'management' ? 0 : 1;
+    return player.pol >= 100 ? 0 : 1;
+  }
   if (game.currentEvent?.event.id === 'jobOffer') {
     const offer = game.currentEvent.data;
     const accept = !game.employment.employed || offer.level > player.level
@@ -201,8 +204,9 @@ export function playQuarter(game, policy) {
  */
 // Balance is measured on the career, not on fate: crashes, fires and cancer are switched off, so a character's
 // retirement rate does not hang on whether the dice took them in a car.
-export function playCareer({ seed, characterId, industryId, policyName, tierLock = null }) {
+export function playCareer({ seed, characterId, industryId, policyName, tierLock = null, track = null }) {
   const game = createGame({ seed, characterId, industryId, tierLock, misfortune: false });
+  game.botForceTrack = track;
   game.botRandom = (function makeBotRandom() {
     let state = seed * 7919 + 13;
     const next = () => {

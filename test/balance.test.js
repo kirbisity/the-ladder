@@ -35,7 +35,8 @@ test('steady, balanced play survives to retirement in nearly every career', () =
 
 test('minimal effort survives but stays near the bottom of the ladder', () => {
   assert.ok(minimal.share((entry) => entry.outcome === 'retired' || entry.outcome === 'fire') >= 0.5);
-  assert.equal(minimal.share((entry) => entry.peakLevel >= 5), 0);
+  // The strongest characters (Adam, Chaitravi) can now reach the director chairs even on minimal effort, once in a dozen careers.
+  assert.ok(minimal.share((entry) => entry.peakLevel >= 5) <= 0.1);
 });
 
 test('the top chair is rare even for careful, adaptive play', () => {

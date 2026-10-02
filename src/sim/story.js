@@ -58,6 +58,8 @@ export function careerSummary(game) {
   const peak = Math.max(game.peakLevel, player.level);
   const years = Math.max(0, Math.round(player.age - 22));
   const paragraphs = [];
+  // Mid-career, the same story is told in the present: no endings, no verdicts on money.
+  const ongoing = !outcome;
 
   // Opening.
   const joined = first(journal, 'joined');
@@ -67,7 +69,9 @@ export function careerSummary(game) {
 
   // The climb.
   const promotions = journal.filter((entry) => entry.kind === 'promoted');
-  if (promotions.length === 0) {
+  if (promotions.length === 0 && ongoing) {
+    paragraphs.push(years < 1 ? 'The career is just beginning.' : `No promotion yet: ${years} ${years === 1 ? 'year' : 'years'} in, the title on the badge is still ${titles[player.level]}.`);
+  } else if (promotions.length === 0) {
     paragraphs.push(pick(game, 2, [
       `The ladder never moved. ${years} years in, the title on the badge was still ${titles[player.level]}.`,
       `No promotion ever came. Others climbed past while ${player.name.split(' ')[0]} stayed on the first rung.`,
@@ -101,6 +105,8 @@ export function careerSummary(game) {
     const sentence = setbacks.length === 1 ? setbacks[0] : `${setbacks.slice(0, -1).join(', ')} and ${setbacks[setbacks.length - 1]}`;
     paragraphs.push(`Along the way, ${player.name.split(' ')[0]} ${sentence}.`
       + (outOfWork ? ` In all, ${plural(outOfWork, 'quarter')} ${outOfWork === 1 ? 'was' : 'were'} spent out of work, sending applications into the void.` : ''));
+  } else if (ongoing) {
+    if (years >= 2) paragraphs.push('So far: no firings, no layoffs, no PIPs.');
   } else {
     paragraphs.push(pick(game, 4, [
       'There were no firings, no layoffs, no PIPs: a rare, clean record.',
@@ -183,7 +189,7 @@ export function careerSummary(game) {
 
   // Money.
   const worth = outcome?.netWorth ?? 0;
-  paragraphs.push(worth >= 20e6 ? `The money was extraordinary: ${money(worth)} at the end, from ${money(game.lifetimeEarnings)} earned.`
+  if (!ongoing) paragraphs.push(worth >= 20e6 ? `The money was extraordinary: ${money(worth)} at the end, from ${money(game.lifetimeEarnings)} earned.`
     : worth >= 3e6 ? `Financially, it worked: ${money(worth)} at the end.`
       : worth >= 500e3 ? `A comfortable sum, ${money(worth)}, was put away.`
         : worth > 0 ? `Savings stayed thin: ${money(worth)} at the end.`
@@ -218,4 +224,37 @@ export function careerVerdict(game, { peak, promotions, losses, burnouts, moves 
   if (burnouts >= 2) return 'The Burnout Years';
   if (promotions === 0) return 'The Long Wait';
   return 'A Working Life';
+}
+
+const BAND = (value, [low, mid, high], words) => (value < low ? words[0] : value < mid ? words[1] : value < high ? words[2] : words[3]);
+
+/**
+ * The career so far, in natural language: the same paragraphs as the ending,
+ * then where things stand today. `status` carries what only the game module
+ * can compute: { worth, fireShare }.
+ */
+export function careerSoFar(game, status = {}) {
+  const { paragraphs } = careerSummary(game);
+  const player = game.player;
+  const first = player.name.split(' ')[0];
+  const age = Math.floor(player.age);
+  const title = game.industry.titles[player.level];
+  const company = game.org?.companyName ?? game.lastOrg?.companyName ?? 'the last employer';
+  const now = [];
+  now.push(game.employment.employed
+    ? `Today, at ${age}, ${first} is ${title} at ${company}.`
+    : `Today, at ${age}, ${first} is between jobs, last a ${title} at ${company}.`);
+  const body = BAND(player.health, [30, 55, 80], ['The body is in trouble', 'Health is worn thin', 'Health is decent', 'Health is strong']);
+  const mood = BAND(player.motivation, [25, 50, 75], ['the spark is nearly gone', 'motivation is flat', 'motivation is steady', 'motivation is high']);
+  now.push(`${body}, and ${mood}.`);
+  const home = [];
+  if (game.partner) home.push(game.married ? `is married to ${game.partner.name.split(' ')[0]}` : `is seeing ${game.partner.name.split(' ')[0]}`);
+  const kids = (game.children ?? []).length;
+  if (kids) home.push(`has ${plural(kids, 'child', 'children')}`);
+  if (game.homeEquity > 0) home.push('owns a home');
+  if (home.length) now.push(`${first} ${home.join(', ')}.`);
+  if (status.worth !== undefined) {
+    now.push(`The savings stand at ${money(status.worth)}${status.fireShare !== undefined ? `, ${Math.round(status.fireShare * 100)}% of the way to never having to work again` : ''}.`);
+  }
+  return { headline: 'The story so far', paragraphs: [...paragraphs.filter((text) => text && !/^It ended|^At \d+, (the badge|financially)/.test(text)), now.join(' ')] };
 }

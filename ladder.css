@@ -140,7 +140,9 @@ h2, h3 { margin: 0; text-wrap: balance; }
 .difficulty i { width: 9px; height: 9px; border-radius: 50%; background: rgba(255, 255, 255, 0.15); }
 .difficulty.d1 i.on { background: #46b96b; }
 .difficulty.d2 i.on { background: #f5c542; }
-.difficulty.d3 i.on { background: #e5484d; }
+.difficulty.d3 i.on { background: #f08c3a; }
+.difficulty.d4 i.on { background: #e5484d; }
+.difficulty.d5 i.on { background: #b52d5c; }
 .pick-hint { margin: 0; color: var(--ink-faint); font-size: 14px; }
 .screen-profile { align-items: center; }
 .profile-card { width: min(1100px, 100%); flex: 1; min-height: 0; overflow-y: auto; display: grid; gap: 12px; align-content: start; background: var(--panel); border: 1px solid var(--panel-line); border-radius: var(--radius); padding: 16px; }
@@ -923,3 +925,11 @@ details.developer[open] summary { margin-bottom: 8px; }
 /* A fifth button (the partner) squeezes the column: smaller icons keep them clear of the labels. */
 .side-buttons.five .side-icon { transform: scale(0.62); margin: -7px 0; }
 .side-buttons.five .side-button { gap: 0; font-size: 15px; }
+
+/* Intelligence and political skill: a wide bar with its reference ticks named underneath. */
+.stat-row.wide { grid-column: 1 / -1; }
+.stat-bar.wide { height: 12px; border-radius: 6px; }
+.stat-bar.wide div { border-radius: 6px; }
+.stat-bar.wide i { top: -3px; height: 18px; }
+.stat-marks { position: relative; height: 14px; font-size: 11px; color: var(--ink-faint); }
+.stat-marks span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
